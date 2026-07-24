@@ -118,9 +118,6 @@ if "utente_loggato" not in st.session_state:
 if "ruolo_corrente" not in st.session_state:
     st.session_state.ruolo_corrente = None
 
-if "custom_admin_password" not in st.session_state:
-    st.session_state.custom_admin_password = st.secrets.get("auth", {}).get("proprietario_password", "admin123")
-
 st.sidebar.markdown("### 🔐 Autenticazione Accesso")
 
 if st.session_state.utente_loggato is None:
@@ -133,12 +130,22 @@ if st.session_state.utente_loggato is None:
         if btn_login:
             pwd_h = hash_password(password_input)
             
-            if username_input == "proprietario" and (password_input == st.session_state.custom_admin_password or pwd_h == hash_password(st.session_state.custom_admin_password)):
+            # Controllo proprietario principale via tabella Supabase "utenti" o fallback secrets
+            try:
+                res_admin = supabase.table("utenti").select("*").eq("username", "proprietario").execute()
+                admin_pswd_stored = res_admin.data[0].get("pswd") if res_admin.data else None
+            except:
+                admin_pswd_stored = None
+                
+            pwd_segreta = st.secrets.get("auth", {}).get("proprietario_password", "admin123")
+            
+            if username_input == "proprietario" and (password_input == pwd_segreta or pwd_h == admin_pswd_stored or (admin_pswd_stored and password_input == admin_pswd_stored)):
                 st.session_state.utente_loggato = "proprietario"
                 st.session_state.ruolo_corrente = "Proprietario"
                 st.success("Accesso effettuato come Proprietario!")
                 st.rerun()
             else:
+                # Interroghiamo la tabella Supabase "utenti"[cite: 3]
                 try:
                     res = supabase.table("utenti").select("*").eq("username", username_input).execute()
                     if res.data and len(res.data) > 0:
@@ -257,8 +264,16 @@ if is_proprietario:
         nuova_pass_admin = st.text_input("Nuova Password Admin", type="password")
         if st.button("Aggiorna Password Admin"):
             if nuova_pass_admin.strip():
-                st.session_state.custom_admin_password = nuova_pass_admin.strip()
-                st.success("Password admin aggiornata per la sessione.")
+                pwd_h_admin = hash_password(nuova_pass_admin.strip())
+                try:
+                    supabase.table("utenti").upsert({
+                        "username": "proprietario",
+                        "pswd": pwd_h_admin
+                    }).execute()
+                    st.session_state.custom_admin_password = pwd_h_admin
+                    st.success("Password admin aggiornata e salvata su Supabase!")
+                except Exception as e:
+                    st.error(f"Errore durante il salvataggio su Supabase: {e}")
             else:
                 st.error("Inserisci una password valida.")
 
@@ -275,9 +290,12 @@ if is_proprietario:
                     st.warning("Username non consentito.")
                 else:
                     try:
+                        # Cifriamo la password prima di salvarla nel database
+                        pwd_h_atleta = hash_password(nuova_pass.strip())
+                        
                         supabase.table("utenti").upsert({
                             "username": nuovo_user,
-                            "pswd": nuova_pass.strip()
+                            "pswd": pwd_h_atleta
                         }).execute()
 
                         if nuovo_user not in st.session_state.atleti:
@@ -290,11 +308,12 @@ if is_proprietario:
                                 "db_diario": {},
                             }
                         salva_dati_disco()
-                        st.success(f"Account '{nuovo_user}' creato e registrato su Supabase!")
+                        st.success(f"Account '{nuovo_user}' creato con password cifrata su Supabase!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Errore durante la creazione su Supabase: {e}")
 
+        # Visualizzazione ed eliminazione utenti da Supabase
         st.markdown("### Elenco Utenti Registrati su Supabase")
         try:
             res_utenti = supabase.table("utenti").select("username").execute()
