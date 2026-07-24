@@ -326,10 +326,15 @@ if is_proprietario:
                     lista_utenti_supabase = [row["username"] for row in res_utenti.data if row["username"] != "proprietario"]
                     
                     if lista_utenti_supabase:
-                        opzioni_select = ["-- Seleziona un utente da cancellare --"] + lista_utenti_supabase
-                        utente_da_eliminare = st.selectbox("Seleziona utente da eliminare:", opzioni_select, key="select_utente_elimina")
+                        utente_da_eliminare = st.selectbox(
+                            "Seleziona utente da eliminare:", 
+                            lista_utenti_supabase, 
+                            index=None, 
+                            placeholder="-- Seleziona un utente da cancellare --", 
+                            key="select_utente_elimina"
+                        )
                         
-                        if utente_da_eliminare != "-- Seleziona un utente da cancellare --":
+                        if utente_da_eliminare is not None:
                             if st.button(f"Conferma ed Elimina '{utente_da_eliminare}'"):
                                 try:
                                     supabase.table("utenti").delete().eq("username", utente_da_eliminare).execute()
