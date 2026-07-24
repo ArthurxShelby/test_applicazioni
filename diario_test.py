@@ -118,6 +118,9 @@ if "utente_loggato" not in st.session_state:
 if "ruolo_corrente" not in st.session_state:
     st.session_state.ruolo_corrente = None
 
+if "custom_admin_password" not in st.session_state:
+    st.session_state.custom_admin_password = st.secrets.get("auth", {}).get("proprietario_password", "admin123")
+
 st.sidebar.markdown("### 🔐 Autenticazione Accesso")
 
 if st.session_state.utente_loggato is None:
@@ -129,22 +132,18 @@ if st.session_state.utente_loggato is None:
         
         if btn_login:
             pwd_h = hash_password(password_input)
-            # Controllo proprietario principale dai secrets
-            pwd_segreta = st.secrets.get("auth", {}).get("proprietario_password", "admin123")
             
-            if username_input == "proprietario" and password_input == pwd_segreta:
+            if username_input == "proprietario" and (password_input == st.session_state.custom_admin_password or pwd_h == hash_password(st.session_state.custom_admin_password)):
                 st.session_state.utente_loggato = "proprietario"
                 st.session_state.ruolo_corrente = "Proprietario"
                 st.success("Accesso effettuato come Proprietario!")
                 st.rerun()
             else:
-                # Interroghiamo la tabella Supabase "utenti"[cite: 3]
                 try:
                     res = supabase.table("utenti").select("*").eq("username", username_input).execute()
                     if res.data and len(res.data) > 0:
                         db_user = res.data[0]
                         stored_pwd = db_user.get("pswd")
-                        # Supporta sia password in chiaro che hashate
                         if stored_pwd == password_input or stored_pwd == pwd_h:
                             st.session_state.utente_loggato = username_input
                             st.session_state.ruolo_corrente = "Utente"
@@ -258,7 +257,7 @@ if is_proprietario:
         nuova_pass_admin = st.text_input("Nuova Password Admin", type="password")
         if st.button("Aggiorna Password Admin"):
             if nuova_pass_admin.strip():
-                st.secrets["auth"]["proprietario_password"] = nuova_pass_admin.strip()
+                st.session_state.custom_admin_password = nuova_pass_admin.strip()
                 st.success("Password admin aggiornata per la sessione.")
             else:
                 st.error("Inserisci una password valida.")
@@ -276,13 +275,11 @@ if is_proprietario:
                     st.warning("Username non consentito.")
                 else:
                     try:
-                        # Inserimento nella tabella Supabase "utenti"[cite: 3]
                         supabase.table("utenti").upsert({
                             "username": nuovo_user,
                             "pswd": nuova_pass.strip()
                         }).execute()
 
-                        # Crea automaticamente anche l'atleta corrispondente nel dizionario
                         if nuovo_user not in st.session_state.atleti:
                             st.session_state.atleti[nuovo_user] = {
                                 "peso": 70.0,
@@ -298,7 +295,6 @@ if is_proprietario:
                     except Exception as e:
                         st.error(f"Errore durante la creazione su Supabase: {e}")
 
-        # Visualizzazione ed eliminazione utenti da Supabase
         st.markdown("### Elenco Utenti Registrati su Supabase")
         try:
             res_utenti = supabase.table("utenti").select("username").execute()
