@@ -36,45 +36,17 @@ st.set_page_config(
     layout="wide",
 )
 
-# --- 0. GESTIONE AUTENTICAZIONE E RUOLI (BLINDATURA) ---
-st.sidebar.markdown("### 🔐 Accesso e Sicurezza")
-ruolo_utente = st.sidebar.radio(
-    "Modalità Utente",
-    ["Ospite (Sola Lettura)", "Proprietario / Autorizzato"],
-    key="auth_diario",
-)
-
-is_proprietario = False
-if ruolo_utente == "Proprietario / Autorizzato":
-    password_inserita = st.sidebar.text_input(
-        "Inserisci Password di Controllo", type="password", key="pass_diario"
-    )
-    password_corretta = st.secrets.get("auth", {}).get(
-        "proprietario_password", "admin123"
-    )
-    if password_inserita == password_corretta:
-        is_proprietario = True
-        st.sidebar.success(
-            "Accesso Proprietario Autorizzato (Controllo Completo)"
-        )
-    else:
-        st.sidebar.error("Password errata. Modalità limitata a Ospite.")
-
 # --- 0. GESTIONE PERSISTENZA CLOUD (SUPABASE) ---
 
-
-# Inizializzazione della connessione a Supabase usando i segreti
 @st.cache_resource
 def init_supabase():
     url = st.secrets["supabase"]["url"]
     key = st.secrets["supabase"]["key"]
     return create_client(url, key)
 
-
 supabase = init_supabase()
 
-
-# Funzione per caricare i dati dal Cloud di Supabase
+# Funzione per caricare lo stato globale dal Cloud di Supabase
 def carica_dati_disco():
     try:
         response = supabase.table("diario_test").select("payload").eq("id", 1).execute()
@@ -89,7 +61,6 @@ def carica_dati_disco():
             if "atleti" in payload and isinstance(payload["atleti"], dict):
                 for nome_atleta, dati_atleta in payload["atleti"].items():
                     if isinstance(dati_atleta, dict):
-                        # Controllo sul diario per trasformare liste in DataFrame
                         if "db_diario" in dati_atleta and isinstance(dati_atleta["db_diario"], dict):
                             for data_key, pasti_dict in dati_atleta["db_diario"].items():
                                 if isinstance(pasti_dict, dict):
@@ -99,7 +70,6 @@ def carica_dati_disco():
                                                 pasti_dict[pasto_nome] = pd.DataFrame(val_pasto)
                                             except:
                                                 pass
-                        # Altri campi generali
                         for k, v in dati_atleta.items():
                             if isinstance(v, list) and k != "db_diario":
                                 try:
@@ -117,11 +87,8 @@ def carica_dati_disco():
 
 def salva_dati_disco(dati=None):
     """Salva lo stato convertendo ricorsivamente qualsiasi DataFrame in dizionario JSON-compatibile."""
-    if not is_proprietario:
-        return
     try:
         if dati is None:
-            # Funzione di supporto interna per serializzare in modo sicuro i DataFrame
             def serializza_oggetti(obj):
                 if hasattr(obj, "to_dict"):
                     return obj.to_dict(orient="records")
@@ -131,17 +98,14 @@ def salva_dati_disco(dati=None):
                     return [serializza_oggetti(item) for item in obj]
                 return obj
 
-            # Prepariamo lo stato grezzo
             stato_grezzo = {
                 "atleti": st.session_state.get("atleti", {}),
                 "banca_dati_df": st.session_state.get("banca_dati_df"),
                 "atleta_corrente": st.session_state.get("atleta_corrente"),
+                "utenti_registrati": st.session_state.get("utenti_registrati", {}),
             }
-            
-            # Serializziamo l'intero dizionario ripulendolo da ogni DataFrame
             dati = serializza_oggetti(stato_grezzo)
         
-        # Invio a Supabase
         supabase.table("diario_test").upsert({"id": 1, "payload": dati}).execute()
         st.toast("Dati salvati con successo su Supabase!", icon="✅")
     except Exception as e:
@@ -149,6 +113,70 @@ def salva_dati_disco(dati=None):
 
 
 dati_salvati = carica_dati_disco()
+
+# --- 0. GESTIONE UTENTI E AUTENTICAZIONE (BLINDATURA PROPRIETARIO & ACCOUNT) ---
+
+# Inizializzazione database utenti nel session_state
+if "utenti_registrati" not in st.session_state:
+    if dati_salvati and "utenti_registrati" in dati_salvati:
+        st.session_state.utenti_registrati = dati_salvati["utenti_registrati"]
+    else:
+        # Utente proprietario predefinito di emergenza o inizializzazione
+        st.session_state.utenti_registrati = {
+            "proprietario": {
+                "password": st.secrets.get("auth", {}).get("proprietario_password", "admin123"),
+                "ruolo": "Proprietario"
+            }
+        }
+
+if "utente_loggato" not in st.session_state:
+    st.session_state.utente_loggato = None
+
+if "ruolo_corrente" not in st.session_state:
+    st.session_state.ruolo_corrente = None
+
+st.sidebar.markdown("### 🔐 Autenticazione Accesso")
+
+if st.session_state.utente_loggato is None:
+    st.sidebar.info("Effettua il login per accedere alle funzionalità.")
+    with st.sidebar.form("form_login"):
+        username_input = st.text_input("Username")
+        password_input = st.text_input("Password", type="password")
+        btn_login = st.form_submit_button("Accedi")
+        
+        if btn_login:
+            # Controllo se è il proprietario principale dai secrets o dal dizionario
+            pwd_segreta = st.secrets.get("auth", {}).get("proprietario_password", "admin123")
+            if username_input == "proprietario" and password_input == pwd_segreta:
+                st.session_state.utente_loggato = "proprietario"
+                st.session_state.ruolo_corrente = "Proprietario"
+                st.success("Accesso effettuato come Proprietario!")
+                st.rerun()
+            elif username_input in st.session_state.utenti_registrati:
+                if st.session_state.utenti_registrati[username_input]["password"] == password_input:
+                    st.session_state.utente_loggato = username_input
+                    st.session_state.ruolo_corrente = st.session_state.utenti_registrati[username_input].get("ruolo", "Utente")
+                    st.success(f"Accesso effettuato come {username_input}!")
+                    st.rerun()
+                else:
+                    st.error("Password errata.")
+            else:
+                st.error("Utente non trovato.")
+    st.stop() # Interrompe l'esecuzione finché non si effettua il login
+else:
+    st.sidebar.success(f"Utente: **{st.session_state.utente_loggato}** ({st.session_state.ruolo_corrente})")
+    if st.sidebar.button("Logout"):
+        st.session_state.utente_loggato = None
+        st.session_state.ruolo_corrente = None
+        st.rerun()
+
+is_proprietario = (st.session_state.ruolo_corrente == "Proprietario")
+
+# Se l'utente loggato è un utente standard, forziamo l'atleta corrispondente al suo username (se esiste negli atleti)
+if not is_proprietario:
+    if st.session_state.utente_loggato in st.session_state.get("atleti", {}):
+        st.session_state.atleta_corrente = st.session_state.utente_loggato
+
 
 # Banca dati precompilata iniziale (condivisa tra gli atleti)
 DEFAULT_BANCA_DATI = [
@@ -516,63 +544,86 @@ PASTI = ["Colazione", "Spuntino", "Pranzo", "Merenda", "Cena", "Extra"]
 
 st.title("Pianificatore Alimentare & Allenamento - Multi-Atleta (Mifflin)")
 
+# --- SEZIONE GESTIONE AMMINISTRATIVA (PROPRIETARIO) ---
+if is_proprietario:
+    with st.sidebar.expander("🛠️ Pannello Amministratore (Proprietario)"):
+        st.markdown("### Cambio Password Personale")
+        nuova_pass_admin = st.text_input("Nuova Password Admin", type="password")
+        if st.button("Aggiorna Password Admin"):
+            if nuova_pass_admin.strip():
+                st.secrets["auth"]["proprietario_password"] = nuova_pass_admin
+                st.success("Password admin aggiornata temporaneamente per la sessione.")
+            else:
+                st.error("Inserisci una password valida.")
+
+        st.markdown("### Creazione e Gestione Account Utenti")
+        with st.form("form_crea_utente"):
+            nuovo_user = st.text_input("Username Nuovo Utente")
+            nuova_pass = st.text_input("Password Nuovo Utente", type="password")
+            btn_crea_user = st.form_submit_button("Crea Account e Profilo Atleta")
+            
+            if btn_crea_user:
+                u_clean = nuovo_user.strip()
+                if not u_clean or not nuova_pass.strip():
+                    st.error("Compila tutti i campi.")
+                elif u_clean in st.session_state.utenti_registrati or u_clean == "proprietario":
+                    st.warning("Username già esistente.")
+                else:
+                    st.session_state.utenti_registrati[u_clean] = {
+                        "password": nuova_pass.strip(),
+                        "ruolo": "Utente"
+                    }
+                    # Crea automaticamente anche l'atleta corrispondente
+                    if u_clean not in st.session_state.atleti:
+                        st.session_state.atleti[u_clean] = {
+                            "peso": 70.0,
+                            "altezza": 175.0,
+                            "eta": 30,
+                            "genere": "Uomo",
+                            "livello_allenamento": "Allenamento Moderato (PAL 1.55)",
+                            "db_diario": {},
+                        }
+                    salva_dati_disco()
+                    st.success(f"Account '{u_clean}' creato con successo!")
+                    st.rerun()
+
+        if st.session_state.utenti_registrati:
+            st.markdown("### Elenco Utenti Registrati")
+            for usr, info in list(st.session_state.utenti_registrati.items()):
+                if usr != "proprietario":
+                    col_u1, col_u2 = st.columns([2, 1])
+                    with col_u1:
+                        st.text(f"Utente: {usr}")
+                    with col_u2:
+                        if st.button(f"Elimina {usr}", key=f"del_u_{usr}"):
+                            del st.session_state.utenti_registrati[usr]
+                            if usr in st.session_state.atleti:
+                                del st.session_state.atleti[usr]
+                            salva_dati_disco()
+                            st.success(f"Utente {usr} eliminato.")
+                            st.rerun()
+
 # --- SEZIONE GESTIONE ATLETI NELLA SIDEBAR ---
 st.sidebar.header("Gestione Atleti")
 lista_atleti = list(st.session_state.atleti.keys())
-atleta_selezionato = st.sidebar.selectbox(
-    "Seleziona Atleta",
-    lista_atleti,
-    index=lista_atleti.index(st.session_state.atleta_corrente)
-    if st.session_state.atleta_corrente in lista_atleti
-    else 0,
-    key="selectbox_atleta",
-)
-
-if atleta_selezionato != st.session_state.atleta_corrente:
-    st.session_state.atleta_corrente = atleta_selezionato
-    if is_proprietario:
-        salva_dati_disco()
-    st.rerun()
 
 if is_proprietario:
-    with st.sidebar.expander("Aggiungi o Gestisci Atleti"):
-        nuovo_atleta_nome = st.text_input("Nome Nuovo Atleta")
-        if st.button("Crea Nuovo Atleta"):
-            nome_pulito = nuovo_atleta_nome.strip()
-            if nome_pulito == "":
-                st.error("Inserisci un nome valido.")
-            elif nome_pulito in st.session_state.atleti:
-                st.warning("Esiste già un atleta con questo nome.")
-            else:
-                st.session_state.atleti[nome_pulito] = {
-                    "peso": 70.0,
-                    "altezza": 175.0,
-                    "eta": 30,
-                    "genere": "Uomo",
-                    "livello_allenamento": "Allenamento Moderato (PAL 1.55)",
-                    "db_diario": {},
-                }
-                st.session_state.atleta_corrente = nome_pulito
-                salva_dati_disco()
-                st.success(f"Atleta '{nome_pulito}' aggiunto con successo!")
-                st.rerun()
-
-        if len(st.session_state.atleti) > 1:
-            atleta_da_eliminare = st.selectbox(
-                "Elimina Atleta",
-                [a for a in lista_atleti if a != st.session_state.atleta_corrente],
-            )
-            if st.button("Conferma ed Elimina Atleta", type="primary"):
-                if atleta_da_eliminare in st.session_state.atleti:
-                    del st.session_state.atleti[atleta_da_eliminare]
-                    st.session_state.atleta_corrente = list(
-                        st.session_state.atleti.keys()
-                    )[0]
-                    salva_dati_disco()
-                    st.success(f"Atleta '{atleta_da_eliminare}' eliminato.")
-                    st.rerun()
+    atleta_selezionato = st.sidebar.selectbox(
+        "Seleziona Atleta",
+        lista_atleti,
+        index=lista_atleti.index(st.session_state.atleta_corrente)
+        if st.session_state.atleta_corrente in lista_atleti
+        else 0,
+        key="selectbox_atleta",
+    )
+    if atleta_selezionato != st.session_state.atleta_corrente:
+        st.session_state.atleta_corrente = atleta_selezionato
+        salva_dati_disco()
+        st.rerun()
 else:
-    st.sidebar.info("🔒 Gestione atleti bloccata per gli ospiti (Sola Lettura).")
+    # L'utente standard vede solo il proprio profilo atleta associato
+    atleta_selezionato = st.session_state.atleta_corrente
+    st.sidebar.text(f"Profilo attivo: {atleta_selezionato}")
 
 st.sidebar.markdown("---")
 st.sidebar.header(
@@ -607,7 +658,8 @@ allenamento_index = (
     else 2
 )
 
-if is_proprietario:
+# Il proprietario o l'utente proprietario del proprio profilo possono modificare i parametri Mifflin
+if is_proprietario or st.session_state.utente_loggato == st.session_state.atleta_corrente:
     peso = st.sidebar.number_input(
         "Peso (kg)",
         value=float(saved_peso),
@@ -698,8 +750,7 @@ if data_str not in db_diario_atleta:
         )
         for pasto in PASTI
     }
-    if is_proprietario:
-        salva_dati_disco()
+    salva_dati_disco()
 
 tot_carbo = sum(
     [
@@ -773,7 +824,7 @@ with col_m4:
 
 st.markdown("---")
 
-with st.expander("Gestione Avanzata Banca Dati Alimenti (Condivisa)", expanded=False):
+with st.expander("Gestione Avanzata Banca Dati Alimenti", expanded=False):
     st.markdown("### Accesso e Visualizzazione")
     banca_dati = st.session_state.banca_dati_df
     st.dataframe(banca_dati, use_container_width=True)
@@ -1018,7 +1069,7 @@ with st.expander("Gestione Avanzata Banca Dati Alimenti (Condivisa)", expanded=F
                 except Exception as e:
                     st.error(f"Errore durante la lettura del file CSV: {e}")
     else:
-        st.info("🔒 Funzionalità di modifica della banca dati riservate al proprietario.")
+        st.info("🔒 La modifica della banca dati alimentare è consentita esclusivamente al proprietario.")
 
 st.markdown("---")
 
@@ -1056,48 +1107,39 @@ if alimenti_validati:
             key="num_quantita_principale",
         )
 
-    if is_proprietario:
-        if st.button("Aggiungi al pasto selezionato", key="btn_aggiungi_principale"):
-            fattore = quantita / default_q if default_q > 0 else 1
+    if st.button("Aggiungi al pasto selezionato", key="btn_aggiungi_principale"):
+        fattore = quantita / default_q if default_q > 0 else 1
 
-            c_calc = round(safe_float(item_row["carbo"]) * fattore, 2)
-            p_calc = round(safe_float(item_row["proteine"]) * fattore, 2)
-            g_calc = round(safe_float(item_row["grassi"]) * fattore, 2)
-            k_calc = round(safe_float(item_row["kcal"]) * fattore, 2)
+        c_calc = round(safe_float(item_row["carbo"]) * fattore, 2)
+        p_calc = round(safe_float(item_row["proteine"]) * fattore, 2)
+        g_calc = round(safe_float(item_row["grassi"]) * fattore, 2)
+        k_calc = round(safe_float(item_row["kcal"]) * fattore, 2)
 
-            nuova_riga = pd.DataFrame(
-                [
-                    {
-                        "Alimento": alimento_scelto,
-                        "gr/n": quantita,
-                        "carbo": c_calc,
-                        "proteine": p_calc,
-                        "grassi": g_calc,
-                        "kcal": k_calc,
-                    }
-                ]
-            )
-            
-            # Controllo di sicurezza e conversione robusta del dataframe del pasto
-            pasto_corrente_df = db_diario_atleta[data_str][pasto_selezionato]
-            if not isinstance(pasto_corrente_df, pd.DataFrame):
-                pasto_corrente_df = pd.DataFrame(pasto_corrente_df)
-            if pasto_corrente_df.empty:
-                pasto_corrente_df = pd.DataFrame(columns=["Alimento", "gr/n", "carbo", "proteine", "grassi", "kcal"])
-
-            db_diario_atleta[data_str][pasto_selezionato] = pd.concat(
-                [pasto_corrente_df, nuova_riga],
-                ignore_index=True,
-            )
-            salva_dati_disco()
-            st.rerun()
-    else:
-        st.button(
-            "Aggiungi al pasto selezionato",
-            key="btn_aggiungi_principale",
-            disabled=True,
+        nuova_riga = pd.DataFrame(
+            [
+                {
+                    "Alimento": alimento_scelto,
+                    "gr/n": quantita,
+                    "carbo": c_calc,
+                    "proteine": p_calc,
+                    "grassi": g_calc,
+                    "kcal": k_calc,
+                }
+            ]
         )
-        st.caption("🔒 Azione non consentita in modalità ospite (sola lettura).")
+        
+        pasto_corrente_df = db_diario_atleta[data_str][pasto_selezionato]
+        if not isinstance(pasto_corrente_df, pd.DataFrame):
+            pasto_corrente_df = pd.DataFrame(pasto_corrente_df)
+        if pasto_corrente_df.empty:
+            pasto_corrente_df = pd.DataFrame(columns=["Alimento", "gr/n", "carbo", "proteine", "grassi", "kcal"])
+
+        db_diario_atleta[data_str][pasto_selezionato] = pd.concat(
+            [pasto_corrente_df, nuova_riga],
+            ignore_index=True,
+        )
+        salva_dati_disco()
+        st.rerun()
 else:
     st.warning("La banca dati è vuota o contiene solo elementi non validi.")
 
@@ -1120,7 +1162,6 @@ for i, pasto in enumerate(PASTI):
             )
 
             if not df_p.empty:
-                # Forza l'ordine delle colonne mostrando l'alimento per primo
                 ordine_pasto = ["Alimento", "gr/n", "kcal", "carbo", "grassi", "proteine"]
                 ordine_pasto_esistente = [c for c in ordine_pasto if c in df_p.columns]
                 df_p = df_p[ordine_pasto_esistente]
@@ -1134,51 +1175,48 @@ for i, pasto in enumerate(PASTI):
                 )
                 st.dataframe(df_p, use_container_width=True)
 
-                if is_proprietario:
-                    mostra_gestione_voci = st.toggle(
-                        "Modifica voci pasto", key=f"toggle_mod_{pasto}"
+                mostra_gestione_voci = st.toggle(
+                    "Modifica voci pasto", key=f"toggle_mod_{pasto}"
+                )
+
+                if mostra_gestione_voci:
+                    indices_disponibili = df_p.index.tolist()
+                    opzioni_rimozione = {
+                        f"Riga {idx}: {df_p.loc[idx, 'Alimento']} ({df_p.loc[idx, 'gr/n']}g)": idx
+                        for idx in indices_disponibili
+                    }
+
+                    voce_da_rimuovere = st.selectbox(
+                        "Elimina voce:",
+                        list(opzioni_rimozione.keys()),
+                        key=f"del_box_{pasto}",
                     )
 
-                    if mostra_gestione_voci:
-                        indices_disponibili = df_p.index.tolist()
-                        opzioni_rimozione = {
-                            f"Riga {idx}: {df_p.loc[idx, 'Alimento']} ({df_p.loc[idx, 'gr/n']}g)": idx
-                            for idx in indices_disponibili
-                        }
-
-                        voce_da_rimuovere = st.selectbox(
-                            "Elimina voce:",
-                            list(opzioni_rimozione.keys()),
-                            key=f"del_box_{pasto}",
-                        )
-
-                        col_btn1, col_btn2 = st.columns(2)
-                        with col_btn1:
-                            if st.button("Elimina", key=f"btn_del_{pasto}"):
-                                idx_to_drop = opzioni_rimozione[voce_da_rimuovere]
-                                db_diario_atleta[data_str][pasto] = df_p.drop(
-                                    idx_to_drop
-                                ).reset_index(drop=True)
-                                salva_dati_disco()
-                                st.rerun()
-                        with col_btn2:
-                            if st.button("Svuota", key=f"clear_{pasto}"):
-                                db_diario_atleta[data_str][
-                                    pasto
-                                ] = pd.DataFrame(
-                                    columns=[
-                                        "Alimento",
-                                        "gr/n",
-                                        "carbo",
-                                        "proteine",
-                                        "grassi",
-                                        "kcal",
-                                    ]
-                                )
-                                salva_dati_disco()
-                                st.rerun()
-                else:
-                    st.caption("🔒 Modifica voci disattivata per gli ospiti.")
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("Elimina", key=f"btn_del_{pasto}"):
+                            idx_to_drop = opzioni_rimozione[voce_da_rimuovere]
+                            db_diario_atleta[data_str][pasto] = df_p.drop(
+                                idx_to_drop
+                            ).reset_index(drop=True)
+                            salva_dati_disco()
+                            st.rerun()
+                    with col_btn2:
+                        if st.button("Svuota", key=f"clear_{pasto}"):
+                            db_diario_atleta[data_str][
+                                pasto
+                            ] = pd.DataFrame(
+                                columns=[
+                                    "Alimento",
+                                    "gr/n",
+                                    "carbo",
+                                    "proteine",
+                                    "grassi",
+                                    "kcal",
+                                ]
+                            )
+                            salva_dati_disco()
+                            st.rerun()
             else:
                 st.info("Nessun alimento registrato.")
 
