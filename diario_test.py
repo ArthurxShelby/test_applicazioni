@@ -261,21 +261,24 @@ st.title("Pianificatore Alimentare & Allenamento - Multi-Atleta (Mifflin)")
 if is_proprietario:
     with st.sidebar.expander("🛠️ Pannello Amministratore (Proprietario)"):
         st.markdown("### Cambio Password Proprietario")
-        nuova_pass_admin = st.text_input("Nuova Password Admin", type="password")
-        if st.button("Aggiorna Password Admin"):
-            if nuova_pass_admin.strip():
-                pwd_h_admin = hash_password(nuova_pass_admin.strip())
-                try:
-                    supabase.table("utenti").upsert({
-                        "username": "proprietario",
-                        "pswd": pwd_h_admin
-                    }).execute()
-                    st.session_state.custom_admin_password = pwd_h_admin
-                    st.success("Password admin aggiornata e salvata su Supabase!")
-                except Exception as e:
-                    st.error(f"Errore durante il salvataggio su Supabase: {e}")
-            else:
-                st.error("Inserisci una password valida.")
+        with st.form("form_cambio_password_admin"):
+            nuova_pass_admin = st.text_input("Nuova Password Admin", type="password")
+            btn_aggiorna_admin = st.form_submit_button("Aggiorna Password Admin")
+            
+            if btn_aggiorna_admin:
+                if nuova_pass_admin.strip():
+                    pwd_h_admin = hash_password(nuova_pass_admin.strip())
+                    try:
+                        supabase.table("utenti").upsert({
+                            "username": "proprietario",
+                            "pswd": pwd_h_admin
+                        }).execute()
+                        st.session_state.custom_admin_password = pwd_h_admin
+                        st.success("Password admin aggiornata e salvata su Supabase!")
+                    except Exception as e:
+                        st.error(f"Errore durante il salvataggio su Supabase: {e}")
+                else:
+                    st.error("Inserisci una password valida.")
 
         st.markdown("### Creazione e Gestione Account Atleti (Supabase)")
         with st.form("form_crea_utente"):
@@ -290,7 +293,6 @@ if is_proprietario:
                     st.warning("Username non consentito.")
                 else:
                     try:
-                        # Cifriamo la password prima di salvarla nel database
                         pwd_h_atleta = hash_password(nuova_pass.strip())
                         
                         supabase.table("utenti").upsert({
@@ -324,13 +326,14 @@ if is_proprietario:
                     with col_u1:
                         st.text(f"Utente: {usr}")
                     with col_u2:
-                        if st.button(f"Elimina {usr}", key=f"del_u_{usr}"):
-                            supabase.table("utenti").delete().eq("username", usr).execute()
-                            if usr in st.session_state.atleti:
-                                del st.session_state.atleti[usr]
-                            salva_dati_disco()
-                            st.success(f"Utente {usr} eliminato.")
-                            st.rerun()
+                        if usr != "proprietario":
+                            if st.button(f"Elimina {usr}", key=f"del_u_{usr}"):
+                                supabase.table("utenti").delete().eq("username", usr).execute()
+                                if usr in st.session_state.atleti:
+                                    del st.session_state.atleti[usr]
+                                salva_dati_disco()
+                                st.success(f"Utente {usr} eliminato.")
+                                st.rerun()
         except Exception as e:
             st.warning(f"Impossibile caricare gli utenti da Supabase: {e}")
 
