@@ -77,7 +77,7 @@ supabase = init_supabase()
 # Funzione per caricare i dati dal Cloud di Supabase
 def carica_dati_disco():
     try:
-        response = supabase.table("app_data_diario").select("payload").eq("id", 1).execute()
+        response = supabase.table("diario_test").select("payload").eq("id", 1).execute()
         if response.data and len(response.data) > 0:
             payload = response.data[0]["payload"]
             
@@ -142,7 +142,7 @@ def salva_dati_disco(dati=None):
             dati = serializza_oggetti(stato_grezzo)
         
         # Invio a Supabase
-        supabase.table("app_data_diario").upsert({"id": 1, "payload": dati}).execute()
+        supabase.table("diario_test").upsert({"id": 1, "payload": dati}).execute()
         st.toast("Dati salvati con successo su Supabase!", icon="✅")
     except Exception as e:
         st.error(f"Errore critico durante il salvataggio su Supabase: {e}")
