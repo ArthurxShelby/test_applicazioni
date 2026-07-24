@@ -145,7 +145,7 @@ if st.session_state.utente_loggato is None:
                 st.success("Accesso effettuato come Proprietario!")
                 st.rerun()
             else:
-                # Interroghiamo la tabella Supabase "utenti"[cite: 3]
+                # Interroghiamo la tabella Supabase "utenti"
                 try:
                     res = supabase.table("utenti").select("*").eq("username", username_input).execute()
                     if res.data and len(res.data) > 0:
@@ -315,29 +315,28 @@ if is_proprietario:
                     except Exception as e:
                         st.error(f"Errore durante la creazione su Supabase: {e}")
 
-        # Visualizzazione ed eliminazione utenti da Supabase
-        st.markdown("### Elenco Utenti Registrati su Supabase")
+        # Visualizzazione ed eliminazione utenti da Supabase tramite Menu a Discesa
+        st.markdown("### Gestione Utenti Registrati su Supabase")
         try:
             res_utenti = supabase.table("utenti").select("username").execute()
             if res_utenti.data:
-                for row in res_utenti.data:
-                    usr = row["username"]
-                    col_u1, col_u2 = st.columns([2, 1])
-                    with col_u1:
-                        st.text(f"Utente: {usr}")
-                    with col_u2:
-                        if usr != "proprietario":
-                            if st.button(f"Elimina {usr}", key=f"del_u_{usr}"):
-                                supabase.table("utenti").delete().eq("username", usr).execute()
-                                if usr in st.session_state.atleti:
-                                    del st.session_state.atleti[usr]
-                                salva_dati_disco()
-                                st.success(f"Utente {usr} eliminato.")
-                                st.rerun()
+                lista_utenti_supabase = [row["username"] for row in res_utenti.data if row["username"] != "proprietario"]
+                
+                if lista_utenti_supabase:
+                    utente_da_eliminare = st.selectbox("Seleziona utente da eliminare:", lista_utenti_supabase, key="select_utente_elimina")
+                    if st.button(f"Elimina utente selezionato"):
+                        supabase.table("utenti").delete().eq("username", utente_da_eliminare).execute()
+                        if utente_da_eliminare in st.session_state.atleti:
+                            del st.session_state.atleti[utente_da_eliminare]
+                        salva_dati_disco()
+                        st.success(f"Utente {utente_da_eliminare} eliminato.")
+                        st.rerun()
+                else:
+                    st.info("Nessun atleta aggiuntivo registrato.")
         except Exception as e:
             st.warning(f"Impossibile caricare gli utenti da Supabase: {e}")
 
-# --- SEZIONE GESTIONE ATLETI NELLA SIDEBAR ---
+# --- SEZIONE GESTIONE ATLETI NELLA SIDEBAR (MENU A DISCESA) ---
 st.sidebar.header("Gestione Atleti")
 lista_atleti = list(st.session_state.atleti.keys())
 
