@@ -281,39 +281,44 @@ if is_proprietario:
                     st.error("Inserisci una password valida.")
 
         st.markdown("### Creazione e Gestione Account Atleti (Supabase)")
-        with st.form("form_crea_utente"):
-            nuovo_user = st.text_input("Username Nuovo Atleta").strip()
-            nuova_pass = st.text_input("Password Nuovo Atleta", type="password")
-            btn_crea_user = st.form_submit_button("Crea Account e Profilo Atleta")
-            
-            if btn_crea_user:
-                if not nuovo_user or not nuova_pass.strip():
-                    st.error("Compila tutti i campi.")
-                elif nuovo_user == "proprietario":
-                    st.warning("Username non consentito.")
-                else:
-                    try:
-                        pwd_h_atleta = hash_password(nuova_pass.strip())
-                        
-                        supabase.table("utenti").upsert({
-                            "username": nuovo_user,
-                            "pswd": pwd_h_atleta
-                        }).execute()
+        with st.expander("➕ Crea Nuovo Utente"):
+            with st.form("form_crea_utente", clear_on_submit=True):
+                nuovo_user = st.text_input("Username Nuovo Atleta").strip()
+                nuova_pass = st.text_input("Password Nuovo Atleta", type="password")
+                btn_crea_user = st.form_submit_button("Crea Account e Profilo Atleta")
+                
+                if btn_crea_user:
+                    if not nuovo_user or not nuova_pass.strip():
+                        st.error("Compila tutti i campi.")
+                    elif nuovo_user == "proprietario":
+                        st.warning("Username non consentito.")
+                    else:
+                        try:
+                            pwd_h_atleta = hash_password(nuova_pass.strip())
+                            
+                            supabase.table("utenti").upsert({
+                                "username": nuovo_user,
+                                "pswd": pwd_h_atleta
+                            }).execute()
 
-                        if nuovo_user not in st.session_state.atleti:
-                            st.session_state.atleti[nuovo_user] = {
-                                "peso": 70.0,
-                                "altezza": 175.0,
-                                "eta": 30,
-                                "genere": "Uomo",
-                                "livello_allenamento": "Allenamento Moderato (PAL 1.55)",
-                                "db_diario": {},
-                            }
-                        salva_dati_disco()
-                        st.success(f"Account '{nuovo_user}' creato con password cifrata su Supabase!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Errore durante la creazione su Supabase: {e}")
+                            if nuovo_user not in st.session_state.atleti:
+                                st.session_state.atleti[nuovo_user] = {
+                                    "peso": 70.0,
+                                    "altezza": 175.0,
+                                    "eta": 30,
+                                    "genere": "Uomo",
+                                    "livello_allenamento": "Allenamento Moderato (PAL 1.55)",
+                                    "db_diario": {},
+                                }
+                            salva_dati_disco()
+                            st.session_state.ultimo_utente_creato = nuovo_user
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Errore durante la creazione su Supabase: {e}")
+
+        if "ultimo_utente_creato" in st.session_state and st.session_state.ultimo_utente_creato:
+            st.success(f"Account '{st.session_state.ultimo_utente_creato}' creato con successo e salvato su Supabase!")
+            st.session_state.ultimo_utente_creato = None
 
         # Visualizzazione ed eliminazione utenti da Supabase tramite Menu a Discesa
         st.markdown("### Gestione Utenti Registrati su Supabase")
