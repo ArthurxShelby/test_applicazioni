@@ -5,6 +5,11 @@ import pickle
 import re
 from supabase import create_client
 import streamlit as st
+import hashlib
+
+def hash_password(password):
+    """Converte la password in una stringa cifrata (SHA-256)"""
+    return hashlib.sha256(password.encode()).hexdigest()
 
 def safe_float(val):
     try:
