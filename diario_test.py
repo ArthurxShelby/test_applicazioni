@@ -280,7 +280,7 @@ if is_proprietario:
 
         st.markdown("### Creazione e Gestione Account Atleti (Supabase)")
         
-        with st.expander("➕ Crea Nuovo Utente"):
+       with st.expander("➕ Crea Nuovo Utente"):
             with st.form("form_crea_utente", clear_on_submit=True):
                 nuovo_user = st.text_input("Username Nuovo Atleta").strip()
                 nuova_pass = st.text_input("Password Nuovo Atleta", type="password")
@@ -310,7 +310,9 @@ if is_proprietario:
                                     "db_diario": {},
                                 }
                             salva_dati_disco()
-                            st.session_state.ultimo_utente_creato = nuovo_user
+                            
+                            # Mostra un toast a comparsa che scompare da solo dopo pochi secondi
+                            st.toast(f"Account '{nuovo_user}' creato con successo!", icon="✅")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Errore durante la creazione su Supabase: {e}")
