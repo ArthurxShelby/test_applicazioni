@@ -9,19 +9,14 @@ st.set_page_config(
     page_title="Pianificazione Allenamento", page_icon="🏋️", layout="wide"
 )
 
-# --- 0. GESTIONE AUTENTICAZIONE E RUOLI (BLINDATURA) ---
-st.sidebar.markdown("### 🔐 Accesso e Sicurezza")
-ruolo_utente = st.sidebar.radio("Modalità Utente", ["Ospite (Sola Lettura)", "Proprietario / Autorizzato"])
+# --- 0. CONTROLLO ACCESSO PROPRIETARIO ---
+# Verifica se l'utente ha effettuato il login come proprietario nella pagina principale
+is_proprietario = (st.session_state.get("ruolo_corrente") == "Proprietario")
 
-is_proprietario = False
-if ruolo_utente == "Proprietario / Autorizzato":
-    password_inserita = st.sidebar.text_input("Inserisci Password di Controllo", type="password")
-    password_corretta = st.secrets.get("auth", {}).get("proprietario_password", "admin123")
-    if password_inserita == password_corretta:
-        is_proprietario = True
-        st.sidebar.success("Accesso Proprietario Autorizzato (Controllo Completo)")
-    else:
-        st.sidebar.error("Password errata. Modalità limitata a Ospite.")
+if not is_proprietario:
+    st.error("🚨 Accesso Negato: questa sezione è riservata esclusivamente al proprietario.")
+    st.info("Torna alla pagina principale del Diario Alimentare ed effettua il login con le credenziali da amministratore.")
+    st.stop()  # Interrompe l'esecuzione del resto della pagina per i non autorizzati
 
 # --- 0. GESTIONE PERSISTENZA CLOUD (SUPABASE) ---
 
@@ -153,8 +148,6 @@ if mese_selezionato not in st.session_state.database_allenamenti[anno_selezionat
 
 dati_correnti = st.session_state.database_allenamenti[anno_selezionato][mese_selezionato]
 
-dati_correnti = st.session_state.database_allenamenti[anno_selezionato][mese_selezionato]
-
 # Assicura che sia sempre un DataFrame pronto all'uso
 if not isinstance(dati_correnti, pd.DataFrame):
     if isinstance(dati_correnti, list):
@@ -199,8 +192,6 @@ if is_proprietario:
                     st.error(f"Il file CSV non contiene le colonne corrette: {colonne_attese}")
             except Exception as e:
                 st.error(f"Errore nella lettura del file CSV: {e}")
-else:
-    st.info("ℹ️ Sezione di importazione CSV riservata al proprietario (Modalità Ospite: Sola Lettura).")
 
 # --- 5. TABELLA INTERATTIVA DI MODIFICA ---
 st.subheader(f"✍️ Gestione e Modifica Allenamenti: **{mese_selezionato} {anno_selezionato}**")
@@ -223,9 +214,6 @@ if is_proprietario:
     if not df_modificato.equals(df_base_mese):
         st.session_state.database_allenamenti[anno_selezionato][mese_selezionato] = df_modificato
         salva_database()
-else:
-    st.dataframe(df_base_mese, use_container_width=True)
-    st.warning("⚠️ Accesso Ospite: la tabella è in sola lettura.")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -274,7 +262,3 @@ if is_proprietario:
                     st.rerun()
                 except Exception as e:
                     st.error(f"Errore durante la pulizia: {e}")
-else:
-    with st.expander("🗑️ Pannello di Pulizia / Cancellazione Periodo (Avanzato)"):
-        st.warning("⚠️ Funzione riservata esclusivamente al proprietario.")
-
