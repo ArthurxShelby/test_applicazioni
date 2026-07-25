@@ -258,6 +258,29 @@ st.title("Pianificatore Alimentare & Allenamento - Multi-Atleta (Mifflin)")
 # --- SEZIONE GESTIONE AMMINISTRATIVA (PROPRIETARIO) CON SUPABASE "utenti" ---
 if is_proprietario:
     with st.sidebar.expander("🛠️ Pannello Amministratore (Proprietario)"):
+        
+        # --- NUOVA VISUALIZZAZIONE PAGINA ALLENAMENTI NEL MENU A SCOMPARSA ---
+        st.markdown("### 🏋️ Visualizzazione Allenamenti")
+        vista_allenamenti_attiva = st.toggle("Apri Gestione Allenamenti", value=False, key="toggle_vista_allenamenti_admin")
+        
+        if vista_allenamenti_attiva:
+            st.markdown("---")
+            st.markdown("#### 🚴‍♂️ Sezione Pianificazione e Caricamento Allenamenti")
+            st.info("Qui puoi visualizzare e gestire i dati relativi alla pianificazione delle sessioni e i test dell'atleta (es. rouleur-climber).")
+            
+            # Esempio di sezione interattiva dedicata agli allenamenti nel pannello admin
+            atleta_allenamento_selezionato = st.selectbox("Seleziona Atleta per Allenamenti", list(st.session_state.atleti.keys()), key="sel_atleta_allenamenti")
+            
+            with st.form("form_gestione_allenamenti_admin"):
+                st.write(f"Configurazione Allenamento per: **{atleta_allenamento_selezionato}**")
+                tipo_sessione = st.selectbox("Tipologia Seduta", ["Resistenza / Lungo", "Agilità / Salita (No SFR)", "Scarico / Feel-based"])
+                note_seduta = st.text_area("Note e Feedback (es. sensazioni su Intervals.icu)")
+                btn_salva_allenamento = st.form_submit_button("Salva Configurazione Allenamento")
+                
+                if btn_salva_allenamento:
+                    st.success(f"Sessione di allenamento aggiornata per {atleta_allenamento_selezionato}!")
+            st.markdown("---")
+        
         st.markdown("### Cambio Password Proprietario")
         with st.form("form_cambio_password_admin"):
             nuova_pass_admin = st.text_input("Nuova Password Admin", type="password")
