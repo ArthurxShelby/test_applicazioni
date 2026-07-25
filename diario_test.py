@@ -674,6 +674,14 @@ st.markdown("---")
 st.subheader("Inserimento Alimenti nei Pasti")
 pasto_selezionato = st.selectbox("Seleziona il pasto a cui aggiungere l'alimento:", PASTI)
 
+# Mostra il banner di successo se presente
+if "banner_pasto_inserito" in st.session_state and st.session_state.banner_pasto_inserito:
+    st.success(st.session_state.banner_pasto_inserito)
+    st.session_state.banner_pasto_inserito = None
+
+banca_dati_corrente = st.session_state.banca_dati_df
+
+
 banca_dati_corrente = st.session_state.banca_dati_df
 alimenti_validi = []
 if banca_dati_corrente is not None and not banca_dati_corrente.empty and "Alimento" in banca_dati_corrente.columns:
