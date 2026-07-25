@@ -728,7 +728,8 @@ if "banner_pasto_inserito" in st.session_state:
     del st.session_state.banner_pasto_inserito
 
 else:
-    st.warning("La banca dati è vuota o contiene solo elementi non validi.")
+    if not alimenti_validati:
+        st.warning("Nessun elemento inserito nella banca dati.")
 
 st.markdown("---")
 
