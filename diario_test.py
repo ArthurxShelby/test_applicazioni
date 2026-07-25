@@ -675,22 +675,25 @@ st.subheader("Inserimento Alimenti nei Pasti")
 pasto_selezionato = st.selectbox("Seleziona il pasto a cui aggiungere l'alimento:", PASTI)
 
 banca_dati_corrente = st.session_state.banca_dati_df
-alimenti_validi = banca_dati_corrente["Alimento"].dropna().tolist()
+alimenti_validi = []
+if banca_dati_corrente is not None and not banca_dati_corrente.empty and "Alimento" in banca_dati_corrente.columns:
+    alimenti_validi = banca_dati_corrente["Alimento"].dropna().tolist()
+    
 alimenti_validati = [str(a) for a in alimenti_validi if str(a).strip() != "" and str(a).lower() != "nan"]
 
 if alimenti_validati:
     col_ins1, col_ins2 = st.columns(2)
     with col_ins1:
-        alimento_scelto = st.selectbox("Alimento", alimenti_validati, key="sel_alimento_principale")
+        alimento_scelto = st.selectbox("Alimento", alimenti_validati, key=f"sel_alimento_principale_{st.session_state.atleta_corrente}")
         item_row = banca_dati_corrente[banca_dati_corrente["Alimento"].astype(str) == str(alimento_scelto)].iloc[0]
 
         val_gr_n = safe_float(item_row["gr/n"])
         default_q = int(val_gr_n) if val_gr_n > 0 else 100
 
     with col_ins2:
-        quantita = st.number_input("Quantità (g o porzione)", min_value=1.0, value=float(default_q), key="num_quantita_principale")
+        quantita = st.number_input("Quantità (g o porzione)", min_value=1.0, value=float(default_q), key=f"num_quantita_principale_{st.session_state.atleta_corrente}")
 
-    if st.button("Aggiungi al pasto selezionato", key="btn_aggiungi_principale"):
+    if st.button("Aggiungi al pasto selezionato", key=f"btn_aggiungi_principale_{st.session_state.atleta_corrente}"):
         fattore = quantita / default_q if default_q > 0 else 1
 
         c_calc = round(safe_float(item_row["carbo"]) * fattore, 2)
@@ -722,13 +725,10 @@ if alimenti_validati:
         salva_dati_disco()
         st.session_state.banner_pasto_inserito = f"Alimento '{alimento_scelto}' aggiunto con successo al pasto '{pasto_selezionato}'!"
         st.rerun()
-
-if "banner_pasto_inserito" in st.session_state:
-    st.success(st.session_state.banner_pasto_inserito)
-    del st.session_state.banner_pasto_inserito
-
 else:
-    st.warning("La banca dati è vuota o contiene solo elementi non validi.")
+    # Invece di mostrare un avviso bloccante ogni volta che si cambia atleta,
+    # usiamo st.empty() o un feedback non invasivo finché i dati non sono sincronizzati
+    st.empty()
 
 st.markdown("---")
 
