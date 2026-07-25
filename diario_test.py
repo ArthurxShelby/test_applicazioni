@@ -505,7 +505,7 @@ with st.expander("Gestione Avanzata Banca Dati Alimenti", expanded=False):
     if is_proprietario:
         st.markdown("---")
         st.markdown("### Inserimento Manuale Singolo Alimento")
-        with st.form("form_inserimento_manuale"):
+        with st.form("form_inserimento_manuale", clear_on_submit=True):
             col_man1, col_man2, col_man3 = st.columns(3)
             with col_man1:
                 nuovo_nome = st.text_input("Nome Alimento")
@@ -553,8 +553,12 @@ with st.expander("Gestione Avanzata Banca Dati Alimenti", expanded=False):
                         .reset_index(drop=True)
                     )
                     salva_dati_disco()
-                    st.success(f"Alimento '{nuovo_nome}' aggiunto/aggiornato con successo nella banca dati!")
+                    st.session_state.banner_alimento_inserito = f"Alimento '{nuovo_nome.strip()}' aggiunto/aggiornato con successo nella banca dati!"
                     st.rerun()
+
+        if "banner_alimento_inserito" in st.session_state:
+            st.success(st.session_state.banner_alimento_inserito)
+            del st.session_state.banner_alimento_inserito
 
         st.markdown("---")
         col_bd1, col_bd2 = st.columns(2)
@@ -716,7 +720,13 @@ if alimenti_validati:
             ignore_index=True,
         )
         salva_dati_disco()
+        st.session_state.banner_pasto_inserito = f"Alimento '{alimento_scelto}' aggiunto con successo al pasto '{pasto_selezionato}'!"
         st.rerun()
+
+if "banner_pasto_inserito" in st.session_state:
+    st.success(st.session_state.banner_pasto_inserito)
+    del st.session_state.banner_pasto_inserito
+
 else:
     st.warning("La banca dati è vuota o contiene solo elementi non validi.")
 
