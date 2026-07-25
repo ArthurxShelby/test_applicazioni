@@ -372,7 +372,6 @@ else:
     st.sidebar.text(f"Profilo attivo: {atleta_selezionato}")
 
 st.sidebar.markdown("---")
-st.sidebar.header(f"Parametri Mifflin & Allenamento: {st.session_state.atleta_corrente}")
 
 atleta_data = st.session_state.atleti[st.session_state.atleta_corrente]
 
@@ -394,37 +393,38 @@ allenamento_opzioni = [
 ]
 allenamento_index = allenamento_opzioni.index(saved_allenamento) if saved_allenamento in allenamento_opzioni else 2
 
-if is_proprietario or st.session_state.utente_loggato == st.session_state.atleta_corrente:
-    peso = st.sidebar.number_input("Peso (kg)", value=float(saved_peso), key=f"peso_{st.session_state.atleta_corrente}")
-    altezza = st.sidebar.number_input("Altezza (cm)", value=float(saved_altezza), key=f"altezza_{st.session_state.atleta_corrente}")
-    eta = st.sidebar.number_input("Età (anni)", value=int(saved_eta), key=f"eta_{st.session_state.atleta_corrente}")
-    genere = st.sidebar.selectbox("Genere", genere_opzioni, index=genere_index, key=f"genere_{st.session_state.atleta_corrente}")
-    livello_allenamento = st.sidebar.selectbox("Intensità Allenamento / Attività", allenamento_opzioni, index=allenamento_index, key=f"allenamento_{st.session_state.atleta_corrente}")
+with st.sidebar.expander(f"Parametri Mifflin & Allenamento: {st.session_state.atleta_corrente}"):
+    if is_proprietario or st.session_state.utente_loggato == st.session_state.atleta_corrente:
+        peso = st.number_input("Peso (kg)", value=float(saved_peso), key=f"peso_{st.session_state.atleta_corrente}")
+        altezza = st.number_input("Altezza (cm)", value=float(saved_altezza), key=f"altezza_{st.session_state.atleta_corrente}")
+        eta = st.number_input("Età (anni)", value=int(saved_eta), key=f"eta_{st.session_state.atleta_corrente}")
+        genere = st.selectbox("Genere", genere_opzioni, index=genere_index, key=f"genere_{st.session_state.atleta_corrente}")
+        livello_allenamento = st.selectbox("Intensità Allenamento / Attività", allenamento_opzioni, index=allenamento_index, key=f"allenamento_{st.session_state.atleta_corrente}")
 
-    if (
-        atleta_data.get("peso") != peso
-        or atleta_data.get("altezza") != altezza
-        or atleta_data.get("eta") != eta
-        or atleta_data.get("genere") != genere
-        or atleta_data.get("livello_allenamento") != livello_allenamento
-    ):
-        atleta_data["peso"] = peso
-        atleta_data["altezza"] = altezza
-        atleta_data["eta"] = eta
-        atleta_data["genere"] = genere
-        atleta_data["livello_allenamento"] = livello_allenamento
-        salva_dati_disco()
-else:
-    peso = saved_peso
-    altezza = saved_altezza
-    eta = saved_eta
-    genere = saved_genere
-    livello_allenamento = saved_allenamento
-    st.sidebar.text(f"Peso: {peso} kg")
-    st.sidebar.text(f"Altezza: {altezza} cm")
-    st.sidebar.text(f"Età: {eta} anni")
-    st.sidebar.text(f"Genere: {genere}")
-    st.sidebar.text(f"Attività: {livello_allenamento}")
+        if (
+            atleta_data.get("peso") != peso
+            or atleta_data.get("altezza") != altezza
+            or atleta_data.get("eta") != eta
+            or atleta_data.get("genere") != genere
+            or atleta_data.get("livello_allenamento") != livello_allenamento
+        ):
+            atleta_data["peso"] = peso
+            atleta_data["altezza"] = altezza
+            atleta_data["eta"] = eta
+            atleta_data["genere"] = genere
+            atleta_data["livello_allenamento"] = livello_allenamento
+            salva_dati_disco()
+    else:
+        peso = saved_peso
+        altezza = saved_altezza
+        eta = saved_eta
+        genere = saved_genere
+        livello_allenamento = saved_allenamento
+        st.text(f"Peso: {peso} kg")
+        st.text(f"Altezza: {altezza} cm")
+        st.text(f"Età: {eta} anni")
+        st.text(f"Genere: {genere}")
+        st.text(f"Attività: {livello_allenamento}")
 
 pal_dict = {
     "Riposo / Sedentario (PAL 1.2)": 1.2,
@@ -728,8 +728,7 @@ if "banner_pasto_inserito" in st.session_state:
     del st.session_state.banner_pasto_inserito
 
 else:
-    if not alimenti_validati:
-        st.warning("Nessun elemento inserito nella banca dati.")
+    st.warning("La banca dati è vuota o contiene solo elementi non validi.")
 
 st.markdown("---")
 
@@ -1019,5 +1018,5 @@ with st.expander("📥 Opzioni di Esportazione Report PDF (Giornaliero e Interva
                         file_name=f"report_periodo_{st.session_state.atleta_corrente}_{data_inizio}_al_{data_fine}.pdf",
                         mime="application/pdf",
                     )
-            except Exception as e:
+            exceptException as e:
                 st.error(f"Errore nella generazione del PDF personalizzato: {e}")
