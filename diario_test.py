@@ -34,7 +34,7 @@ def pulisci_dataframe_banca_dati(df):
 
 # Configurazione della pagina
 st.set_page_config(
-    page_title="Diario Alimentare & Allenamento - Multi-Atleta",
+    page_title="Diario Alimentare - Multi-Atleta",
     page_icon="",
     layout="wide",
 )
@@ -253,34 +253,11 @@ if "atleta_corrente" not in st.session_state:
 
 PASTI = ["Colazione", "Spuntino", "Pranzo", "Merenda", "Cena", "Extra"]
 
-st.title("Pianificatore Alimentare & Allenamento - Multi-Atleta (Mifflin)")
+st.title("Pianificatore Alimentare - Multi-Atleta (Mifflin)")
 
 # --- SEZIONE GESTIONE AMMINISTRATIVA (PROPRIETARIO) CON SUPABASE "utenti" ---
 if is_proprietario:
     with st.sidebar.expander("🛠️ Pannello Amministratore (Proprietario)"):
-        
-        # --- NUOVA VISUALIZZAZIONE PAGINA ALLENAMENTI NEL MENU A SCOMPARSA ---
-        st.markdown("### 🏋️ Visualizzazione Allenamenti")
-        vista_allenamenti_attiva = st.toggle("Apri Gestione Allenamenti", value=False, key="toggle_vista_allenamenti_admin")
-        
-        if vista_allenamenti_attiva:
-            st.markdown("---")
-            st.markdown("#### 🚴‍♂️ Sezione Pianificazione e Caricamento Allenamenti")
-            st.info("Qui puoi visualizzare e gestire i dati relativi alla pianificazione delle sessioni e i test dell'atleta (es. rouleur-climber).")
-            
-            # Esempio di sezione interattiva dedicata agli allenamenti nel pannello admin
-            atleta_allenamento_selezionato = st.selectbox("Seleziona Atleta per Allenamenti", list(st.session_state.atleti.keys()), key="sel_atleta_allenamenti")
-            
-            with st.form("form_gestione_allenamenti_admin"):
-                st.write(f"Configurazione Allenamento per: **{atleta_allenamento_selezionato}**")
-                tipo_sessione = st.selectbox("Tipologia Seduta", ["Resistenza / Lungo", "Agilità / Salita (No SFR)", "Scarico / Feel-based"])
-                note_seduta = st.text_area("Note e Feedback (es. sensazioni su Intervals.icu)")
-                btn_salva_allenamento = st.form_submit_button("Salva Configurazione Allenamento")
-                
-                if btn_salva_allenamento:
-                    st.success(f"Sessione di allenamento aggiornata per {atleta_allenamento_selezionato}!")
-            st.markdown("---")
-        
         st.markdown("### Cambio Password Proprietario")
         with st.form("form_cambio_password_admin"):
             nuova_pass_admin = st.text_input("Nuova Password Admin", type="password")
@@ -416,13 +393,13 @@ allenamento_opzioni = [
 ]
 allenamento_index = allenamento_opzioni.index(saved_allenamento) if saved_allenamento in allenamento_opzioni else 2
 
-with st.sidebar.expander(f"Parametri Mifflin & Allenamento: {st.session_state.atleta_corrente}"):
+with st.sidebar.expander(f"Parametri Mifflin & Attività: {st.session_state.atleta_corrente}"):
     if is_proprietario or st.session_state.utente_loggato == st.session_state.atleta_corrente:
         peso = st.number_input("Peso (kg)", value=float(saved_peso), key=f"peso_{st.session_state.atleta_corrente}")
         altezza = st.number_input("Altezza (cm)", value=float(saved_altezza), key=f"altezza_{st.session_state.atleta_corrente}")
         eta = st.number_input("Età (anni)", value=int(saved_eta), key=f"eta_{st.session_state.atleta_corrente}")
         genere = st.selectbox("Genere", genere_opzioni, index=genere_index, key=f"genere_{st.session_state.atleta_corrente}")
-        livello_allenamento = st.selectbox("Intensità Allenamento / Attività", allenamento_opzioni, index=allenamento_index, key=f"allenamento_{st.session_state.atleta_corrente}")
+        livello_allenamento = st.selectbox("Intensità Attività", allenamento_opzioni, index=allenamento_index, key=f"allenamento_{st.session_state.atleta_corrente}")
 
         if (
             atleta_data.get("peso") != peso
