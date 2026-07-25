@@ -725,8 +725,6 @@ if alimenti_validati:
         salva_dati_disco()
         st.session_state.banner_pasto_inserito = f"Alimento '{alimento_scelto}' aggiunto con successo al pasto '{pasto_selezionato}'!"
         st.rerun()
-        st.session_state.banner_pasto_inserito = f"Alimento '{alimento_scelto}' aggiunto con successo al pasto '{pasto_selezionato}'!"
-        st.rerun()
 else:
     # Invece di mostrare un avviso bloccante ogni volta che si cambia atleta,
     # usiamo st.empty() o un feedback non invasivo finché i dati non sono sincronizzati
