@@ -1018,5 +1018,5 @@ with st.expander("📥 Opzioni di Esportazione Report PDF (Giornaliero e Interva
                         file_name=f"report_periodo_{st.session_state.atleta_corrente}_{data_inizio}_al_{data_fine}.pdf",
                         mime="application/pdf",
                     )
-            exceptException as e:
+            except Exception as e:
                 st.error(f"Errore nella generazione del PDF personalizzato: {e}")
