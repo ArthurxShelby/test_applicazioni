@@ -607,7 +607,7 @@ with st.expander("Gestione Avanzata Banca Dati Alimenti", expanded=False):
                         df_nuovo = pd.read_csv(file_caricato, encoding="utf-8", sep=";", engine="python")
 
                     if df_nuovo is not None and not df_nuovo.empty:
-                        st.write("Anteprima dati letti dal file:", df_nuovo.head())
+                        st.write("Anteprima completa dei dati letti dal file:", df_nuovo)
                         if st.button("Conferma e Aggiungi alla Banca Dati"):
                             colonne_attese = ["Alimento", "gr/n", "carbo", "proteine", "grassi", "kcal"]
                             cols_orig = [str(c).strip().lower() for c in df_nuovo.columns]
@@ -659,7 +659,7 @@ with st.expander("Gestione Avanzata Banca Dati Alimenti", expanded=False):
                             )
                             salva_dati_disco()
                             st.success("Banca dati aggiornata con successo dal file CSV!")
-                            st.rerun()
+                            st.success("🎉 Operazione completata con successo! L'aggiornamento della banca dati alimentare è avvenuto correttamente.")
                 except Exception as e:
                     st.error(f"Errore durante la lettura del file CSV: {e}")
     else:
@@ -982,7 +982,7 @@ with st.expander("📥 Opzioni di Esportazione Report PDF (Giornaliero e Interva
                         pdf_output.write(6, f"Kcal: {dk:.1f}")
 
                         pdf_output.set_text_color(0, 0, 0)
-                        pdf_output.write(6, " | Carbo: ")
+                        pdf_output.write(6, " | Carbo: >")
                         if dc > obj_carbo:
                             pdf_output.set_text_color(220, 20, 60)
                         pdf_output.write(6, f"{dc:.1f}g")
