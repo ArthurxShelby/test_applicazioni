@@ -8,7 +8,7 @@ import requests
 st.set_page_config(page_title="Tracker Bici da Corsa - Mappa Fluida", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Mappa interattiva con zoom a due dita attivo, senza pulsanti +/- e gestione waypoint fluida.")
+st.write("Mappa interattiva stabile: nessun riavvio pagina durante l'uso.")
 
 if "points" not in st.session_state:
     st.session_state.points = [
@@ -22,6 +22,9 @@ if "map_center" not in st.session_state:
     st.session_state.map_center = [45.72, 13.68]
 if "map_zoom" not in st.session_state:
     st.session_state.map_zoom = 11
+
+if "temp_click" not in st.session_state:
+    st.session_state.temp_click = None
 
 def cerca_luogo(query):
     url = f"https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=1"
@@ -111,8 +114,26 @@ with st.sidebar:
                     st.warning("Inserisci il nome di un luogo.")
     else:
         st.subheader("🗺️ Click su Mappa Attivo")
-        st.info("Clicca sulla mappa in basso per aggiungere un punto.")
-        nome_click = st.text_input("Nome per il punto cliccato", f"Tappa {len(st.session_state.points) + 1}")
+        st.info("1. Clicca su un punto della mappa.\n2. Conferma l'aggiunta qui sotto.")
+        nome_click = st.text_input("Nome per il punto", f"Tappa {len(st.session_state.points) + 1}")
+        
+        if st.session_state.temp_click:
+            st.success(Coordinate selezionate pronte!)
+            if st.button("✅ Conferma e Aggiungi Punto"):
+                lat_c = st.session_state.temp_click["lat"]
+                lon_c = st.session_state.temp_click["lng"]
+                alt_c = ottieni_altitudine(lat_c, lon_c)
+                
+                st.session_state.points.append({
+                    "nome": nome_click,
+                    "lat": lat_c,
+                    "lon": lon_c,
+                    "alt": alt_c
+                })
+                st.session_state.temp_click = None
+                st.rerun()
+        else:
+            st.warning("Nessun punto selezionato sulla mappa.")
 
     st.markdown("---")
     st.subheader("🗑️ Azioni Rapide")
@@ -129,6 +150,7 @@ with st.sidebar:
         st.session_state.points = []
         st.session_state.map_center = [45.72, 13.68]
         st.session_state.map_zoom = 11
+        st.session_state.temp_click = None
         st.rerun()
 
 @st.fragment
@@ -152,7 +174,6 @@ def render_mappa_e_dati():
             tiles_url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
             attr = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
 
-        # zoom_control=False rimuove i pulsanti + e -, mentre scrollWheelZoom=True lascia attivo lo zoom con due dita
         m = folium.Map(
             location=st.session_state.map_center, 
             zoom_start=st.session_state.map_zoom, 
@@ -193,6 +214,14 @@ def render_mappa_e_dati():
                 icon=folium.Icon(color=colore_marker, icon=icona, prefix='fa')
             ).add_to(m)
 
+        # Evidenziamo il punto temporaneo cliccato se presente
+        if st.session_state.temp_click:
+            folium.Marker(
+                [st.session_state.temp_click["lat"], st.session_state.temp_click["lng"]],
+                popup="Punto Selezionato",
+                icon=folium.Icon(color='orange', icon='question', prefix='fa')
+            ).add_to(m)
+
         map_output = st_folium(
             m, 
             width='100%', 
@@ -205,15 +234,8 @@ def render_mappa_e_dati():
                 click_lat = map_output["last_clicked"]["lat"]
                 click_lon = map_output["last_clicked"]["lng"]
                 
-                ultimo_punto = st.session_state.points[-1] if st.session_state.points else None
-                if not ultimo_punto or (ultimo_punto["lat"] != click_lat or ultimo_punto["lon"] != click_lon):
-                    alt_cliccata = ottieni_altitudine(click_lat, click_lon)
-                    st.session_state.points.append({
-                        "nome": nome_click,
-                        "lat": click_lat,
-                        "lon": click_lon,
-                        "alt": alt_cliccata
-                    })
+                if not st.session_state.temp_click or (st.session_state.temp_click["lat"] != click_lat or st.session_state.temp_click["lng"] != click_lon):
+                    st.session_state.temp_click = {"lat": click_lat, "lng": click_lon}
     else:
         st.info("Aggiungi almeno un punto per visualizzare la mappa.")
 
