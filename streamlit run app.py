@@ -8,7 +8,7 @@ import requests
 st.set_page_config(page_title="Tracker Bici da Corsa - Mappa Fluida", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Mappa interattiva stabile: nessun riavvio pagina e posizione persistente.")
+st.write("Mappa interattiva stabile: zoom fluido libero e nessun riavvio durante la navigazione.")
 
 if "points" not in st.session_state:
     st.session_state.points = [
@@ -112,7 +112,7 @@ with st.sidebar:
                     st.warning("Inserisci il nome di un luogo.")
     else:
         st.subheader("🗺️ Click su Mappa Attivo")
-        st.info("Un tap/click sulla mappa aggiunge il punto e mantiene la posizione attiva.")
+        st.info("Fai tap sulla mappa per aggiungere un punto. Lo zoom a due dita è libero.")
 
     st.markdown("---")
     st.subheader("🗑️ Azioni Rapide")
@@ -195,37 +195,32 @@ def render_mappa_e_dati():
                 icon=folium.Icon(color=colore_marker, icon=icona, prefix='fa')
             ).add_to(m)
 
+        # Chiediamo a st_folium di restituire ESCLUSIVAMENTE l'evento di click sul marker/mappa, ignorando zoom e centro dinamici
         map_output = st_folium(
             m, 
             width='100%', 
             height=750, 
-            returned_objects=["last_clicked", "center", "zoom"]
+            returned_objects=["last_clicked"]
         )
         
-        if map_output:
-            if map_output.get("center"):
-                st.session_state.map_center = [map_output["center"]["lat"], map_output["center"]["lng"]]
-            if map_output.get("zoom"):
-                st.session_state.map_zoom = map_output["zoom"]
+        if map_output and modalita == "🗺️ Inserimento Manuale (Click su Mappa)":
+            if map_output.get("last_clicked"):
+                click_lat = map_output["last_clicked"]["lat"]
+                click_lon = map_output["last_clicked"]["lng"]
                 
-            if modalita == "🗺️ Inserimento Manuale (Click su Mappa)":
-                if map_output.get("last_clicked"):
-                    click_lat = map_output["last_clicked"]["lat"]
-                    click_lon = map_output["last_clicked"]["lng"]
+                ultimo_punto = st.session_state.points[-1] if st.session_state.points else None
+                if not ultimo_punto or (ultimo_punto["lat"] != click_lat or ultimo_punto["lon"] != click_lon):
+                    alt_cliccata = ottieni_altitudine(click_lat, click_lon)
+                    nuovo_nome = f"Tappa {len(st.session_state.points) + 1}"
                     
-                    ultimo_punto = st.session_state.points[-1] if st.session_state.points else None
-                    if not ultimo_punto or (ultimo_punto["lat"] != click_lat or ultimo_punto["lon"] != click_lon):
-                        alt_cliccata = ottieni_altitudine(click_lat, click_lon)
-                        nuovo_nome = f"Tappa {len(st.session_state.points) + 1}"
-                        
-                        st.session_state.points.append({
-                            "nome": nuovo_nome,
-                            "lat": click_lat,
-                            "lon": click_lon,
-                            "alt": alt_cliccata
-                        })
-                        # Aggiorniamo il centro nativo sullo zoom/posizione corrente senza forzare st.rerun() globale
-                        st.session_state.map_center = [click_lat, click_lon]
+                    st.session_state.points.append({
+                        "nome": nuovo_nome,
+                        "lat": click_lat,
+                        "lon": click_lon,
+                        "alt": alt_cliccata
+                    })
+                    st.session_state.map_center = [click_lat, click_lon]
+                    st.rerun()
     else:
         st.info("Aggiungi almeno un punto per visualizzare la mappa.")
 
