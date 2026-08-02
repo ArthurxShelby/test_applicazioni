@@ -5,10 +5,10 @@ import folium
 from streamlit_folium import st_folium
 import requests
 
-st.set_page_config(page_title="Tracker Bici da Corsa - Senza Riavvi", page_icon="🚴‍♂️", layout="wide")
+st.set_page_config(page_title="Tracker Bici da Corsa - Mappa Fluida", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Mappa a tutto schermo con aggiornamento fluido e mantenimento dello zoom.")
+st.write("Mappa interattiva ottimizzata: inserimento e gestione waypoint totalmente fluidi.")
 
 # Inizializzazione della sessione per i punti
 if "points" not in st.session_state:
@@ -211,6 +211,7 @@ def render_mappa_e_dati():
                     click_lon = map_output["last_clicked"]["lng"]
                     
                     ultimo_punto = st.session_state.points[-1] if st.session_state.points else None
+                    # Evitiamo di inserire lo stesso punto due volte consecutive
                     if not ultimo_punto or (ultimo_punto["lat"] != click_lat or ultimo_punto["lon"] != click_lon):
                         alt_cliccata = ottieni_altitudine(click_lat, click_lon)
                         st.session_state.points.append({
@@ -219,7 +220,7 @@ def render_mappa_e_dati():
                             "lon": click_lon,
                             "alt": alt_cliccata
                         })
-                        st.rerun()
+                        # Rimosso st.rerun(): il frammento si aggiornerà automaticamente senza sfarfallii
     else:
         st.info("Aggiungi almeno un punto per visualizzare la mappa.")
 
