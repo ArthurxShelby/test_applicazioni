@@ -8,7 +8,7 @@ import requests
 st.set_page_config(page_title="Tracker Bici da Corsa - Mappa Fluida", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Mappa interattiva con persistenza della posizione e inserimento diretto al click.")
+st.write("Mappa interattiva stabile: nessun riavvio pagina e posizione persistente.")
 
 if "points" not in st.session_state:
     st.session_state.points = [
@@ -103,7 +103,6 @@ with st.sidebar:
                             "lon": lon_trovata, 
                             "alt": alt_trovata
                         })
-                        # Fissiamo il centro della mappa sull'ultimo punto aggiunto
                         st.session_state.map_center = [lat_trovata, lon_trovata]
                         st.success("Tappa aggiunta con successo!")
                         st.rerun()
@@ -113,7 +112,7 @@ with st.sidebar:
                     st.warning("Inserisci il nome di un luogo.")
     else:
         st.subheader("🗺️ Click su Mappa Attivo")
-        st.info("Un tap/click sulla mappa aggiunge il punto e centra la vista sull'ultimo inserito.")
+        st.info("Un tap/click sulla mappa aggiunge il punto e mantiene la posizione attiva.")
 
     st.markdown("---")
     st.subheader("🗑️ Azioni Rapide")
@@ -200,10 +199,12 @@ def render_mappa_e_dati():
             m, 
             width='100%', 
             height=750, 
-            returned_objects=["last_clicked", "zoom"]
+            returned_objects=["last_clicked", "center", "zoom"]
         )
         
         if map_output:
+            if map_output.get("center"):
+                st.session_state.map_center = [map_output["center"]["lat"], map_output["center"]["lng"]]
             if map_output.get("zoom"):
                 st.session_state.map_zoom = map_output["zoom"]
                 
@@ -223,9 +224,8 @@ def render_mappa_e_dati():
                             "lon": click_lon,
                             "alt": alt_cliccata
                         })
-                        # Fissiamo permanentemente il centro della mappa sull'ultimo punto aggiunto
+                        # Aggiorniamo il centro nativo sullo zoom/posizione corrente senza forzare st.rerun() globale
                         st.session_state.map_center = [click_lat, click_lon]
-                        st.rerun()
     else:
         st.info("Aggiungi almeno un punto per visualizzare la mappa.")
 
