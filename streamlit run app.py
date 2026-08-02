@@ -118,7 +118,7 @@ with st.sidebar:
         nome_click = st.text_input("Nome per il punto", f"Tappa {len(st.session_state.points) + 1}")
         
         if st.session_state.temp_click:
-            st.success(Coordinate selezionate pronte!)
+            st.success("Coordinate selezionate pronte!")
             if st.button("✅ Conferma e Aggiungi Punto"):
                 lat_c = st.session_state.temp_click["lat"]
                 lon_c = st.session_state.temp_click["lng"]
@@ -214,7 +214,6 @@ def render_mappa_e_dati():
                 icon=folium.Icon(color=colore_marker, icon=icona, prefix='fa')
             ).add_to(m)
 
-        # Evidenziamo il punto temporaneo cliccato se presente
         if st.session_state.temp_click:
             folium.Marker(
                 [st.session_state.temp_click["lat"], st.session_state.temp_click["lng"]],
