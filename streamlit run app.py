@@ -8,7 +8,7 @@ import requests
 st.set_page_config(page_title="Tracker Bici da Corsa - Mappa Fluida", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Mappa interattiva con inserimento diretto al click e aggiornamento fluido.")
+st.write("Mappa interattiva con persistenza della posizione e inserimento diretto al click.")
 
 if "points" not in st.session_state:
     st.session_state.points = [
@@ -103,6 +103,8 @@ with st.sidebar:
                             "lon": lon_trovata, 
                             "alt": alt_trovata
                         })
+                        # Fissiamo il centro della mappa sull'ultimo punto aggiunto
+                        st.session_state.map_center = [lat_trovata, lon_trovata]
                         st.success("Tappa aggiunta con successo!")
                         st.rerun()
                     else:
@@ -111,10 +113,7 @@ with st.sidebar:
                     st.warning("Inserisci il nome di un luogo.")
     else:
         st.subheader("🗺️ Click su Mappa Attivo")
-        st.info("Basta un click (o un tap) sulla mappa per aggiungere subito una nuova tappa.")
-        # Salviamo l'ultimo punto cliccato nello stato per assegnargli un nome progressivo sicuro
-        if "click_counter" not in st.session_state:
-            st.session_state.click_counter = len(st.session_state.points) + 1
+        st.info("Un tap/click sulla mappa aggiunge il punto e centra la vista sull'ultimo inserito.")
 
     st.markdown("---")
     st.subheader("🗑️ Azioni Rapide")
@@ -122,6 +121,9 @@ with st.sidebar:
     if st.button("↩️ Elimina Ultimo Waypoint"):
         if len(st.session_state.points) > 0:
             eliminato = st.session_state.points.pop()
+            if len(st.session_state.points) > 0:
+                ult = st.session_state.points[-1]
+                st.session_state.map_center = [ult["lat"], ult["lon"]]
             st.success(f"Rimosso: {eliminato['nome']}")
             st.rerun()
         else:
@@ -198,27 +200,32 @@ def render_mappa_e_dati():
             m, 
             width='100%', 
             height=750, 
-            returned_objects=["last_clicked"]
+            returned_objects=["last_clicked", "zoom"]
         )
         
-        if map_output and modalita == "🗺️ Inserimento Manuale (Click su Mappa)":
-            if map_output.get("last_clicked"):
-                click_lat = map_output["last_clicked"]["lat"]
-                click_lon = map_output["last_clicked"]["lng"]
+        if map_output:
+            if map_output.get("zoom"):
+                st.session_state.map_zoom = map_output["zoom"]
                 
-                ultimo_punto = st.session_state.points[-1] if st.session_state.points else None
-                if not ultimo_punto or (ultimo_punto["lat"] != click_lat or ultimo_punto["lon"] != click_lon):
-                    alt_cliccata = ottieni_altitudine(click_lat, click_lon)
-                    nuovo_nome = f"Tappa {len(st.session_state.points) + 1}"
+            if modalita == "🗺️ Inserimento Manuale (Click su Mappa)":
+                if map_output.get("last_clicked"):
+                    click_lat = map_output["last_clicked"]["lat"]
+                    click_lon = map_output["last_clicked"]["lng"]
                     
-                    st.session_state.points.append({
-                        "nome": nuovo_nome,
-                        "lat": click_lat,
-                        "lon": click_lon,
-                        "alt": alt_cliccata
-                    })
-                    # Sfruttiamo il frammento per aggiornare istantaneamente la mappa e la tabella senza ricaricare la pagina
-                    st.rerun()
+                    ultimo_punto = st.session_state.points[-1] if st.session_state.points else None
+                    if not ultimo_punto or (ultimo_punto["lat"] != click_lat or ultimo_punto["lon"] != click_lon):
+                        alt_cliccata = ottieni_altitudine(click_lat, click_lon)
+                        nuovo_nome = f"Tappa {len(st.session_state.points) + 1}"
+                        
+                        st.session_state.points.append({
+                            "nome": nuovo_nome,
+                            "lat": click_lat,
+                            "lon": click_lon,
+                            "alt": alt_cliccata
+                        })
+                        # Fissiamo permanentemente il centro della mappa sull'ultimo punto aggiunto
+                        st.session_state.map_center = [click_lat, click_lon]
+                        st.rerun()
     else:
         st.info("Aggiungi almeno un punto per visualizzare la mappa.")
 
