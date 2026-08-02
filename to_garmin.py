@@ -105,8 +105,8 @@ if st.session_state.garmin_client:
                                     },
                                     "endConditionValue": duration_minutes * 60,
                                     "targetType": {
-                                        "workoutTargetTypeId": 4,
-                                        "workoutTargetTypeKey": "power.zone",
+                                        "workoutTargetTypeId": 3,
+                                        "workoutTargetTypeKey": "power",
                                     },
                                     "targetValueOne": power_min,
                                     "targetValueTwo": power_max,
