@@ -72,69 +72,47 @@ if st.session_state.garmin_client:
         workout_data = {
             "workoutName": workout_name,
             "sportType": {"sportTypeId": 2, "sportTypeKey": "cycling"},
+            "estimatedDurationInSeconds": duration_minutes * 60 * num_repeats,
+            "estimatedDistanceInMeters": 0,
             "workoutSegments": [
                 {
                     "segmentOrder": 1,
                     "sportType": {"sportTypeId": 2, "sportTypeKey": "cycling"},
                     "workoutSteps": [
                         {
-                            "type": "executableStep",
-                            "stepOrder": 1,
-                            "description": "Riscaldamento",
-                            "endCondition": {
-                                "conditionTypeId": 1,
-                                "conditionTypeKey": "lap.button",
-                            },
-                            "targetType": {
-                                "workoutTargetTypeId": 1,
-                                "workoutTargetTypeKey": "no.target",
-                            },
-                        },
-                        {
                             "type": "repeatGroup",
-                            "stepOrder": 2,
+                            "stepOrder": 1,
                             "numberOfIterations": num_repeats,
                             "workoutSteps": [
                                 {
                                     "type": "executableStep",
                                     "stepOrder": 1,
-                                    "description": "Fase di spinta",
-                                    "endCondition": {
-                                        "conditionTypeId": 2,
-                                        "conditionTypeKey": "time",
+                                    "durationValue": duration_minutes * 60,
+                                    "durationUnit": {
+                                        "unitId": 2,
+                                        "unitKey": "time",
                                     },
-                                    "endConditionValue": duration_minutes * 60,
+                                    "targetValue": {
+                                        "unitId": 11,
+                                        "unitKey": "watt",
+                                        "comparator": "range",
+                                        "min": power_min,
+                                        "max": power_max,
+                                    },
                                     "targetType": {
                                         "workoutTargetTypeId": 3,
                                         "workoutTargetTypeKey": "power",
                                     },
-                                    "targetValueOne": power_min,
-                                    "targetValueTwo": power_max,
-                                },
-                                {
-                                    "type": "executableStep",
-                                    "stepOrder": 2,
-                                    "description": "Recupero",
-                                    "endCondition": {
-                                        "conditionTypeId": 1,
-                                        "conditionTypeKey": "lap.button",
-                                    },
-                                    "targetType": {
-                                        "workoutTargetTypeId": 1,
-                                        "workoutTargetTypeKey": "no.target",
-                                    },
-                                },
+                                }
                             ],
-                        },
+                        }
                     ],
                 }
             ],
         }
 
-        # Invio dei dati a Garmin usando il metodo corretto della libreria
+        # Invio a Garmin
         response = client.upload_workout(workout_data)
-
-        # Estrazione dell'ID e pianificazione nel calendario
         workout_id = response.get("workoutId")
         date_str = workout_date.strftime("%Y-%m-%d")
         client.schedule_workout(workout_id, date_str)
