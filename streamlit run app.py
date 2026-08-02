@@ -5,10 +5,10 @@ import folium
 from streamlit_folium import st_folium
 import requests
 
-st.set_page_config(page_title="Tracker Bici da Corsa - Mappa Stabile", page_icon="🚴‍♂️", layout="wide")
+st.set_page_config(page_title="Tracker Bici da Corsa - Mappa Fluida", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Mappa protetta contro i riavvii da trackpad Mac.")
+st.write("Mappa interattiva con zoom a due dita attivo e gestione waypoint fluida.")
 
 if "points" not in st.session_state:
     st.session_state.points = [
@@ -152,13 +152,13 @@ def render_mappa_e_dati():
             tiles_url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
             attr = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
 
-        # Creazione della mappa bloccando il zoom gestito da scroll/trackpad nativo per evitare conflitti su Mac
+        # scrollWheelZoom ripristinato a True per consentire lo zoom con il trackpad del Mac
         m = folium.Map(
             location=st.session_state.map_center, 
             zoom_start=st.session_state.map_zoom, 
             tiles=tiles_url, 
             attr=attr,
-            scrollWheelZoom=False,
+            scrollWheelZoom=True,
             dragging=True
         )
 
@@ -192,7 +192,6 @@ def render_mappa_e_dati():
                 icon=folium.Icon(color=colore_marker, icon=icona, prefix='fa')
             ).add_to(m)
 
-        # Restituiamo solo il click, disabilitando il ritorno di centro e zoom dinamici che causano il refresh
         map_output = st_folium(
             m, 
             width='100%', 
