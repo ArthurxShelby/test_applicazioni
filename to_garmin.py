@@ -68,6 +68,7 @@ if st.session_state.garmin_client:
         # Nota: La struttura JSON esatta per i workout complessi richiede i codici categoria Garmin.
         # Qui impostiamo la struttura logica di base per un allenamento di ciclismo.
 
+        # Creazione del payload dell'allenamento
         workout_data = {
             "workoutName": workout_name,
             "sportType": {"sportTypeId": 2, "sportTypeKey": "cycling"},
@@ -102,8 +103,7 @@ if st.session_state.garmin_client:
                                         "conditionTypeId": 2,
                                         "conditionTypeKey": "time",
                                     },
-                                    "endConditionValue": duration_minutes
-                                    * 60,  # in secondi
+                                    "endConditionValue": duration_minutes * 60,
                                     "targetType": {
                                         "workoutTargetTypeId": 4,
                                         "workoutTargetTypeKey": "power.zone",
@@ -131,11 +131,11 @@ if st.session_state.garmin_client:
             ],
         }
 
-        # 1. Creazione del workout su Garmin
-        created_workout = client.add_workout(workout_data)
-        workout_id = created_workout.get("workoutId")
+        # Invio dei dati a Garmin usando il metodo corretto della libreria
+        response = client.upload_workout(workout_data)
 
-        # 2. Programmazione del workout nel calendario alla data scelta
+        # Estrazione dell'ID e pianificazione nel calendario
+        workout_id = response.get("workoutId")
         date_str = workout_date.strftime("%Y-%m-%d")
         client.schedule_workout(workout_id, date_str)
 
