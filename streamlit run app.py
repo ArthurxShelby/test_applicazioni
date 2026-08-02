@@ -1,23 +1,49 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-# Rimuoviamo matplotlib, non serve più per la mappa
 from geopy.distance import geodesic
 import folium
 from streamlit_folium import st_folium
+import requests
 
-st.set_page_config(page_title="Tracker Uscite Bici Interattivo", page_icon="🚴‍♂️", layout="wide")
+st.set_page_config(page_title="Tracker Bici da Corsa - Strade Reali", page_icon="🚴‍♂️", layout="wide")
 
-st.title("🚴‍♂️ Tracker Uscite in Bici (Mappa Interattiva)")
-st.write("Inserisci i punti di passaggio. Il percorso verrà visualizzato sulla mappa interattiva.")
+st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa (Percorsi su Strada)")
+st.write("Inserisci le tappe: il sistema calcolerà la traccia seguendo le reali strade asfaltate.")
 
-# Inizializzazione della sessione per i punti (Trieste - Basovizza - Prosecco)
+# Inizializzazione della sessione
 if "points" not in st.session_state:
     st.session_state.points = [
         {"nome": "Trieste (Partenza)", "lat": 45.6495, "lon": 13.7768, "alt": 5},
         {"nome": "Basovizza", "lat": 45.6417, "lon": 13.8639, "alt": 370},
         {"nome": "Prosecco", "lat": 45.7142, "lon": 13.7433, "alt": 250}
     ]
+
+# Funzione per ottenere il percorso stradale reale tramite OSRM (Open Source Routing Machine)
+def ottieni_percorso_stradale(punti):
+    if len(punti) < 2:
+        return [], 0.0
+    
+    # Costruisce la stringa delle coordinate per l'API OSRM (lon,lat;lon,lat...)
+    coords_str = ";".join([f"{p['lon']},{p['lat']}" for p in punti])
+    url = f"http://router.project-osrm.org/route/v1/driving/{coords_str}?overview=full&geometries=geojson"
+    
+    try:
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if "routes" in data and len(data["routes"]) > 0:
+                route = data["routes"][0]
+                # Le coordinate in GeoJSON sono [lon, lat], Folium vuole [lat, lon]
+                geometry = [[coord[1], coord[0]] for coord in route["geometry"]["coordinates"]]
+                distanza_km = route["distance"] / 1000.0  # convertito in km
+                return geometry, distanza_km
+    except Exception as e:
+        st.error(f"Errore di connessione al servizio di routing stradale: {e}")
+    
+    # Fallimento di riserva (linea retta se l'API non risponde)
+    fallback_coords = [[p["lat"], p["lon"]] for p in punti]
+    return fallback_coords, 0.0
 
 with st.sidebar:
     st.header("➕ Aggiungi Tappa")
@@ -39,76 +65,71 @@ with st.sidebar:
         st.session_state.points = []
         st.rerun()
 
-# Sezione Principale: Layout a due colonne
+# Layout principale
 col_map, col_data = st.columns([2, 1])
 
-# --- Colonna Sinistra: Mappa ---
 with col_map:
-    st.subheader("🗺️ Mappa del Percorso")
+    st.subheader("🗺️ Mappa del Percorso Stradale")
     
-    # Selettore stile mappa nella colonna della mappa
+    # Selettore dello stile della mappa
     map_style = st.radio(
         "Scegli stile mappa:",
-        ("🗺️ Stradale (OpenStreetMap)", "衛星 Satellitare (con etichette)"),
+        ("🗺️ Stradale (OpenStreetMap)", "🛰️ Satellitare (con etichette)"),
         horizontal=True
     )
     
     if len(st.session_state.points) > 0:
-        # Calcola il centro medio dei punti per centrare la mappa
         centro_lat = np.mean([p["lat"] for p in st.session_state.points])
         centro_lon = np.mean([p["lon"] for p in st.session_state.points])
         
-        # Crea l'oggetto mappa Folium
+        # Inizializzazione mappa
         if map_style == "🗺️ Stradale (OpenStreetMap)":
             m = folium.Map(location=[centro_lat, centro_lon], zoom_start=12, tiles='OpenStreetMap')
         else:
-            # Utilizziamo Esri World Imagery che è ottimo e spesso ha etichette integrate
-            m = folium.Map(location=[centro_lat, centro_lon], zoom_start=12, tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community')
+            m = folium.Map(
+                location=[centro_lat, centro_lon], 
+                zoom_start=12, 
+                tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
+                attr='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            )
 
-        # Prepara la lista di coordinate per la linea
-        coordinate_linea = []
+        # Calcola tracciato stradale reale
+        coordinate_strada, distanza_stradale = ottieni_percorso_stradale(st.session_state.points)
 
+        # Disegna la linea che segue le strade
+        if len(coordinate_strada) > 1:
+            folium.PolyLine(
+                coordinate_strada,
+                color='red',
+                weight=4,
+                opacity=0.8,
+                tooltip='Percorso Stradale'
+            ).add_to(m)
+
+        # Aggiungi i marker dei punti
         for i, punto in enumerate(st.session_state.points):
-            # Crea il popup con le info
             popup_html = f"<b>{punto['nome']}</b><br>Altitudine: {punto['alt']}m"
-            
-            # Colore diverso per partenza e arrivo
             if i == 0:
-                colore_marker = 'green' # Partenza
+                colore_marker = 'green'
                 icona = 'play'
             elif i == len(st.session_state.points) - 1:
-                colore_marker = 'red' # Arrivo
+                colore_marker = 'darkred'
                 icona = 'flag'
             else:
-                colore_marker = 'blue' # Tappe intermedie
+                colore_marker = 'blue'
                 icona = 'map-pin'
 
-            # Aggiungi il Marker
             folium.Marker(
                 [punto["lat"], punto["lon"]],
                 popup=popup_html,
                 tooltip=f"{punto['nome']} ({punto['alt']}m)",
                 icon=folium.Icon(color=colore_marker, icon=icona, prefix='fa')
             ).add_to(m)
-            
-            coordinate_linea.append([punto["lat"], punto["lon"]])
 
-        # Aggiungi la linea del percorso
-        if len(coordinate_linea) > 1:
-            folium.PolyLine(
-                coordinate_linea,
-                color='blue',
-                weight=3,
-                opacity=0.8,
-                tooltip='Percorso'
-            ).add_to(m)
-
-        # Visualizza la mappa in Streamlit
         st_folium(m, width='100%', height=500)
     else:
         st.info("Aggiungi almeno un punto per visualizzare la mappa.")
 
-# --- Colonna Destra: Dati e Tabella ---
 with col_data:
     st.subheader("📊 Dati Tecnici")
     
@@ -116,34 +137,22 @@ with col_data:
         df_points = pd.DataFrame(st.session_state.points)
         st.dataframe(df_points, use_container_width=True)
         
-        # Calcoli di distanza e dislivello
-        distanza_totale = 0.0
+        # Calcolo dislivello basato sui punti inseriti
         dislivello_positivo = 0.0
         dislivello_negativo = 0.0
         
         for i in range(len(st.session_state.points) - 1):
-            p1 = (st.session_state.points[i]["lat"], st.session_state.points[i]["lon"])
-            p2 = (st.session_state.points[i+1]["lat"], st.session_state.points[i+1]["lon"])
-            
-            # Distanza in km
-            distanza_totale += geodesic(p1, p2).kilometers
-            
-            # Calcolo dislivello
             alt1 = st.session_state.points[i]["alt"]
             alt2 = st.session_state.points[i+1]["alt"]
             diff_alt = alt2 - alt1
-            
             if diff_alt > 0:
                 dislivello_positivo += diff_alt
             else:
                 dislivello_negativo += abs(diff_alt)
 
-        # Metriche principali
-        st.metric("📏 Distanza Totale", f"{distanza_totale:.2f} km")
+        # Mostra i dati con la distanza stradale effettiva calcolata dall'API
+        st.metric("📏 Distanza su Strada", f"{distanza_stradale:.2f} km")
         st.metric("📈 Dislivello Positivo", f"{dislivello_positivo:.0f} m")
         st.metric("📉 Dislivello Negativo", f"{dislivello_negativo:.0f} m")
     else:
         st.info("Aggiungi punti per vedere i dati.")
-
-# RIMOSSO IL GRAFICO ALTImETRICO per far posto alla mappa completa.
-# Se lo vuoi rimettere, puoi metterlo sotto i dati tecnici.
