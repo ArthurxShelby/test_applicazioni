@@ -8,7 +8,7 @@ import requests
 st.set_page_config(page_title="Tracker Bici da Corsa - Mappa Fluida", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Mappa interattiva stabile con calcolo del dislivello calibrato e filtrato dal rumore digitale.")
+st.write("Mappa interattiva stabile con calcolo del dislivello calibrato e corretto.")
 
 if "points" not in st.session_state:
     st.session_state.points = [
@@ -78,8 +78,8 @@ def calcola_dislivello_dettagliato(coordinate_strada):
     if len(coordinate_strada) < 2:
         return 0.0, 0.0
     
-    # Campionamento bilanciato
-    passi = max(1, len(coordinate_strada) // 80)
+    # Usiamo un campionamento più fitto (es. raddoppiato rispetto a prima)
+    passi = max(1, len(coordinate_strada) // 120)
     punti_campionati = coordinate_strada[::passi]
     if coordinate_strada[-1] not in punti_campionati:
         punti_campionati.append(coordinate_strada[-1])
@@ -91,7 +91,7 @@ def calcola_dislivello_dettagliato(coordinate_strada):
     if not grezze:
         return 0.0, 0.0
 
-    # Smoothing a media mobile per ripulire le oscillazioni spurie dell'API
+    # Smoothing delicato per preservare i dislivelli reali senza troncarli
     quote = []
     window = 3
     for i in range(len(grezze)):
@@ -103,8 +103,8 @@ def calcola_dislivello_dettagliato(coordinate_strada):
     dislivello_positivo = 0.0
     dislivello_negativo = 0.0
     
-    # Soglia di rumore tarata a 3.0 metri per evitare il conteggio di micro-variazioni fittizie
-    soglia_rumore = 3.0
+    # Abbassiamo la soglia di rumore a 1.0 metro per catturare tutte le vere rampe senza scartarle
+    soglia_rumore = 1.0
     
     for i in range(len(quote) - 1):
         diff = quote[i+1] - quote[i]
