@@ -6,10 +6,10 @@ import folium
 from streamlit_folium import st_folium
 import requests
 
-st.set_page_config(page_title="Tracker Bici da Corsa - Personalizzato", page_icon="🚴‍♂️", layout="wide")
+st.set_page_config(page_title="Tracker Bici da Corsa - Click Mappa", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Gestisci le tappe del tuo percorso stradale con ricerca automatica o inserimento manuale delle coordinate.")
+st.write("Cerca per indirizzo oppure seleziona l'inserimento manuale per **cliccare direttamente sulla mappa** e aggiungere i waypoint.")
 
 # Inizializzazione della sessione
 if "points" not in st.session_state:
@@ -30,22 +30,25 @@ def cerca_luogo(query):
             if len(data) > 0:
                 lat = float(data[0]["lat"])
                 lon = float(data[0]["lon"])
-                
-                alt = 50 
-                try:
-                    elev_url = f"https://api.open-elevation.com/api/v1/lookup?locations={lat},{lon}"
-                    elev_res = requests.get(elev_url, timeout=3)
-                    if elev_res.status_code == 200:
-                        elev_data = elev_res.json()
-                        if "results" in elev_data and len(elev_data["results"]) > 0:
-                            alt = elev_data["results"][0]["elevation"]
-                except:
-                    pass
-                
+                alt = ottieni_altitudine(lat, lon)
                 return lat, lon, int(alt)
     except Exception as e:
         st.error(f"Errore nella ricerca del luogo: {e}")
     return None, None, None
+
+# Funzione per ottenere l'altitudine tramite API pubblica
+def ottieni_altitudine(lat, lon):
+    alt = 50
+    try:
+        elev_url = f"https://api.open-elevation.com/api/v1/lookup?locations={lat},{lon}"
+        elev_res = requests.get(elev_url, timeout=3)
+        if elev_res.status_code == 200:
+            elev_data = elev_res.json()
+            if "results" in elev_data and len(elev_data["results"]) > 0:
+                alt = elev_data["results"][0]["elevation"]
+    except:
+        pass
+    return int(alt)
 
 # Funzione per calcolare il percorso stradale reale (OSRM)
 def ottieni_percorso_stradale(punti):
@@ -73,10 +76,9 @@ def ottieni_percorso_stradale(punti):
 with st.sidebar:
     st.header("⚙️ Gestione Tappe")
     
-    # Scelta della modalità di inserimento
     modalita = st.radio(
         "Modalità inserimento:",
-        ("🔍 Ricerca per Nome/Indirizzo", "✍️ Inserimento Manuale Coordinate"),
+        ("🔍 Ricerca per Nome/Indirizzo", "🗺️ Inserimento Manuale (Click su Mappa)"),
         horizontal=False
     )
     
@@ -107,32 +109,15 @@ with st.sidebar:
                 else:
                     st.warning("Inserisci il nome di un luogo.")
     else:
-        with st.form("add_point_form_manual"):
-            st.subheader("➕ Aggiungi Manualmente")
-            nome_manuale = st.text_input("Nome Tappa", "Punto X")
-            lat_manuale = st.number_input("Latitudine", value=45.6700, format="%.5f")
-            lon_manuale = st.number_input("Longitudine", value=13.7800, format="%.5f")
-            alt_manuale = st.number_input("Altitudine (metri)", value=150)
-            
-            submitted_manual = st.form_submit_button("Aggiungi alla lista")
-            
-            if submitted_manual:
-                if len(nome_manuale) > 0:
-                    st.session_state.points.append({
-                        "nome": nome_manuale, 
-                        "lat": lat_manuale, 
-                        "lon": lon_manuale, 
-                        "alt": alt_manuale
-                    })
-                    st.success("Tappa manuale aggiunta!")
-                    st.rerun()
-                else:
-                    st.warning("Inserisci un nome per la tappa.")
+        st.subheader("🗺️ Click su Mappa Attivo")
+        st.info("Clicca in un punto qualsiasi della mappa a destra per aggiungere automaticamente una nuova tappa.")
+        
+        # Opzionale: nome da dare al punto cliccato
+        nome_click = st.text_input("Nome per il prossimo punto cliccato", f"Tappa {len(st.session_state.points) + 1}")
 
     st.markdown("---")
     st.subheader("🗑️ Azioni Rapide")
     
-    # Pulsante per eliminare l'ultimo waypoint
     if st.button("↩️ Elimina Ultimo Waypoint"):
         if len(st.session_state.points) > 0:
             eliminato = st.session_state.points.pop()
@@ -141,7 +126,6 @@ with st.sidebar:
         else:
             st.warning("Non ci sono tappe da eliminare.")
 
-    # Pulsante per resettare tutto
     if st.button("🔄 Resetta Tutte le Tappe"):
         st.session_state.points = []
         st.rerun()
@@ -202,7 +186,26 @@ with col_map:
                 icon=folium.Icon(color=colore_marker, icon=icona, prefix='fa')
             ).add_to(m)
 
-        st_folium(m, width='100%', height=500)
+        # Mostra la mappa e cattura il click se siamo in modalità manuale
+        map_output = st_folium(m, width='100%', height=500)
+        
+        # Gestione del click sulla mappa
+        if modalita == "🗺️ Inserimento Manuale (Click su Mappa)":
+            if map_output and map_output.get("last_clicked"):
+                click_lat = map_output["last_clicked"]["lat"]
+                click_lon = map_output["last_clicked"]["lng"]
+                
+                # Evita di aggiungere lo stesso punto più volte di seguito a causa del refresh
+                ultimo_punto = st.session_state.points[-1] if st.session_state.points else None
+                if not ultimo_punto or (ultimo_punto["lat"] != click_lat or ultimo_punto["lon"] != click_lon):
+                    alt_cliccata = ottieni_altitudine(click_lat, click_lon)
+                    st.session_state.points.append({
+                        "nome": nome_click,
+                        "lat": click_lat,
+                        "lon": click_lon,
+                        "alt": alt_cliccata
+                    })
+                    st.rerun()
     else:
         st.info("Aggiungi almeno un punto per visualizzare la mappa.")
 
