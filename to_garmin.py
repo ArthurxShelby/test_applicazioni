@@ -103,50 +103,70 @@ if st.session_state.garmin_client:
             del workout_data["workoutId"]
         else:
           # Schema di fallback standard sicuro
-          workout_data = {
-              "workoutName": workout_name,
-              "sportType": {"sportTypeId": 2, "sportTypeKey": "cycling"},
-              "workoutSegments": [
-                  {
-                      "segmentOrder": 1,
-                      "sportType": {
-                          "sportTypeId": 2,
-                          "sportTypeKey": "cycling",
-                      },
-                      "workoutSteps": [
-                          {
-                              "type": "repeatGroup",
-                              "stepOrder": 1,
-                              "numberOfIterations": num_repeats,
-                              "workoutSteps": [
-                                  {
-                                      "type": "executableStep",
-                                      "stepOrder": 1,
-                                      "durationValue": duration_minutes * 60,
-                                      "durationUnit": {
-                                          "unitId": 2,
-                                          "unitKey": "time",
-                                      },
-                                      "targetValue": {
-                                          "unitId": 11,
-                                          "unitKey": "watt",
-                                          "comparator": "range",
-                                          "min": power_min,
-                                          "max": power_max,
-                                      },
-                                      "targetType": {
-                                          "workoutTargetTypeId": 3,
-                                          "workoutTargetTypeKey": "power",
-                                      },
-                                  }
-                              ],
-                          }
-                      ],
-                  }
-              ],
-          }
+          # Creazione diretta di un payload standard pulito compatibile con Garmin
+        workout_data = {
+            "workoutName": workout_name,
+            "sportType": {"sportTypeId": 2, "sportTypeKey": "cycling"},
+            "workoutSegments": [
+                {
+                    "segmentOrder": 1,
+                    "sportType": {"sportTypeId": 2, "sportTypeKey": "cycling"},
+                    "workoutSteps": [
+                        {
+                            "type": "executableStep",
+                            "stepOrder": 1,
+                            "description": "Riscaldamento",
+                            "endCondition": {
+                                "conditionTypeId": 1,
+                                "conditionTypeKey": "lap.button",
+                            },
+                            "targetType": {
+                                "workoutTargetTypeId": 1,
+                                "workoutTargetTypeKey": "no.target",
+                            },
+                        },
+                        {
+                            "type": "repeatGroup",
+                            "stepOrder": 2,
+                            "numberOfIterations": num_repeats,
+                            "workoutSteps": [
+                                {
+                                    "type": "executableStep",
+                                    "stepOrder": 1,
+                                    "description": "Intervallo",
+                                    "endCondition": {
+                                        "conditionTypeId": 2,
+                                        "conditionTypeKey": "time",
+                                    },
+                                    "endConditionValue": duration_minutes * 60,
+                                    "targetType": {
+                                        "workoutTargetTypeId": 3,
+                                        "workoutTargetTypeKey": "power",
+                                    },
+                                    "targetValueOne": power_min,
+                                    "targetValueTwo": power_max,
+                                },
+                                {
+                                    "type": "executableStep",
+                                    "stepOrder": 2,
+                                    "description": "Recupero",
+                                    "endCondition": {
+                                        "conditionTypeId": 1,
+                                        "conditionTypeKey": "lap.button",
+                                    },
+                                    "targetType": {
+                                        "workoutTargetTypeId": 1,
+                                        "workoutTargetTypeKey": "no.target",
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                }
+            ],
+        }
 
-        # Invio e caricamento su Garmin
+        # Invio diretto a Garmin
         response = client.upload_workout(workout_data)
         workout_id = response.get("workoutId")
 
