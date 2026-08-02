@@ -8,7 +8,7 @@ import requests
 st.set_page_config(page_title="Tracker Bici da Corsa - Mappa Fluida", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Mappa interattiva stabile: nessun riavvio pagina e inserimento touch fluido.")
+st.write("Mappa interattiva stabile con calcolo del dislivello dettagliato lungo il percorso stradale.")
 
 if "points" not in st.session_state:
     st.session_state.points = [
@@ -73,6 +73,34 @@ def ottieni_percorso_stradale(punti):
     
     fallback_coords = [[p["lat"], p["lon"]] for p in punti]
     return fallback_coords, 0.0
+
+def calcola_dislivello_dettagliato(coordinate_strada):
+    if len(coordinate_strada) < 2:
+        return 0.0, 0.0
+    
+    # Per evitare troppe richieste pesanti all'API gratuita se il percorso ha molti punti,
+    # campioniamo i punti intermedi in modo intelligente (es. massimo 30-40 punti chiave lungo la strada)
+    passi = max(1, len(coordinate_strada) // 30)
+    punti_campionati = coordinate_strada[::passi]
+    if coordinate_strada[-1] not in punti_campionati:
+        punti_campionati.append(coordinate_strada[-1])
+        
+    # Otteniamo le quote per i punti campionati
+    quote = []
+    for lat, lon in punti_campionati:
+        quote.append(ottieni_altitudine(lat, lon))
+        
+    dislivello_positivo = 0.0
+    dislivello_negativo = 0.0
+    
+    for i in range(len(quote) - 1):
+        diff = quote[i+1] - quote[i]
+        if diff > 0:
+            dislivello_positivo += diff
+        else:
+            dislivello_negativo += abs(diff)
+            
+    return dislivello_positivo, dislivello_negativo
 
 with st.sidebar:
     st.header("⚙️ Gestione Tappe")
@@ -146,6 +174,7 @@ def render_mappa_e_dati():
     )
 
     distanza_stradale = 0.0
+    coordinate_strada = []
 
     if len(st.session_state.points) > 0:
         if map_style == "🗺️ Stradale (OpenStreetMap)":
@@ -208,7 +237,6 @@ def render_mappa_e_dati():
                 click_lon = map_output["last_clicked"]["lng"]
                 
                 ultimo_punto = st.session_state.points[-1] if st.session_state.points else None
-                # Controlliamo che non sia un doppio evento sullo stesso punto esatto
                 if not ultimo_punto or (ultimo_punto["lat"] != click_lat or ultimo_punto["lon"] != click_lon):
                     alt_cliccata = ottieni_altitudine(click_lat, click_lon)
                     nuovo_nome = f"Tappa {len(st.session_state.points) + 1}"
@@ -219,7 +247,6 @@ def render_mappa_e_dati():
                         "lon": click_lon,
                         "alt": alt_cliccata
                     })
-                    # NOTA: NESSUN st.rerun() qui dentro! Il frammento si aggiorna da solo fluidamente.
     else:
         st.info("Aggiungi almeno un punto per visualizzare la mappa.")
 
@@ -230,17 +257,7 @@ def render_mappa_e_dati():
     if len(st.session_state.points) > 0:
         col1, col2, col3 = st.columns(3)
         
-        dislivello_positivo = 0.0
-        dislivello_negativo = 0.0
-        
-        for i in range(len(st.session_state.points) - 1):
-            alt1 = st.session_state.points[i]["alt"]
-            alt2 = st.session_state.points[i+1]["alt"]
-            diff_alt = alt2 - alt1
-            if diff_alt > 0:
-                dislivello_positivo += diff_alt
-            else:
-                dislivello_negativo += abs(diff_alt)
+        dislivello_positivo, dislivello_negativo = calcola_dislivello_dettagliato(coordinate_strada)
 
         col1.metric("📏 Distanza su Strada", f"{distanza_stradale:.2f} km")
         col2.metric("📈 Dislivello Positivo", f"{dislivello_positivo:.0f} m")
