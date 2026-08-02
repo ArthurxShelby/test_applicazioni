@@ -8,7 +8,7 @@ import requests
 st.set_page_config(page_title="Tracker Bici da Corsa - Mappa Fluida", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Mappa interattiva con zoom a due dita attivo e gestione waypoint fluida.")
+st.write("Mappa interattiva con zoom a due dita attivo, senza pulsanti +/- e gestione waypoint fluida.")
 
 if "points" not in st.session_state:
     st.session_state.points = [
@@ -152,12 +152,13 @@ def render_mappa_e_dati():
             tiles_url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
             attr = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
 
-        # scrollWheelZoom ripristinato a True per consentire lo zoom con il trackpad del Mac
+        # zoom_control=False rimuove i pulsanti + e -, mentre scrollWheelZoom=True lascia attivo lo zoom con due dita
         m = folium.Map(
             location=st.session_state.map_center, 
             zoom_start=st.session_state.map_zoom, 
             tiles=tiles_url, 
             attr=attr,
+            zoom_control=False,
             scrollWheelZoom=True,
             dragging=True
         )
