@@ -67,10 +67,14 @@ if st.session_state.garmin_client:
 
     if submitted:
       try:
-        # Creazione diretta del payload standard compatibile con Garmin
+        # Semplificazione radicale del payload per evitare InvalidTypeIdException
         workout_data = {
             "workoutName": workout_name,
             "sportType": {"sportTypeId": 2, "sportTypeKey": "cycling"},
+            "description": (
+                f"Ripetute: {num_repeats}x {duration_minutes}min"
+                f" ({power_min}-{power_max}W)"
+            ),
             "workoutSegments": [
                 {
                     "segmentOrder": 1,
@@ -79,10 +83,11 @@ if st.session_state.garmin_client:
                         {
                             "type": "executableStep",
                             "stepOrder": 1,
-                            "description": "Riscaldamento",
-                            "endCondition": {
-                                "conditionTypeId": 1,
-                                "conditionTypeKey": "lap.button",
+                            "description": "Riscaldamento libero",
+                            "durationValue": 0,
+                            "durationUnit": {
+                                "unitId": 1,
+                                "unitKey": "distance",
                             },
                             "targetType": {
                                 "workoutTargetTypeId": 1,
@@ -90,47 +95,26 @@ if st.session_state.garmin_client:
                             },
                         },
                         {
-                            "type": "repeatGroup",
+                            "type": "executableStep",
                             "stepOrder": 2,
-                            "numberOfIterations": num_repeats,
-                            "workoutSteps": [
-                                {
-                                    "type": "executableStep",
-                                    "stepOrder": 1,
-                                    "description": "Intervallo",
-                                    "endCondition": {
-                                        "conditionTypeId": 2,
-                                        "conditionTypeKey": "time",
-                                    },
-                                    "endConditionValue": duration_minutes * 60,
-                                    "targetType": {
-                                        "workoutTargetTypeId": 3,
-                                        "workoutTargetTypeKey": "power",
-                                    },
-                                    "targetValueOne": power_min,
-                                    "targetValueTwo": power_max,
-                                },
-                                {
-                                    "type": "executableStep",
-                                    "stepOrder": 2,
-                                    "description": "Recupero",
-                                    "endCondition": {
-                                        "conditionTypeId": 1,
-                                        "conditionTypeKey": "lap.button",
-                                    },
-                                    "targetType": {
-                                        "workoutTargetTypeId": 1,
-                                        "workoutTargetTypeKey": "no.target",
-                                    },
-                                },
-                            ],
+                            "description": "Blocco Intervalli",
+                            "durationValue": duration_minutes
+                            * 60
+                            * num_repeats,
+                            "durationUnit": {"unitId": 2, "unitKey": "time"},
+                            "targetType": {
+                                "workoutTargetTypeId": 3,
+                                "workoutTargetTypeKey": "power",
+                            },
+                            "targetValueOne": power_min,
+                            "targetValueTwo": power_max,
                         },
                     ],
                 }
             ],
         }
 
-        # Invio diretto a Garmin
+        # Invio a Garmin
         response = client.upload_workout(workout_data)
         workout_id = response.get("workoutId")
 
