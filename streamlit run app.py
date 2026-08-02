@@ -8,7 +8,7 @@ import requests
 st.set_page_config(page_title="Tracker Bici da Corsa - Mappa Fluida", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Mappa interattiva stabile: navigazione fluida e nessun riavvio durante lo spostamento.")
+st.write("Mappa interattiva stabile: nessun riavvio pagina e inserimento touch fluido.")
 
 if "points" not in st.session_state:
     st.session_state.points = [
@@ -112,7 +112,7 @@ with st.sidebar:
                     st.warning("Inserisci il nome di un luogo.")
     else:
         st.subheader("🗺️ Click su Mappa Attivo")
-        st.info("Sposta la mappa liberamente e fai tap per aggiungere un punto.")
+        st.info("Fai tap o click sulla mappa: il punto viene aggiunto istantaneamente senza riavviare la pagina.")
 
     st.markdown("---")
     st.subheader("🗑️ Azioni Rapide")
@@ -153,7 +153,7 @@ def render_mappa_e_dati():
             attr = None
         else:
             tiles_url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-            attr = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            attr = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
 
         m = folium.Map(
             location=st.session_state.map_center, 
@@ -195,7 +195,6 @@ def render_mappa_e_dati():
                 icon=folium.Icon(color=colore_marker, icon=icona, prefix='fa')
             ).add_to(m)
 
-        # RESTITUiamo SOLO l'evento di click. In questo modo il trascinamento (pan) e lo zoom sono gestiti nativamente dal browser senza ricaricamenti.
         map_output = st_folium(
             m, 
             width='100%', 
@@ -209,6 +208,7 @@ def render_mappa_e_dati():
                 click_lon = map_output["last_clicked"]["lng"]
                 
                 ultimo_punto = st.session_state.points[-1] if st.session_state.points else None
+                # Controlliamo che non sia un doppio evento sullo stesso punto esatto
                 if not ultimo_punto or (ultimo_punto["lat"] != click_lat or ultimo_punto["lon"] != click_lon):
                     alt_cliccata = ottieni_altitudine(click_lat, click_lon)
                     nuovo_nome = f"Tappa {len(st.session_state.points) + 1}"
@@ -219,8 +219,7 @@ def render_mappa_e_dati():
                         "lon": click_lon,
                         "alt": alt_cliccata
                     })
-                    st.session_state.map_center = [click_lat, click_lon]
-                    st.rerun()
+                    # NOTA: NESSUN st.rerun() qui dentro! Il frammento si aggiorna da solo fluidamente.
     else:
         st.info("Aggiungi almeno un punto per visualizzare la mappa.")
 
