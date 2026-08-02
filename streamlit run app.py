@@ -78,14 +78,12 @@ def calcola_dislivello_dettagliato(coordinate_strada):
     if len(coordinate_strada) < 2:
         return 0.0, 0.0
     
-    # Per evitare troppe richieste pesanti all'API gratuita se il percorso ha molti punti,
-    # campioniamo i punti intermedi in modo intelligente (es. massimo 30-40 punti chiave lungo la strada)
-    passi = max(1, len(coordinate_strada) // 30)
+    # Campionamento più fitto (1 punto ogni 5 della geometria OSRM, fino a un massimo di 150 punti)
+    passi = max(1, len(coordinate_strada) // 150)
     punti_campionati = coordinate_strada[::passi]
     if coordinate_strada[-1] not in punti_campionati:
         punti_campionati.append(coordinate_strada[-1])
         
-    # Otteniamo le quote per i punti campionati
     quote = []
     for lat, lon in punti_campionati:
         quote.append(ottieni_altitudine(lat, lon))
@@ -93,11 +91,14 @@ def calcola_dislivello_dettagliato(coordinate_strada):
     dislivello_positivo = 0.0
     dislivello_negativo = 0.0
     
+    # Soglia di rumore per scartare le fluttuazioni casuali dell'API
+    soglia_rumore = 1.5
+    
     for i in range(len(quote) - 1):
         diff = quote[i+1] - quote[i]
-        if diff > 0:
+        if diff > soglia_rumore:
             dislivello_positivo += diff
-        else:
+        elif diff < -soglia_rumore:
             dislivello_negativo += abs(diff)
             
     return dislivello_positivo, dislivello_negativo
