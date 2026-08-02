@@ -6,15 +6,15 @@ import folium
 from streamlit_folium import st_folium
 import requests
 
-st.set_page_config(page_title="Tracker Bici da Corsa - Mappa Grande", page_icon="🚴‍♂️", layout="wide")
+st.set_page_config(page_title="Tracker Bici da Corsa - Full Screen", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Uscite in bici con mappa ingrandita, calcolo del percorso stradale e inserimento interattivo.")
+st.write("Mappa a tutto schermo con percorso stradale, gestione waypoint e dati tecnici in basso.")
 
 # Inizializzazione della sessione
 if "points" not in st.session_state:
     st.session_state.points = [
-        {"nome": "Stazione Centrale Trieste", "lat": 45.6562, "lon": 13.7740, "alt": 5},
+        {"nome": "Stazione centrale trieste", "lat": 45.6587, "lon": 13.7710, "alt": 5},
         {"nome": "Sistiana", "lat": 45.7716, "lon": 13.6370, "alt": 70},
         {"nome": "Tappa 3", "lat": 45.7954, "lon": 13.5870, "alt": 30},
         {"nome": "Tappa 4", "lat": 45.8179, "lon": 13.5770, "alt": 15}
@@ -108,7 +108,7 @@ with st.sidebar:
                     st.warning("Inserisci il nome di un luogo.")
     else:
         st.subheader("🗺️ Click su Mappa Attivo")
-        st.info("Clicca sulla mappa a sinistra per aggiungere un punto.")
+        st.info("Clicca sulla mappa in basso per aggiungere un punto.")
         nome_click = st.text_input("Nome per il punto cliccato", f"Tappa {len(st.session_state.points) + 1}")
 
     st.markdown("---")
@@ -126,104 +126,107 @@ with st.sidebar:
         st.session_state.points = []
         st.rerun()
 
-# Layout principale modificato: proporzione 3 a 1 per dare molto più spazio alla mappa
-col_map, col_data = st.columns([3, 1])
+# --- SEZIONE MAPPA A TUTTO SCHERMO ---
+st.subheader("🗺️ Mappa del Percorso Stradale (Full Screen)")
 
-with col_map:
-    st.subheader("🗺️ Mappa del Percorso Stradale (Ingrandita)")
+map_style = st.radio(
+    "Scegli stile mappa:",
+    ("🗺️ Stradale (OpenStreetMap)", "🛰️ Satellitare (con etichette)"),
+    horizontal=True
+)
+
+if len(st.session_state.points) > 0:
+    centro_lat = np.mean([p["lat"] for p in st.session_state.points])
+    centro_lon = np.mean([p["lon"] for p in st.session_state.points])
     
-    map_style = st.radio(
-        "Scegli stile mappa:",
-        ("🗺️ Stradale (OpenStreetMap)", "🛰️ Satellitare (con etichette)"),
-        horizontal=True
-    )
-    
-    if len(st.session_state.points) > 0:
-        centro_lat = np.mean([p["lat"] for p in st.session_state.points])
-        centro_lon = np.mean([p["lon"] for p in st.session_state.points])
-        
-        if map_style == "🗺️ Stradale (OpenStreetMap)":
-            m = folium.Map(location=[centro_lat, centro_lon], zoom_start=11, tiles='OpenStreetMap')
+    if map_style == "🗺️ Stradale (OpenStreetMap)":
+        m = folium.Map(location=[centro_lat, centro_lon], zoom_start=11, tiles='OpenStreetMap')
+    else:
+        m = folium.Map(
+            location=[centro_lat, centro_lon], 
+            zoom_start=11, 
+            tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
+            attr='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+        )
+
+    coordinate_strada, distanza_stradale = ottieni_percorso_stradale(st.session_state.points)
+
+    if len(coordinate_strada) > 1:
+        folium.PolyLine(
+            coordinate_strada,
+            color='red',
+            weight=4,
+            opacity=0.8,
+            tooltip='Percorso Stradale'
+        ).add_to(m)
+
+    for i, punto in enumerate(st.session_state.points):
+        popup_html = f"<b>{punto['nome']}</b><br>Altitudine: {punto['alt']}m"
+        if i == 0:
+            colore_marker = 'green'
+            icona = 'play'
+        elif i == len(st.session_state.points) - 1:
+            colore_marker = 'darkred'
+            icona = 'flag'
         else:
-            m = folium.Map(
-                location=[centro_lat, centro_lon], 
-                zoom_start=11, 
-                tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
-                attr='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-            )
+            colore_marker = 'blue'
+            icona = 'map-pin'
 
-        coordinate_strada, distanza_stradale = ottieni_percorso_stradale(st.session_state.points)
+        folium.Marker(
+            [punto["lat"], punto["lon"]],
+            popup=popup_html,
+            tooltip=f"{punto['nome']} ({punto['alt']}m)",
+            icon=folium.Icon(color=colore_marker, icon=icona, prefix='fa')
+        ).add_to(m)
 
-        if len(coordinate_strada) > 1:
-            folium.PolyLine(
-                coordinate_strada,
-                color='red',
-                weight=4,
-                opacity=0.8,
-                tooltip='Percorso Stradale'
-            ).add_to(m)
-
-        for i, punto in enumerate(st.session_state.points):
-            popup_html = f"<b>{punto['nome']}</b><br>Altitudine: {punto['alt']}m"
-            if i == 0:
-                colore_marker = 'green'
-                icona = 'play'
-            elif i == len(st.session_state.points) - 1:
-                colore_marker = 'darkred'
-                icona = 'flag'
-            else:
-                colore_marker = 'blue'
-                icona = 'map-pin'
-
-            folium.Marker(
-                [punto["lat"], punto["lon"]],
-                popup=popup_html,
-                tooltip=f"{punto['nome']} ({punto['alt']}m)",
-                icon=folium.Icon(color=colore_marker, icon=icona, prefix='fa')
-            ).add_to(m)
-
-        # Mappa ingrandita a 700 pixel di altezza
-        map_output = st_folium(m, width='100%', height=700)
-        
-        if modalita == "🗺️ Inserimento Manuale (Click su Mappa)":
-            if map_output and map_output.get("last_clicked"):
-                click_lat = map_output["last_clicked"]["lat"]
-                click_lon = map_output["last_clicked"]["lng"]
-                
-                ultimo_punto = st.session_state.points[-1] if st.session_state.points else None
-                if not ultimo_punto or (ultimo_punto["lat"] != click_lat or ultimo_punto["lon"] != click_lon):
-                    alt_cliccata = ottieni_altitudine(click_lat, click_lon)
-                    st.session_state.points.append({
-                        "nome": nome_click,
-                        "lat": click_lat,
-                        "lon": click_lon,
-                        "alt": alt_cliccata
-                    })
-                    st.rerun()
-    else:
-        st.info("Aggiungi almeno un punto per visualizzare la mappa.")
-
-with col_data:
-    st.subheader("📊 Dati Tecnici")
+    # Mappa a tutta larghezza e altezza generosa (750px)
+    map_output = st_folium(m, width='100%', height=750)
     
-    if len(st.session_state.points) > 0:
-        df_points = pd.DataFrame(st.session_state.points)
-        st.dataframe(df_points, use_container_width=True)
-        
-        dislivello_positivo = 0.0
-        dislivello_negativo = 0.0
-        
-        for i in range(len(st.session_state.points) - 1):
-            alt1 = st.session_state.points[i]["alt"]
-            alt2 = st.session_state.points[i+1]["alt"]
-            diff_alt = alt2 - alt1
-            if diff_alt > 0:
-                dislivello_positivo += diff_alt
-            else:
-                dislivello_negativo += abs(diff_alt)
+    if modalita == "🗺️ Inserimento Manuale (Click su Mappa)":
+        if map_output and map_output.get("last_clicked"):
+            click_lat = map_output["last_clicked"]["lat"]
+            click_lon = map_output["last_clicked"]["lng"]
+            
+            ultimo_punto = st.session_state.points[-1] if st.session_state.points else None
+            if not ultimo_punto or (ultimo_punto["lat"] != click_lat or ultimo_punto["lon"] != click_lon):
+                alt_cliccata = ottieni_altitudine(click_lat, click_lon)
+                st.session_state.points.append({
+                    "nome": nome_click,
+                    "lat": click_lat,
+                    "lon": click_lon,
+                    "alt": alt_cliccata
+                })
+                st.rerun()
+else:
+    st.info("Aggiungi almeno un punto per visualizzare la mappa.")
 
-        st.metric("📏 Distanza su Strada", f"{distanza_stradale:.2f} km")
-        st.metric("📈 Dislivello Positivo", f"{dislivello_positivo:.0f} m")
-        st.metric("📉 Dislivello Negativo", f"{dislivello_negativo:.0f} m")
-    else:
-        st.info("Aggiungi punti per vedere i dati.")
+st.markdown("---")
+
+# --- SEZIONE DATI TECNICI SOTTO LA MAPPA ---
+st.subheader("📊 Dati Tecnici e Tabella Tappe")
+
+if len(st.session_state.points) > 0:
+    # Metriche disposte in orizzontale su tre colonne sotto la mappa
+    col1, col2, col3 = st.columns(3)
+    
+    dislivello_positivo = 0.0
+    dislivello_negativo = 0.0
+    
+    for i in range(len(st.session_state.points) - 1):
+        alt1 = st.session_state.points[i]["alt"]
+        alt2 = st.session_state.points[i+1]["alt"]
+        diff_alt = alt2 - alt1
+        if diff_alt > 0:
+            dislivello_positivo += diff_alt
+        else:
+            dislivello_negativo += abs(diff_alt)
+
+    col1.metric("📏 Distanza su Strada", f"{distanza_stradale:.2f} km")
+    col2.metric("📈 Dislivello Positivo", f"{dislivello_positivo:.0f} m")
+    col3.metric("📉 Dislivello Negativo", f"{dislivello_negativo:.0f} m")
+    
+    st.write("")
+    df_points = pd.DataFrame(st.session_state.points)
+    st.dataframe(df_points, use_container_width=True)
+else:
+    st.info("Aggiungi punti per vedere i dati.")
