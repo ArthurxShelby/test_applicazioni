@@ -10,9 +10,15 @@ st.title("Generatore Allenamenti per Garmin / Zwift (.zwo)")
 
 st.write(
     "Crea i tuoi allenamenti strutturati in formato standard `.zwo`. "
-    "Il file potrà essere caricato direttamente nella sezione **Allenamenti** di"
-    " Garmin Connect o inserito nel ciclocomputer."
+    "Il file potrà essere scaricato e caricato direttamente nella sezione"
+    " **Allenamenti** di Garmin Connect."
 )
+
+# Inizializzazione della variabile di sessione per il file XML
+if "zwo_data" not in st.session_state:
+  st.session_state.zwo_data = None
+if "zwo_filename" not in st.session_state:
+  st.session_state.zwo_filename = "allenamento.zwo"
 
 with st.form("zwo_form"):
   workout_name = st.text_input(
@@ -44,7 +50,7 @@ with st.form("zwo_form"):
       value=260,
   )
 
-  submitted = st.form_submit_button("Genera File .zwo")
+  submitted = st.form_submit_button("Genera Contenuto ZWO")
 
   if submitted:
     try:
@@ -81,9 +87,8 @@ with st.form("zwo_form"):
       repeat_elem = ET.SubElement(workout_elem, "Repeat")
       repeat_elem.set("Repeat", str(num_repeats))
       repeat_elem.set("OnDuration", str(duration_minutes * 60))
-      repeat_elem.set("OffDuration", "180")  # 3 minuti di recupero fisso
+      repeat_elem.set("OffDuration", "180")
 
-      # Calcolo dei target in percentuale rispetto alla FTP
       p_avg_pct = round(
           (((power_min + power_max) / 2) / ftp_ref),
           2,
@@ -95,9 +100,7 @@ with st.form("zwo_form"):
           Duration=str(duration_minutes * 60),
           Power=str(p_avg_pct),
       )
-      ET.SubElement(
-          repeat_elem, "Recovery", Duration="180", Power="0.55"
-      )  # Recupero al 55% FTP
+      ET.SubElement(repeat_elem, "Recovery", Duration="180", Power="0.55")
 
       # Defaticamento finale
       ET.SubElement(
@@ -108,18 +111,23 @@ with st.form("zwo_form"):
           PowerHigh="0.50",
       )
 
-      # Conversione in stringa XML
-      xml_str = ET.tostring(root, encoding="utf-8", method="xml").decode(
-          "utf-8"
-      )
+      # Salvataggio nella sessione anziché usare il download button dentro il form
+      st.session_state.zwo_data = ET.tostring(
+          root, encoding="utf-8", method="xml"
+      ).decode("utf-8")
+      st.session_state.zwo_filename = f"{workout_name.replace(' ', '_')}.zwo"
 
-      st.success("File .zwo generato con successo!")
-      st.download_button(
-          label="Scarica File .zwo per Garmin",
-          data=xml_str,
-          file_name=f"{workout_name.replace(' ', '_')}.zwo",
-          mime="application/xml",
-      )
+      st.success("Parametri elaborati con successo! Scarica il file qui sotto.")
 
     except Exception as e:
       st.error(f"Errore nella generazione del file: {str(e)}")
+
+# --- Pulsante di download posizionato FUORI dal form ---
+if st.session_state.zwo_data is not None:
+  st.divider()
+  st.download_button(
+      label="📥 Clicca qui per scaricare il file .zwo",
+      data=st.session_state.zwo_data,
+      file_name=st.session_state.zwo_filename,
+      mime="application/xml",
+  )
