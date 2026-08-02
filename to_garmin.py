@@ -3,7 +3,7 @@ import streamlit as st
 from garminconnect import Garmin
 
 # Configurazione della pagina Streamlit
-st.setTitle("Gestione Allenamenti Garmin Connect")
+st.title("Gestione Allenamenti Garmin Connect")
 st.write(
     "Crea e pianifica i tuoi allenamenti strutturati (es. ripetute di potenza) direttamente nel calendario."
 )
