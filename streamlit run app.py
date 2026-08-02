@@ -8,7 +8,7 @@ import requests
 st.set_page_config(page_title="Tracker Bici da Corsa - Mappa Fluida", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Mappa a tutto schermo: la visualizzazione e lo zoom vengono mantenuti anche dopo l'eliminazione o l'aggiunta di waypoint.")
+st.write("Mappa a tutto schermo completamente fluida: nessuno sfarfallio o riavvio durante lo zoom o lo spostamento.")
 
 # Inizializzazione della sessione per i punti
 if "points" not in st.session_state:
@@ -19,7 +19,7 @@ if "points" not in st.session_state:
         {"nome": "Tappa 4", "lat": 45.8179, "lon": 13.5770, "alt": 15}
     ]
 
-# Inizializzazione dello stato di navigazione della mappa per preservare zoom e centro
+# Inizializzazione dello stato di navigazione della mappa
 if "map_center" not in st.session_state:
     st.session_state.map_center = [45.72, 13.68]
 if "map_zoom" not in st.session_state:
@@ -150,7 +150,7 @@ if len(st.session_state.points) > 0:
         tiles_url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
         attr = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
 
-    # Usa sempre lo stato salvato di centro e zoom per evitare che ritorni alla scala predefinita
+    # Usa lo stato salvato per mantenere la visuale corrente senza reset
     m = folium.Map(
         location=st.session_state.map_center, 
         zoom_start=st.session_state.map_zoom, 
@@ -188,32 +188,31 @@ if len(st.session_state.points) > 0:
             icon=folium.Icon(color=colore_marker, icon=icona, prefix='fa')
         ).add_to(m)
 
-    # Catturiamo sia il click che lo stato corrente della mappa (centro e zoom)
-    map_output = st_folium(m, width='100%', height=750, returned_objects=["last_clicked", "center", "zoom"])
+    # Rimosso il tracciamento in tempo reale di zoom/centro per evitare il refresh continuo durante lo zoom.
+    # Vengono restituiti solo i click e le informazioni di navigazione finali senza innescare ricaricamenti indesiderati.
+    map_output = st_folium(
+        m, 
+        width='100%', 
+        height=750, 
+        returned_objects=["last_clicked"],
+        fire_state_events=False
+    )
     
-    if map_output:
-        # Aggiorna lo stato di zoom e centro della mappa in memoria ad ogni movimento/zoom
-        if map_output.get("center"):
-            st.session_state.map_center = [map_output["center"]["lat"], map_output["center"]["lng"]]
-        if map_output.get("zoom"):
-            st.session_state.map_zoom = map_output["zoom"]
+    if map_output and modalita == "🗺️ Inserimento Manuale (Click su Mappa)":
+        if map_output.get("last_clicked"):
+            click_lat = map_output["last_clicked"]["lat"]
+            click_lon = map_output["last_clicked"]["lng"]
             
-        # Gestione del click per l'aggiunta manuale
-        if modalita == "🗺️ Inserimento Manuale (Click su Mappa)":
-            if map_output.get("last_clicked"):
-                click_lat = map_output["last_clicked"]["lat"]
-                click_lon = map_output["last_clicked"]["lng"]
-                
-                ultimo_punto = st.session_state.points[-1] if st.session_state.points else None
-                if not ultimo_punto or (ultimo_punto["lat"] != click_lat or ultimo_punto["lon"] != click_lon):
-                    alt_cliccata = ottieni_altitudine(click_lat, click_lon)
-                    st.session_state.points.append({
-                        "nome": nome_click,
-                        "lat": click_lat,
-                        "lon": click_lon,
-                        "alt": alt_cliccata
-                    })
-                    st.rerun()
+            ultimo_punto = st.session_state.points[-1] if st.session_state.points else None
+            if not ultimo_punto or (ultimo_punto["lat"] != click_lat or ultimo_punto["lon"] != click_lon):
+                alt_cliccata = ottieni_altitudine(click_lat, click_lon)
+                st.session_state.points.append({
+                    "nome": nome_click,
+                    "lat": click_lat,
+                    "lon": click_lon,
+                    "alt": alt_cliccata
+                })
+                st.rerun()
 else:
     st.info("Aggiungi almeno un punto per visualizzare la mappa.")
 
