@@ -150,7 +150,6 @@ if len(st.session_state.points) > 0:
         tiles_url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
         attr = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
 
-    # Usa lo stato salvato per mantenere la visuale corrente senza reset
     m = folium.Map(
         location=st.session_state.map_center, 
         zoom_start=st.session_state.map_zoom, 
@@ -188,14 +187,12 @@ if len(st.session_state.points) > 0:
             icon=folium.Icon(color=colore_marker, icon=icona, prefix='fa')
         ).add_to(m)
 
-    # Rimosso il tracciamento in tempo reale di zoom/centro per evitare il refresh continuo durante lo zoom.
-    # Vengono restituiti solo i click e le informazioni di navigazione finali senza innescare ricaricamenti indesiderati.
+    # Rimosso il parametro non valido fire_state_events
     map_output = st_folium(
         m, 
         width='100%', 
         height=750, 
-        returned_objects=["last_clicked"],
-        fire_state_events=False
+        returned_objects=["last_clicked"]
     )
     
     if map_output and modalita == "🗺️ Inserimento Manuale (Click su Mappa)":
