@@ -8,7 +8,7 @@ import requests
 st.set_page_config(page_title="Tracker Bici da Corsa - Mappa Fluida", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Mappa interattiva stabile con calcolo del dislivello dettagliato lungo il percorso stradale.")
+st.write("Mappa interattiva stabile con calcolo del dislivello calibrato e filtrato dal rumore digitale.")
 
 if "points" not in st.session_state:
     st.session_state.points = [
@@ -78,21 +78,33 @@ def calcola_dislivello_dettagliato(coordinate_strada):
     if len(coordinate_strada) < 2:
         return 0.0, 0.0
     
-    # Campionamento più fitto (1 punto ogni 5 della geometria OSRM, fino a un massimo di 150 punti)
-    passi = max(1, len(coordinate_strada) // 150)
+    # Campionamento bilanciato
+    passi = max(1, len(coordinate_strada) // 80)
     punti_campionati = coordinate_strada[::passi]
     if coordinate_strada[-1] not in punti_campionati:
         punti_campionati.append(coordinate_strada[-1])
         
-    quote = []
+    grezze = []
     for lat, lon in punti_campionati:
-        quote.append(ottieni_altitudine(lat, lon))
+        grezze.append(ottieni_altitudine(lat, lon))
+        
+    if not grezze:
+        return 0.0, 0.0
+
+    # Smoothing a media mobile per ripulire le oscillazioni spurie dell'API
+    quote = []
+    window = 3
+    for i in range(len(grezze)):
+        start_idx = max(0, i - window // 2)
+        end_idx = min(len(grezze), i + window // 2 + 1)
+        media_mobile = sum(grezze[start_idx:end_idx]) / (end_idx - start_idx)
+        quote.append(media_mobile)
         
     dislivello_positivo = 0.0
     dislivello_negativo = 0.0
     
-    # Soglia di rumore per scartare le fluttuazioni casuali dell'API
-    soglia_rumore = 1.5
+    # Soglia di rumore tarata a 3.0 metri per evitare il conteggio di micro-variazioni fittizie
+    soglia_rumore = 3.0
     
     for i in range(len(quote) - 1):
         diff = quote[i+1] - quote[i]
