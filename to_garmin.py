@@ -1,26 +1,32 @@
 from datetime import date
+from garminconnect import Garmin
 import streamlit as st
 
 # Configurazione della pagina Streamlit
 st.set_page_config(
-    page_title="Guida Strutturata Allenamenti Garmin",
-    page_icon="🚴",
-    layout="wide",
+    page_title="Integrazione Diretta Garmin", page_icon="🚴", layout="wide"
 )
-st.title("Generatore Guida Allenamenti per Garmin Connect")
+st.title("Generatore e Sincronizzatore Garmin Connect")
 
 st.write(
-    "Inserisci i parametri dell'allenamento: l'app ti restituirà la struttura"
-    " esatta da ricopiare nell'editor ufficiale di Garmin Connect (sezione"
-    " Allenamenti -> Crea allenamento)."
+    "Crea e programma l'allenamento strutturato direttamente nel tuo calendario"
+    " Garmin Connect tramite le API."
 )
 
-with st.form("guide_form"):
-  workout_name = st.text_input(
-      "Nome Allenamento", value="Consolidamento_Streamlit"
-  )
+with st.form("garmin_direct_form"):
+  st.subheader("Credenziali Garmin Connect")
+  col_c1, col_c2 = st.columns(2)
+  with col_c1:
+    email = st.text_input("Email Garmin", value="")
+  with col_c2:
+    password = st.text_input("Password Garmin", type="password", value="")
 
-  st.subheader("Parametri Principali")
+  st.subheader("Dettagli Allenamento")
+  workout_name = st.text_input(
+      "Nome Allenamento", value="Consolidamento Streamlit"
+  )
+  workout_date = st.date_input("Data di Programmazione", value=date.today())
+
   col1, col2 = st.columns(2)
   with col1:
     num_repeats = st.number_input(
@@ -37,69 +43,122 @@ with st.form("guide_form"):
         "Potenza Max Sforzo (W)", min_value=50, max_value=500, value=260
     )
 
-  ftp_ref = st.number_input(
-      "Tua FTP di riferimento (W)", min_value=100, max_value=400, value=260
-  )
-
-  submitted = st.form_submit_button("Genera Guida per Garmin")
+  submitted = st.form_submit_button("Crea e Programma su Garmin")
 
   if submitted:
-    st.session_state.show_guide = True
-    st.session_state.g_name = workout_name
-    st.session_state.g_repeats = num_repeats
-    st.session_state.g_dur = duration_minutes
-    st.session_state.g_pmin = power_min
-    st.session_state.g_pmax = power_max
-    st.session_state.g_ftp = ftp_ref
+    if not email or not password:
+      st.error("Inserisci email e password di Garmin Connect.")
+    else:
+      try:
+        with st.spinner("Connessione a Garmin Connect in corso..."):
+          client = Garmin(email, password)
+          client.login()
 
-# --- Visualizzazione della Guida Passo-Passo ---
-if "show_guide" in st.session_state and st.session_state.show_guide:
-  st.divider()
-  st.header(
-      f"📋 Guida per la creazione di: '{st.session_state.g_name}'"
-  )
-  st.info(
-      "Apri Garmin Connect -> Allenamento e pianificazione -> Allenamenti ->"
-      " **Crea allenamento** -> **Bici**, quindi compila i blocchi come"
-      " indicato di seguito:"
-  )
+        with st.spinner("Creazione dell'allenamento strutturato..."):
+          # Payload strutturato con i tipi di target conformi alle API Garmin
+          workout_data = {
+              "workoutName": workout_name,
+              "sportType": {"sportTypeId": 2, "sportTypeKey": "cycling"},
+              "description": (
+                  f"Ripetute: {num_repeats}x {duration_minutes}min"
+                  f" ({power_min}-{power_max}W)"
+              ),
+              "workoutSegments": [
+                  {
+                      "segmentOrder": 1,
+                      "sportType": {
+                          "sportTypeId": 2,
+                          "sportTypeKey": "cycling",
+                      },
+                      "workoutSteps": [
+                          {
+                              "type": "executableStep",
+                              "stepOrder": 1,
+                              "description": "Riscaldamento",
+                              "durationValue": 300,  # 5 minuti in secondi
+                              "durationUnit": {
+                                  "unitId": 2,
+                                  "unitKey": "time",
+                              },
+                              "targetType": {
+                                  "workoutTargetTypeId": 1,
+                                  "workoutTargetTypeKey": "no.target",
+                              },
+                          },
+                          {
+                              "type": "repeatGroup",
+                              "stepOrder": 2,
+                              "numberOfIterations": num_repeats,
+                              "smartRepeat": False,
+                              "workoutSteps": [
+                                  {
+                                      "type": "executableStep",
+                                      "stepOrder": 1,
+                                      "description": "Sforzo",
+                                      "durationValue": duration_minutes * 60,
+                                      "durationUnit": {
+                                          "unitId": 2,
+                                          "unitKey": "time",
+                                      },
+                                      "targetType": {
+                                          "workoutTargetTypeId": 3,
+                                          "workoutTargetTypeKey": "power",
+                                      },
+                                      "targetValueOne": power_min,
+                                      "targetValueTwo": power_max,
+                                      "zoneNumber": None,
+                                  },
+                                  {
+                                      "type": "executableStep",
+                                      "stepOrder": 2,
+                                      "description": "Recupero",
+                                      "durationValue": 180,  # 3 minuti
+                                      "durationUnit": {
+                                          "unitId": 2,
+                                          "unitKey": "time",
+                                      },
+                                      "targetType": {
+                                          "workoutTargetTypeId": 1,
+                                          "workoutTargetTypeKey": "no.target",
+                                      },
+                                  },
+                              ],
+                          },
+                          {
+                              "type": "executableStep",
+                              "stepOrder": 3,
+                              "description": "Defaticamento",
+                              "durationValue": 300,
+                              "durationUnit": {
+                                  "unitId": 2,
+                                  "unitKey": "time",
+                              },
+                              "targetType": {
+                                  "workoutTargetTypeId": 1,
+                                  "workoutTargetTypeKey": "no.target",
+                              },
+                          },
+                      ],
+                  }
+              ],
+          }
 
-  # Calcoli di supporto
-  avg_power = round((st.session_state.g_pmin + st.session_state.g_pmax) / 2)
-  p_pct = round((avg_power / st.session_state.g_ftp) * 100)
+          # Invio dei dati per la creazione dell'allenamento
+          response = client.upload_workout(workout_data)
+          workout_id = response.get("workoutId")
 
-  col_a, col_b = st.columns(2)
+          if workout_id:
+            # Programmazione sul calendario nella data scelta
+            date_str = workout_date.strftime("%Y-%m-%d")
+            client.schedule_workout(workout_id, date_str)
+            st.success(
+                f"Allenamento '{workout_name}' creato e pianificato sul"
+                f" calendario per il giorno {date_str} con successo!"
+            )
+          else:
+            st.error(
+                "Impossibile recuperare il workoutId dalla risposta di Garmin."
+            )
 
-  with col_a:
-    st.markdown("### 1️⃣ Riscaldamento (Warmup)")
-    st.markdown("- **Durata:** 5 minuti (o a pressione tasto Lap)")
-    st.markdown("- **Target:** Senza target o Potenza al 50-75% FTP")
-
-    st.markdown("### 2️⃣ Blocco Ripetute (Ripeti X volte)")
-    st.markdown(
-        f"- **Numero di ripetizioni:** `{st.session_state.g_repeats}` volte"
-    )
-    st.markdown(
-        f"- **Fase ON (Sforzo):** Durata `{st.session_state.g_dur} minuti`"
-    )
-    st.markdown(
-        f"  - *Target Potenza:* Range da **{st.session_state.g_pmin}W** a"
-        f" **{st.session_state.g_pmax}W** (circa {p_pct}% FTP)"
-    )
-    st.markdown(
-        f"- **Fase OFF (Recupero):** Durata `3 minuti` (o a pressione tasto"
-        " Lap)"
-    )
-    st.markdown("  - *Target:* Potenza leggera (circa 55% FTP)")
-
-  with col_b:
-    st.markdown("### 3️⃣ Defaticamento (Cooldown)")
-    st.markdown("- **Durata:** 5 minuti")
-    st.markdown("- **Target:** Senza target o Potenza decrescente")
-
-    st.markdown("---")
-    st.success(
-        f"✅ Una volta inseriti questi blocchi nell'editor web di Garmin,"
-        f" clicca su **Salva allenamento**. Sarà subito pronto nel tuo"
-        f" elenco per essere pianificato sul calendario!"
-    )
+      except Exception as e:
+        st.error(f"Errore durante la comunicazione con Garmin: {str(e)}")
