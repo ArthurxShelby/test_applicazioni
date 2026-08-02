@@ -8,7 +8,7 @@ import requests
 st.set_page_config(page_title="Tracker Bici da Corsa - Mappa Fluida", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Mappa interattiva stabile: zoom fluido libero e nessun riavvio durante la navigazione.")
+st.write("Mappa interattiva con persistenza di zoom e posizione.")
 
 if "points" not in st.session_state:
     st.session_state.points = [
@@ -112,7 +112,7 @@ with st.sidebar:
                     st.warning("Inserisci il nome di un luogo.")
     else:
         st.subheader("🗺️ Click su Mappa Attivo")
-        st.info("Fai tap sulla mappa per aggiungere un punto. Lo zoom a due dita è libero.")
+        st.info("Tocca la mappa per aggiungere un punto mantenendo lo zoom corrente.")
 
     st.markdown("---")
     st.subheader("🗑️ Azioni Rapide")
@@ -155,12 +155,13 @@ def render_mappa_e_dati():
             tiles_url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
             attr = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
 
+        # Creazione della mappa utilizzando rigorosamente lo zoom e il centro salvati nello state
         m = folium.Map(
             location=st.session_state.map_center, 
             zoom_start=st.session_state.map_zoom, 
             tiles=tiles_url, 
             attr=attr,
-            zoom_control=False,
+            zoom_control=True,
             scrollWheelZoom=True,
             dragging=True
         )
@@ -195,32 +196,38 @@ def render_mappa_e_dati():
                 icon=folium.Icon(color=colore_marker, icon=icona, prefix='fa')
             ).add_to(m)
 
-        # Chiediamo a st_folium di restituire ESCLUSIVAMENTE l'evento di click sul marker/mappa, ignorando zoom e centro dinamici
+        # Salvataggio sicuro di centro, zoom e click senza perdere la scala corrente
         map_output = st_folium(
             m, 
             width='100%', 
             height=750, 
-            returned_objects=["last_clicked"]
+            returned_objects=["last_clicked", "center", "zoom"]
         )
         
-        if map_output and modalita == "🗺️ Inserimento Manuale (Click su Mappa)":
-            if map_output.get("last_clicked"):
-                click_lat = map_output["last_clicked"]["lat"]
-                click_lon = map_output["last_clicked"]["lng"]
+        if map_output:
+            # Aggiorniamo zoom e centro correnti nello state per preservare la vista dell'utente
+            if map_output.get("zoom"):
+                st.session_state.map_zoom = map_output["zoom"]
+            if map_output.get("center"):
+                st.session_state.map_center = [map_output["center"]["lat"], map_output["center"]["lng"]]
                 
-                ultimo_punto = st.session_state.points[-1] if st.session_state.points else None
-                if not ultimo_punto or (ultimo_punto["lat"] != click_lat or ultimo_punto["lon"] != click_lon):
-                    alt_cliccata = ottieni_altitudine(click_lat, click_lon)
-                    nuovo_nome = f"Tappa {len(st.session_state.points) + 1}"
+            if modalita == "🗺️ Inserimento Manuale (Click su Mappa)":
+                if map_output.get("last_clicked"):
+                    click_lat = map_output["last_clicked"]["lat"]
+                    click_lon = map_output["last_clicked"]["lng"]
                     
-                    st.session_state.points.append({
-                        "nome": nuovo_nome,
-                        "lat": click_lat,
-                        "lon": click_lon,
-                        "alt": alt_cliccata
-                    })
-                    st.session_state.map_center = [click_lat, click_lon]
-                    st.rerun()
+                    ultimo_punto = st.session_state.points[-1] if st.session_state.points else None
+                    if not ultimo_punto or (ultimo_punto["lat"] != click_lat or ultimo_punto["lon"] != click_lon):
+                        alt_cliccata = ottieni_altitudine(click_lat, click_lon)
+                        nuovo_nome = f"Tappa {len(st.session_state.points) + 1}"
+                        
+                        st.session_state.points.append({
+                            "nome": nuovo_nome,
+                            "lat": click_lat,
+                            "lon": click_lon,
+                            "alt": alt_cliccata
+                        })
+                        st.rerun()
     else:
         st.info("Aggiungi almeno un punto per visualizzare la mappa.")
 
