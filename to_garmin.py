@@ -38,32 +38,7 @@ if st.session_state.garmin_client:
   client = st.session_state.garmin_client
 
   st.divider()
-  st.header("1. Diagnostica Struttura Allenamenti Esistenti")
-  st.write(
-      "Se vuoi verificare i codici accettati dal tuo account, puoi"
-      " prelevare un allenamento esistente (es. Consolidamneto3)."
-  )
-
-  if st.button("Scarica modello da allenamento esistente"):
-    try:
-      workouts = client.get_workouts()
-      if workouts:
-        # Prende il primo allenamento come riferimento per la struttura
-        sample_id = workouts[0].get("workoutId")
-        sample_details = client.get_workout(sample_id)
-        st.session_state.sample_workout_template = sample_details
-        st.success(
-            "Modello caricato con successo! Verrà usato come riferimento"
-            " strutturale."
-        )
-        st.json(sample_details)
-      else:
-        st.warning("Nessun allenamento trovato sul tuo account.")
-    except Exception as e:
-      st.error(f"Errore nel recupero dei workout: {str(e)}")
-
-  st.divider()
-  st.header("2. Crea e Programma Nuovo Allenamento")
+  st.header("Crea e Programma Nuovo Allenamento")
 
   with st.form("workout_form"):
     workout_name = st.text_input(
@@ -92,18 +67,7 @@ if st.session_state.garmin_client:
 
     if submitted:
       try:
-        # Se abbiamo scaricato un template valido dal profilo lo usiamo come base pulita,
-        # altrimenti utilizziamo lo schema standard di fallback.
-        if "sample_workout_template" in st.session_state:
-          workout_data = st.session_state.sample_workout_template
-          # Modifichiamo i campi chiave mantenendo intatta la struttura dei tipi accettati
-          workout_data["workoutName"] = workout_name
-          # Pulisciamo l'ID per permettere la creazione di un nuovo workout
-          if "workoutId" in workout_data:
-            del workout_data["workoutId"]
-        else:
-          # Schema di fallback standard sicuro
-          # Creazione diretta di un payload standard pulito compatibile con Garmin
+        # Creazione diretta del payload standard compatibile con Garmin
         workout_data = {
             "workoutName": workout_name,
             "sportType": {"sportTypeId": 2, "sportTypeKey": "cycling"},
