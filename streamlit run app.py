@@ -6,10 +6,10 @@ import folium
 from streamlit_folium import st_folium
 import requests
 
-st.set_page_config(page_title="Tracker Bici da Corsa - Full Screen", page_icon="🚴‍♂️", layout="wide")
+st.set_page_config(page_title="Tracker Bici da Corsa - Mantenimento Zoom", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Mappa a tutto schermo con percorso stradale, gestione waypoint e dati tecnici in basso.")
+st.write("Mappa a tutto schermo con mantenimento della posizione e dello zoom correnti durante l'inserimento dei waypoint.")
 
 # Inizializzazione della sessione
 if "points" not in st.session_state:
@@ -127,7 +127,7 @@ with st.sidebar:
         st.rerun()
 
 # --- SEZIONE MAPPA A TUTTO SCHERMO ---
-st.subheader("🗺️ Mappa del Percorso Stradale (Full Screen)")
+st.subheader("🗺️ Mappa del Percorso Stradale")
 
 map_style = st.radio(
     "Scegli stile mappa:",
@@ -136,18 +136,30 @@ map_style = st.radio(
 )
 
 if len(st.session_state.points) > 0:
-    centro_lat = np.mean([p["lat"] for p in st.session_state.points])
-    centro_lon = np.mean([p["lon"] for p in st.session_state.points])
-    
-    if map_style == "🗺️ Stradale (OpenStreetMap)":
-        m = folium.Map(location=[centro_lat, centro_lon], zoom_start=11, tiles='OpenStreetMap')
+    # Gestione dello stato di zoom e centro mappa per preservarlo tra i refresh
+    if len(st.session_state.points) > 1:
+        default_lat = np.mean([p["lat"] for p in st.session_state.points])
+        default_lon = np.mean([p["lon"] for p in st.session_state.points])
+        default_zoom = 11
     else:
-        m = folium.Map(
-            location=[centro_lat, centro_lon], 
-            zoom_start=11, 
-            tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
-            attr='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-        )
+        default_lat = st.session_state.points[0]["lat"]
+        default_lon = st.session_state.points[0]["lon"]
+        default_zoom = 13
+
+    if map_style == "🗺️ Stradale (OpenStreetMap)":
+        tiles_url = 'OpenStreetMap'
+        attr = None
+    else:
+        tiles_url = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+        attr = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+
+    # Creazione della mappa usando le coordinate salvate nello stato se presenti (per non perdere lo zoom)
+    m = folium.Map(
+        location=[default_lat, default_lon], 
+        zoom_start=default_zoom, 
+        tiles=tiles_url, 
+        attr=attr
+    )
 
     coordinate_strada, distanza_stradale = ottieni_percorso_stradale(st.session_state.points)
 
@@ -179,7 +191,7 @@ if len(st.session_state.points) > 0:
             icon=folium.Icon(color=colore_marker, icon=icona, prefix='fa')
         ).add_to(m)
 
-    # Mappa a tutta larghezza e altezza generosa (750px)
+    # Render della mappa e cattura dell'output interattivo (incluso zoom e centro correnti)
     map_output = st_folium(m, width='100%', height=750)
     
     if modalita == "🗺️ Inserimento Manuale (Click su Mappa)":
@@ -206,7 +218,6 @@ st.markdown("---")
 st.subheader("📊 Dati Tecnici e Tabella Tappe")
 
 if len(st.session_state.points) > 0:
-    # Metriche disposte in orizzontale su tre colonne sotto la mappa
     col1, col2, col3 = st.columns(3)
     
     dislivello_positivo = 0.0
