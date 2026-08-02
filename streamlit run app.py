@@ -6,10 +6,10 @@ import folium
 from streamlit_folium import st_folium
 import requests
 
-st.set_page_config(page_title="Tracker Bici da Corsa - Ricerca Indirizzi", page_icon="🚴‍♂️", layout="wide")
+st.set_page_config(page_title="Tracker Bici da Corsa - Personalizzato", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Digita il nome del luogo: il sistema troverà automaticamente coordinate, altitudine e tracciato stradale.")
+st.write("Gestisci le tappe del tuo percorso stradale con ricerca automatica o inserimento manuale delle coordinate.")
 
 # Inizializzazione della sessione
 if "points" not in st.session_state:
@@ -31,8 +31,7 @@ def cerca_luogo(query):
                 lat = float(data[0]["lat"])
                 lon = float(data[0]["lon"])
                 
-                # Stima dell'altitudine basata su un servizio pubblico gratuito di elevazione (Open-Elevation)
-                alt = 50 # valore di default
+                alt = 50 
                 try:
                     elev_url = f"https://api.open-elevation.com/api/v1/lookup?locations={lat},{lon}"
                     elev_res = requests.get(elev_url, timeout=3)
@@ -45,7 +44,7 @@ def cerca_luogo(query):
                 
                 return lat, lon, int(alt)
     except Exception as e:
-        st.error(f- "Errore nella ricerca del luogo: {e}")
+        st.error(f"Errore nella ricerca del luogo: {e}")
     return None, None, None
 
 # Funzione per calcolare il percorso stradale reale (OSRM)
@@ -72,31 +71,78 @@ def ottieni_percorso_stradale(punti):
     return fallback_coords, 0.0
 
 with st.sidebar:
-    st.header("➕ Aggiungi Tappa per Indirizzo")
-    with st.form("add_point_form"):
-        ricerca_input = st.text_input("Cerca Luogo / Indirizzo", "Stazione Centrale Trieste")
-        
-        submitted = st.form_submit_button("Cerca e Aggiungi alla lista")
-        if submitted:
-            if len(ricerca_input) > 0:
-                with st.spinner("Ricerca coordinate e altitudine in corso..."):
-                    lat_trovata, lon_trovata, alt_trovata = cerca_luogo(ricerca_input)
-                
-                if lat_trovata is not None:
+    st.header("⚙️ Gestione Tappe")
+    
+    # Scelta della modalità di inserimento
+    modalita = st.radio(
+        "Modalità inserimento:",
+        ("🔍 Ricerca per Nome/Indirizzo", "✍️ Inserimento Manuale Coordinate"),
+        horizontal=False
+    )
+    
+    st.markdown("---")
+    
+    if modalita == "🔍 Ricerca per Nome/Indirizzo":
+        with st.form("add_point_form_search"):
+            st.subheader("➕ Aggiungi per Nome")
+            ricerca_input = st.text_input("Nome Luogo / Indirizzo", "Opicina")
+            submitted_search = st.form_submit_button("Cerca e Aggiungi")
+            
+            if submitted_search:
+                if len(ricerca_input) > 0:
+                    with st.spinner("Ricerca in corso..."):
+                        lat_trovata, lon_trovata, alt_trovata = cerca_luogo(ricerca_input)
+                    
+                    if lat_trovata is not None:
+                        st.session_state.points.append({
+                            "nome": ricerca_input.capitalize(), 
+                            "lat": lat_trovata, 
+                            "lon": lon_trovata, 
+                            "alt": alt_trovata
+                        })
+                        st.success("Tappa aggiunta con successo!")
+                        st.rerun()
+                    else:
+                        st.error("Luogo non trovato. Prova a essere più specifico.")
+                else:
+                    st.warning("Inserisci il nome di un luogo.")
+    else:
+        with st.form("add_point_form_manual"):
+            st.subheader("➕ Aggiungi Manualmente")
+            nome_manuale = st.text_input("Nome Tappa", "Punto X")
+            lat_manuale = st.number_input("Latitudine", value=45.6700, format="%.5f")
+            lon_manuale = st.number_input("Longitudine", value=13.7800, format="%.5f")
+            alt_manuale = st.number_input("Altitudine (metri)", value=150)
+            
+            submitted_manual = st.form_submit_button("Aggiungi alla lista")
+            
+            if submitted_manual:
+                if len(nome_manuale) > 0:
                     st.session_state.points.append({
-                        "nome": ricerca_input.capitalize(), 
-                        "lat": lat_trovata, 
-                        "lon": lon_trovata, 
-                        "alt": alt_trovata
+                        "nome": nome_manuale, 
+                        "lat": lat_manuale, 
+                        "lon": lon_manuale, 
+                        "alt": alt_manuale
                     })
-                    st.success(f"Trovato! Lat: {lat_trovata:.4f}, Lon: {lon_trovata:.4f}, Alt: {alt_trovata}m")
+                    st.success("Tappa manuale aggiunta!")
                     st.rerun()
                 else:
-                    st.error("Luogo non trovato. Prova a essere più specifico (es. 'Stazione Centrale, Trieste').")
-            else:
-                st.warning("Inserisci il nome di un luogo.")
+                    st.warning("Inserisci un nome per la tappa.")
 
-    if st.button("🔄 Resetta Tappe"):
+    st.markdown("---")
+    st.subheader("🗑️ Azioni Rapide")
+    
+    # Pulsante per eliminare l'ultimo waypoint
+    if st.button("↩️ Elimina Ultimo Waypoint"):
+        if len(st.session_state.points) > 0:
+            eliminato = st.session_state.points.pop()
+            st.success(f"Rimosso: {eliminato['nome']}")
+            st.rerun()
+        else:
+            st.warning("Non ci sono tappe da eliminare.")
+
+    # Pulsante per resettare tutto
+    if st.button("🔄 Resetta Tutte le Tappe"):
         st.session_state.points = []
         st.rerun()
 
