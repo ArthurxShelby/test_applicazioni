@@ -49,7 +49,7 @@ if len(st.session_state.points) > 0:
     altitudini = [st.session_state.points[0]["alt"]]
     nomi_tappe = [st.session_state.points[0]["nome"]]
 
-    for i in range(len(st.session_state.points) - 1]:
+    for i in range(len(st.session_state.points) - 1):
         p1 = (st.session_state.points[i]["lat"], st.session_state.points[i]["lon"])
         p2 = (st.session_state.points[i+1]["lat"], st.session_state.points[i+1]["lon"])
         
