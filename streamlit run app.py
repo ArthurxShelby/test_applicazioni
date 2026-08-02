@@ -1,15 +1,17 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+# Rimuoviamo matplotlib, non serve più per la mappa
 from geopy.distance import geodesic
+import folium
+from streamlit_folium import st_folium
 
-st.set_page_config(page_title="Tracker Uscite Bici", page_icon="🚴‍♂️", layout="wide")
+st.set_page_config(page_title="Tracker Uscite Bici Interattivo", page_icon="🚴‍♂️", layout="wide")
 
-st.title("🚴‍♂️ Tracker Uscite in Bici (Distanza & Dislivello)")
-st.write("Inserisci i punti di passaggio (Waypoint) del tuo giro in bici. Il programma calcolerà la distanza totale e stimerà il dislivello.")
+st.title("🚴‍♂️ Tracker Uscite in Bici (Mappa Interattiva)")
+st.write("Inserisci i punti di passaggio. Il percorso verrà visualizzato sulla mappa interattiva.")
 
-# Inizializzazione della sessione per i punti
+# Inizializzazione della sessione per i punti (Trieste - Basovizza - Prosecco)
 if "points" not in st.session_state:
     st.session_state.points = [
         {"nome": "Trieste (Partenza)", "lat": 45.6495, "lon": 13.7768, "alt": 5},
@@ -21,77 +23,127 @@ with st.sidebar:
     st.header("➕ Aggiungi Tappa")
     with st.form("add_point_form"):
         nome_tappa = st.text_input("Nome Luogo / Punto", "Opicina")
-        lat = st.number_input("Latitudine", value=45.6700, format="%.4f")
-        lon = st.number_input("Longitudine", value=13.7800, format="%.4f")
+        lat = st.number_input("Latitudine", value=45.6700, format="%.5f")
+        lon = st.number_input("Longitudine", value=13.7800, format="%.5f")
         alt = st.number_input("Altitudine (metri s.l.m.)", value=300)
         
         submitted = st.form_submit_button("Aggiungi alla lista")
         if submitted:
-            st.session_state.points.append({"nome": nome_tappa, "lat": lat, "lon": lon, "alt": alt})
-            st.rerun()
+            if len(nome_tappa) > 0:
+                st.session_state.points.append({"nome": nome_tappa, "lat": lat, "lon": lon, "alt": alt})
+                st.rerun()
+            else:
+                st.warning("Inserisci un nome per la tappa.")
 
     if st.button("🔄 Resetta Tappe"):
         st.session_state.points = []
         st.rerun()
 
-# Mostra la tabella delle tappe attuali
-st.subheader("📍 Elenco Tappe Inserite")
-if len(st.session_state.points) > 0:
-    df_points = pd.DataFrame(st.session_state.points)
-    st.dataframe(df_points, use_container_width=True)
-    
-    # Calcoli di distanza e dislivello
-    distanza_totale = 0.0
-    dislivello_positivo = 0.0
-    dislivello_negativo = 0.0
-    
-    distanze_parziali = [0.0]
-    altitudini = [st.session_state.points[0]["alt"]]
-    nomi_tappe = [st.session_state.points[0]["nome"]]
+# Sezione Principale: Layout a due colonne
+col_map, col_data = st.columns([2, 1])
 
-    for i in range(len(st.session_state.points) - 1):
-        p1 = (st.session_state.points[i]["lat"], st.session_state.points[i]["lon"])
-        p2 = (st.session_state.points[i+1]["lat"], st.session_state.points[i+1]["lon"])
+# --- Colonna Sinistra: Mappa ---
+with col_map:
+    st.subheader("🗺️ Mappa del Percorso")
+    
+    # Selettore stile mappa nella colonna della mappa
+    map_style = st.radio(
+        "Scegli stile mappa:",
+        ("🗺️ Stradale (OpenStreetMap)", "衛星 Satellitare (con etichette)"),
+        horizontal=True
+    )
+    
+    if len(st.session_state.points) > 0:
+        # Calcola il centro medio dei punti per centrare la mappa
+        centro_lat = np.mean([p["lat"] for p in st.session_state.points])
+        centro_lon = np.mean([p["lon"] for p in st.session_state.points])
         
-        # Distanza in km tra due punti consecutivi
-        dist_tratta = geodesic(p1, p2).kilometers
-        distanza_totale += dist_tratta
-        distanze_parziali.append(distanza_totale)
-        
-        # Calcolo dislivello
-        alt1 = st.session_state.points[i]["alt"]
-        alt2 = st.session_state.points[i+1]["alt"]
-        diff_alt = alt2 - alt1
-        
-        if diff_alt > 0:
-            dislivello_positivo += diff_alt
+        # Crea l'oggetto mappa Folium
+        if map_style == "🗺️ Stradale (OpenStreetMap)":
+            m = folium.Map(location=[centro_lat, centro_lon], zoom_start=12, tiles='OpenStreetMap')
         else:
-            dislivello_negativo += abs(diff_alt)
+            # Utilizziamo Esri World Imagery che è ottimo e spesso ha etichette integrate
+            m = folium.Map(location=[centro_lat, centro_lon], zoom_start=12, tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community')
+
+        # Prepara la lista di coordinate per la linea
+        coordinate_linea = []
+
+        for i, punto in enumerate(st.session_state.points):
+            # Crea il popup con le info
+            popup_html = f"<b>{punto['nome']}</b><br>Altitudine: {punto['alt']}m"
             
-        altitudini.append(alt2)
-        nomi_tappe.append(st.session_state.points[i+1]["nome"])
+            # Colore diverso per partenza e arrivo
+            if i == 0:
+                colore_marker = 'green' # Partenza
+                icona = 'play'
+            elif i == len(st.session_state.points) - 1:
+                colore_marker = 'red' # Arrivo
+                icona = 'flag'
+            else:
+                colore_marker = 'blue' # Tappe intermedie
+                icona = 'map-pin'
 
-    # Metriche principali in evidenza
-    col1, col2, col3 = st.columns(3)
-    col1.metric("📏 Distanza Totale", f"{distanza_totale:.2f} km")
-    col2.metric("📈 Dislivello Positivo (Salita)", f"{dislivello_positivo:.0f} m")
-    col3.metric("📉 Dislivello Negativo (Discesa)", f"{dislivello_negativo:.0f} m")
+            # Aggiungi il Marker
+            folium.Marker(
+                [punto["lat"], punto["lon"]],
+                popup=popup_html,
+                tooltip=f"{punto['nome']} ({punto['alt']}m)",
+                icon=folium.Icon(color=colore_marker, icon=icona, prefix='fa')
+            ).add_to(m)
+            
+            coordinate_linea.append([punto["lat"], punto["lon"]])
 
-    # Grafico altimetrico
-    st.subheader("⛰️ Profilo Altimetrico del Percorso")
-    fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(distanze_parziali, altitudini, marker='o', color='tab:green', linewidth=2, markersize=6)
-    ax.fill_between(distanze_parziali, altitudini, color='tab:green', alpha=0.2)
+        # Aggiungi la linea del percorso
+        if len(coordinate_linea) > 1:
+            folium.PolyLine(
+                coordinate_linea,
+                color='blue',
+                weight=3,
+                opacity=0.8,
+                tooltip='Percorso'
+            ).add_to(m)
+
+        # Visualizza la mappa in Streamlit
+        st_folium(m, width='100%', height=500)
+    else:
+        st.info("Aggiungi almeno un punto per visualizzare la mappa.")
+
+# --- Colonna Destra: Dati e Tabella ---
+with col_data:
+    st.subheader("📊 Dati Tecnici")
     
-    ax.set_xlabel("Distanza Progressiva (km)")
-    ax.set_ylabel("Altitudine (metri)")
-    ax.grid(True, linestyle='--', alpha=0.6)
-    
-    # Etichette dei punti sul grafico
-    for i, txt in enumerate(nomi_tappe):
-        ax.annotate(txt, (distanze_parziali[i], altitudini[i]), textcoords="offset points", xytext=(0,10), ha='center', fontsize=9)
+    if len(st.session_state.points) > 0:
+        df_points = pd.DataFrame(st.session_state.points)
+        st.dataframe(df_points, use_container_width=True)
+        
+        # Calcoli di distanza e dislivello
+        distanza_totale = 0.0
+        dislivello_positivo = 0.0
+        dislivello_negativo = 0.0
+        
+        for i in range(len(st.session_state.points) - 1):
+            p1 = (st.session_state.points[i]["lat"], st.session_state.points[i]["lon"])
+            p2 = (st.session_state.points[i+1]["lat"], st.session_state.points[i+1]["lon"])
+            
+            # Distanza in km
+            distanza_totale += geodesic(p1, p2).kilometers
+            
+            # Calcolo dislivello
+            alt1 = st.session_state.points[i]["alt"]
+            alt2 = st.session_state.points[i+1]["alt"]
+            diff_alt = alt2 - alt1
+            
+            if diff_alt > 0:
+                dislivello_positivo += diff_alt
+            else:
+                dislivello_negativo += abs(diff_alt)
 
-    st.pyplot(fig)
+        # Metriche principali
+        st.metric("📏 Distanza Totale", f"{distanza_totale:.2f} km")
+        st.metric("📈 Dislivello Positivo", f"{dislivello_positivo:.0f} m")
+        st.metric("📉 Dislivello Negativo", f"{dislivello_negativo:.0f} m")
+    else:
+        st.info("Aggiungi punti per vedere i dati.")
 
-else:
-    st.info("Aggiungi almeno due punti dalla barra laterale per iniziare il calcolo.")
+# RIMOSSO IL GRAFICO ALTImETRICO per far posto alla mappa completa.
+# Se lo vuoi rimettere, puoi metterlo sotto i dati tecnici.
