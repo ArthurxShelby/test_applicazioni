@@ -6,20 +6,20 @@ import folium
 from streamlit_folium import st_folium
 import requests
 
-st.set_page_config(page_title="Tracker Bici da Corsa - Click Mappa", page_icon="🚴‍♂️", layout="wide")
+st.set_page_config(page_title="Tracker Bici da Corsa - Mappa Grande", page_icon="🚴‍♂️", layout="wide")
 
 st.title("🚴‍♂️ Tracker Uscite in Bici da Corsa")
-st.write("Cerca per indirizzo oppure seleziona l'inserimento manuale per **cliccare direttamente sulla mappa** e aggiungere i waypoint.")
+st.write("Uscite in bici con mappa ingrandita, calcolo del percorso stradale e inserimento interattivo.")
 
 # Inizializzazione della sessione
 if "points" not in st.session_state:
     st.session_state.points = [
-        {"nome": "Trieste Centrale", "lat": 45.6562, "lon": 13.7740, "alt": 5},
-        {"nome": "Basovizza", "lat": 45.6417, "lon": 13.8639, "alt": 370},
-        {"nome": "Prosecco", "lat": 45.7142, "lon": 13.7433, "alt": 250}
+        {"nome": "Stazione Centrale Trieste", "lat": 45.6562, "lon": 13.7740, "alt": 5},
+        {"nome": "Sistiana", "lat": 45.7716, "lon": 13.6370, "alt": 70},
+        {"nome": "Tappa 3", "lat": 45.7954, "lon": 13.5870, "alt": 30},
+        {"nome": "Tappa 4", "lat": 45.8179, "lon": 13.5770, "alt": 15}
     ]
 
-# Funzione per cercare coordinate e altitudine da un indirizzo/luogo
 def cerca_luogo(query):
     url = f"https://nominatim.openstreetmap.org/search?q={query}&format=json&limit=1"
     headers = {'User-Agent': 'TrackerBiciApp/1.0'}
@@ -36,7 +36,6 @@ def cerca_luogo(query):
         st.error(f"Errore nella ricerca del luogo: {e}")
     return None, None, None
 
-# Funzione per ottenere l'altitudine tramite API pubblica
 def ottieni_altitudine(lat, lon):
     alt = 50
     try:
@@ -50,7 +49,6 @@ def ottieni_altitudine(lat, lon):
         pass
     return int(alt)
 
-# Funzione per calcolare il percorso stradale reale (OSRM)
 def ottieni_percorso_stradale(punti):
     if len(punti) < 2:
         return [], 0.0
@@ -87,7 +85,7 @@ with st.sidebar:
     if modalita == "🔍 Ricerca per Nome/Indirizzo":
         with st.form("add_point_form_search"):
             st.subheader("➕ Aggiungi per Nome")
-            ricerca_input = st.text_input("Nome Luogo / Indirizzo", "Opicina")
+            ricerca_input = st.text_input("Nome Luogo / Indirizzo", "Monfalcone")
             submitted_search = st.form_submit_button("Cerca e Aggiungi")
             
             if submitted_search:
@@ -105,15 +103,13 @@ with st.sidebar:
                         st.success("Tappa aggiunta con successo!")
                         st.rerun()
                     else:
-                        st.error("Luogo non trovato. Prova a essere più specifico.")
+                        st.error("Luogo non trovato.")
                 else:
                     st.warning("Inserisci il nome di un luogo.")
     else:
         st.subheader("🗺️ Click su Mappa Attivo")
-        st.info("Clicca in un punto qualsiasi della mappa a destra per aggiungere automaticamente una nuova tappa.")
-        
-        # Opzionale: nome da dare al punto cliccato
-        nome_click = st.text_input("Nome per il prossimo punto cliccato", f"Tappa {len(st.session_state.points) + 1}")
+        st.info("Clicca sulla mappa a sinistra per aggiungere un punto.")
+        nome_click = st.text_input("Nome per il punto cliccato", f"Tappa {len(st.session_state.points) + 1}")
 
     st.markdown("---")
     st.subheader("🗑️ Azioni Rapide")
@@ -130,11 +126,11 @@ with st.sidebar:
         st.session_state.points = []
         st.rerun()
 
-# Layout principale
-col_map, col_data = st.columns([2, 1])
+# Layout principale modificato: proporzione 3 a 1 per dare molto più spazio alla mappa
+col_map, col_data = st.columns([3, 1])
 
 with col_map:
-    st.subheader("🗺️ Mappa del Percorso Stradale")
+    st.subheader("🗺️ Mappa del Percorso Stradale (Ingrandita)")
     
     map_style = st.radio(
         "Scegli stile mappa:",
@@ -147,11 +143,11 @@ with col_map:
         centro_lon = np.mean([p["lon"] for p in st.session_state.points])
         
         if map_style == "🗺️ Stradale (OpenStreetMap)":
-            m = folium.Map(location=[centro_lat, centro_lon], zoom_start=12, tiles='OpenStreetMap')
+            m = folium.Map(location=[centro_lat, centro_lon], zoom_start=11, tiles='OpenStreetMap')
         else:
             m = folium.Map(
                 location=[centro_lat, centro_lon], 
-                zoom_start=12, 
+                zoom_start=11, 
                 tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', 
                 attr='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
             )
@@ -186,16 +182,14 @@ with col_map:
                 icon=folium.Icon(color=colore_marker, icon=icona, prefix='fa')
             ).add_to(m)
 
-        # Mostra la mappa e cattura il click se siamo in modalità manuale
-        map_output = st_folium(m, width='100%', height=500)
+        # Mappa ingrandita a 700 pixel di altezza
+        map_output = st_folium(m, width='100%', height=700)
         
-        # Gestione del click sulla mappa
         if modalita == "🗺️ Inserimento Manuale (Click su Mappa)":
             if map_output and map_output.get("last_clicked"):
                 click_lat = map_output["last_clicked"]["lat"]
                 click_lon = map_output["last_clicked"]["lng"]
                 
-                # Evita di aggiungere lo stesso punto più volte di seguito a causa del refresh
                 ultimo_punto = st.session_state.points[-1] if st.session_state.points else None
                 if not ultimo_punto or (ultimo_punto["lat"] != click_lat or ultimo_punto["lon"] != click_lon):
                     alt_cliccata = ottieni_altitudine(click_lat, click_lon)
