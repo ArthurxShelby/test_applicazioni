@@ -42,7 +42,7 @@ def carica_mq_da_supabase():
   except Exception as e:
     st.error(f"Errore di connessione a Supabase (condominio): {e}")
 
-  # Se la tabella è vuota, inserisce i valori di default
+  # Valori di default
   default_mq = {
       "ESPOSITO": 70.0,
       "MARANGI": 75.0,
@@ -52,8 +52,16 @@ def carica_mq_da_supabase():
       "BAVILA": 85.0,
       "TESTA": 85.0,
   }
-  for cond, mq in default_mq.items():
-    supabase.table("condominio").insert({"condomino": cond, "mq": mq}).execute()
+
+  # Usa upsert per evitare errori di chiave duplicata se la tabella ha già righe
+  try:
+    for cond, mq in default_mq.items():
+      supabase.table("condominio").upsert(
+          {"condomino": cond, "mq": mq}, on_conflict="condomino"
+      ).execute()
+  except Exception as e:
+    print(f"Nota inserimento default: {e}")
+
   return default_mq
 
 
