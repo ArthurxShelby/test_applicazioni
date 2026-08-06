@@ -42,7 +42,6 @@ def carica_mq_da_supabase():
   except Exception as e:
     st.error(f"Errore di connessione a Supabase (condominio): {e}")
 
-  # Valori di default nel caso la tabella sia vuota
   default_mq = {
       "ESPOSITO": 70.0,
       "MARANGI": 75.0,
@@ -162,12 +161,12 @@ else:
       with col_f1:
         anni_disponibili = sorted(df_fatture["anno"].unique())
         selected_anno = st.selectbox(
-            "Seleziona Anno Fiscale",
+            "Filtra per Anno Fiscale",
             ["Tutti gli anni (da 2022)"] + list(anni_disponibili),
         )
       with col_f2:
         selected_tipo = st.selectbox(
-            "Seleziona Tipologia Spesa",
+            "Filtra per Tipologia Spesa",
             ["Tutte le tipologie", "Energia Elettrica", "Gasolio"],
         )
 
@@ -179,13 +178,61 @@ else:
         df_filtered = df_filtered[df_filtered["tipo"] == selected_tipo]
 
       st.markdown("---")
+      st.subheader("Elenco Fatture (Seleziona una riga per il riparto mirato)")
+
+      if df_filtered.empty:
+        st.warning("Nessuna fattura trovata con i filtri selezionati.")
+        tot_imp, tot_iva, tot_complessivo = 0.0, 0.0, 0.0
+      else:
+        # Aggiungiamo la colonna di selezione (Checkbox) alla tabella
+        df_display = df_filtered.copy()
+        df_display.insert(0, "Seleziona", False)
+
+        # Tabella con selezione riga attiva
+        edited_df = st.data_editor(
+            df_display,
+            column_config={
+                "Seleziona": st.column_config.CheckboxColumn(
+                    "Seleziona", help="Seleziona la fattura da ripartire", default=False
+                )
+            },
+            disabled=[
+                c
+                for c in df_display.columns
+                if c != "Seleziona"
+            ],
+            hide_index=True,
+            use_container_width=True,
+        )
+
+        # Controlliamo quale fattura è stata selezionata
+        selezionate = edited_df[edited_df["Seleziona"] == True]
+
+        if not selezionate.empty:
+          # Se l'utente ha selezionato una o più fatture, calcoliamo solo su quelle
+          df_calcolo = df_filtered[
+              df_filtered["id"].isin(selezionate["id"])
+          ]
+          st.info(
+              f"Stai visualizzando il riparto per {len(df_calcolo)} fattura/e"
+              " selezionata/e."
+          )
+        else:
+          # Altrimenti usiamo tutte quelle filtrate dai menu a tendina
+          df_calcolo = df_filtered
+          st.info(
+              "Nessuna fattura spuntata: il riparto considera TUTTE le fatture"
+              " filtrate sopra."
+          )
+
+        tot_imp = df_calcolo["imponibile"].sum()
+        tot_iva = df_calcolo["iva"].sum()
+        tot_complessivo = df_calcolo["totale"].sum()
+
+      st.markdown("---")
 
       # Indicatori metrici
       col1, col2, col3 = st.columns(3)
-      tot_imp = df_filtered["imponibile"].sum()
-      tot_iva = df_filtered["iva"].sum()
-      tot_complessivo = df_filtered["totale"].sum()
-
       col1.metric("Totale Imponibile", f"€ {tot_imp:,.2f}")
       col2.metric("Totale IVA", f"€ {tot_iva:,.2f}")
       col3.metric("Totale Generale", f"€ {tot_complessivo:,.2f}")
@@ -212,31 +259,6 @@ else:
 
       df_reparto = pd.DataFrame(reparto_data)
       st.dataframe(df_reparto, use_container_width=True)
-
-      # Mostra anche l'elenco delle fatture filtrate incluse in questo calcolo
-      with st.expander(
-          "Visualizza l'elenco delle fatture incluse in questo calcolo"
-      ):
-        if df_filtered.empty:
-          st.info(
-              "Nessuna fattura corrisponde ai filtri selezionati."
-          )
-        else:
-          st.dataframe(
-              df_filtered[
-                  [
-                      "id",
-                      "anno",
-                      "mese",
-                      "tipo",
-                      "fornitore",
-                      "imponibile",
-                      "iva",
-                      "totale",
-                  ]
-              ],
-              use_container_width=True,
-          )
 
   # --- 2. INSERISCI FATTURA ---
   elif menu == "Inserisci Fattura":
