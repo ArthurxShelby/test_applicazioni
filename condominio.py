@@ -7,10 +7,16 @@ st.set_page_config(
     page_title="Gestione Spese Condominiali", page_icon="🏢", layout="wide"
 )
 
-# --- CONFIGURAZIONE SUPABASE ---
-# Inserisci qui le tue credenziali prese da Supabase (Project Settings -> API)
-SUPABASE_URL = "IL_TUO_SUPABASE_URL"
-SUPABASE_KEY = "LA_TUA_SUPABASE_KEY"
+# --- CONFIGURAZIONE SUPABASE DA SECRETS ---
+try:
+  SUPABASE_URL = st.secrets["SUPABASE_URL"]
+  SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+except Exception as e:
+  st.error(
+      "Configurazione Supabase mancante nei Secrets di Streamlit! Controlla"
+      " le impostazioni dell'app."
+  )
+  st.stop()
 
 # Inizializzazione client Supabase
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -32,12 +38,11 @@ def carica_mq_da_supabase():
     response = supabase.table("condominio").select("*").execute()
     data = response.data
     if data and len(data) > 0:
-      # Converte i dati del db in un dizionario {condomino: mq}
       return {row["condomino"]: float(row["mq"]) for row in data}
   except Exception as e:
     st.error(f"Errore di connessione a Supabase (condominio): {e}")
 
-  # Se la tabella è vuota, restituisce valori di default e li inserisce su DB
+  # Se la tabella è vuota, inserisce i valori di default
   default_mq = {
       "ESPOSITO": 70.0,
       "MARANGI": 75.0,
@@ -55,7 +60,6 @@ def carica_mq_da_supabase():
 def salva_mq_su_supabase(mq_dict):
   try:
     for cond, mq in mq_dict.items():
-      # Aggiorna se esiste o inserisce
       supabase.table("condominio").upsert(
           {"condomino": cond, "mq": mq}, on_conflict="condomino"
       ).execute()
@@ -326,5 +330,4 @@ else:
     df_mil_current = pd.DataFrame(
         list(millesimi.items()), columns=["Condomino", "Valore Millesimale"]
     )
-    st.dataframe(df_mil_current, use_container_width=True)
     st.dataframe(df_mil_current, use_container_width=True)
