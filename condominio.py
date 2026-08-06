@@ -120,7 +120,7 @@ def carica_fatture_da_supabase():
 
 def carica_pagamenti_da_supabase():
   try:
-    response = supabase.table("pagamenti").select("*").execute()
+    response = supabase.table("pagamneti").select("*").execute()
     data = response.data
     if data:
       return pd.DataFrame(data)
@@ -441,7 +441,7 @@ else:
             }
 
             try:
-              supabase.table("pagamenti").insert(nuovo_pagamento).execute()
+              supabase.table("pagamneti").insert(nuovo_pagamento).execute()
               st.session_state.pagamenti = carica_pagamenti_da_supabase()
               st.success(
                   f"Pagamento di € {importo_versato:,.2f} registrato con"
@@ -612,4 +612,4 @@ else:
           "Valore Millesimale": millesimi.get(app, 0),
           "Riporto (€)": dict_riporti.get(app, 0.0),
       })
-    st.dataframe(pd.DataFrame(dati_riepilogo_config), use_container_width=True)    st.dataframe(pd.DataFrame(dati_riepilogo_config), use_container_width=True)
+    st.dataframe(pd.DataFrame(dati_riepilogo_config), use_container_width=True)
