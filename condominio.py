@@ -72,6 +72,30 @@ def salva_mq_su_supabase(mq_dict):
     return False
 
 
+def carica_riporti_da_supabase():
+  try:
+    response = supabase.table("riporti").select("*").execute()
+    data = response.data
+    if data and len(data) > 0:
+      return {row["condominio"]: float(row["riporto"]) for row in data}
+  except Exception as e:
+    pass  # Se la tabella non esiste o è vuota, restituisce 0 per tutti
+  return {app: 0.0 for app in APP_NAMES}
+
+
+def salva_riporti_su_supabase(riporti_dict):
+  try:
+    supabase.table("riporti").delete().neq("id", 0).execute()
+    for cond, rip in riporti_dict.items():
+      supabase.table("riporti").insert(
+          {"condominio": cond, "riporto": rip}
+      ).execute()
+    return True
+  except Exception as e:
+    st.error(f"Errore nel salvataggio dei riporti su Supabase: {e}")
+    return False
+
+
 def carica_fatture_da_supabase():
   try:
     response = supabase.table("fatture").select("*").execute()
@@ -94,6 +118,25 @@ def carica_fatture_da_supabase():
   )
 
 
+def carica_pagamenti_da_supabase():
+  try:
+    response = supabase.table("pagamenti").select("*").execute()
+    data = response.data
+    if data:
+      return pd.DataFrame(data)
+  except Exception as e:
+    pass
+  return pd.DataFrame(
+      columns=[
+          "id",
+          "condominio",
+          "fattura_id",
+          "importo_pagato",
+          "data_pagamento",
+      ]
+  )
+
+
 # --- INIZIALIZZAZIONE SESSION STATE ---
 if "logged_in" not in st.session_state:
   st.session_state.logged_in = False
@@ -101,8 +144,14 @@ if "logged_in" not in st.session_state:
 if "mq_appartamenti" not in st.session_state:
   st.session_state.mq_appartamenti = carica_mq_da_supabase()
 
+if "riporti" not in st.session_state:
+  st.session_state.riporti = carica_riporti_da_supabase()
+
 if "fatture" not in st.session_state:
   st.session_state.fatture = carica_fatture_da_supabase()
+
+if "pagamenti" not in st.session_state:
+  st.session_state.pagamenti = carica_pagamenti_da_supabase()
 
 
 def calcola_millesimi_da_mq(mq_dict):
@@ -120,35 +169,34 @@ def genera_pdf_riparto(df_reparto, titolo_contesto):
 
   styles = getSampleStyleSheet()
   title_style = ParagraphStyle(
-      'TitleStyle', parent=styles['Heading1'], fontSize=16, alignment=1, spaceAfter=12
+      'TitleStyle', parent=styles['Heading1'], fontSize=15, alignment=1, spaceAfter=10
   )
   subtitle_style = ParagraphStyle(
-      'SubtitleStyle', parent=styles['Normal'], fontSize=10, alignment=1, spaceAfter=20
+      'SubtitleStyle', parent=styles['Normal'], fontSize=9, alignment=1, spaceAfter=15
   )
 
   elements.append(Paragraph("<b>RIEPILOGO RIPARTO SPESE CONDOMINIALI</b>", title_style))
   elements.append(Paragraph(f"Contesto: {titolo_contesto}", subtitle_style))
   elements.append(Spacer(1, 10))
 
-  # Conversione del DataFrame in lista per ReportLab
   data = [list(df_reparto.columns)] + df_reparto.values.tolist()
 
-  table = Table(data, colWidths=[110, 70, 110, 100, 110])
+  table = Table(data, colWidths=[90, 60, 80, 75, 75, 70, 75])
   table.setStyle(
       TableStyle([
           ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
           ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
           ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
           ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-          ('FONTSIZE', (0, 0), (-1, 0), 10),
-          ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+          ('FONTSIZE', (0, 0), (-1, 0), 8),
+          ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
           ('BACKGROUND', (0, 1), (-1, -2), colors.HexColor('#f8f9fa')),
           ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e2e8f0')),
           ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
           ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-          ('FONTSIZE', (0, 1), (-1, -1), 9),
-          ('TOPPADDING', (0, 1), (-1, -1), 6),
-          ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+          ('FONTSIZE', (0, 1), (-1, -1), 8),
+          ('TOPPADDING', (0, 1), (-1, -1), 5),
+          ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
       ])
   )
 
@@ -185,7 +233,7 @@ else:
           "Dashboard & Riepilogo",
           "Inserisci Fattura",
           "Storico e Dettaglio",
-          "Gestione Millesimi",
+          "Gestione Millesimi & Riporti",
       ],
   )
 
@@ -196,6 +244,7 @@ else:
   df_fatture = st.session_state.fatture
   millesimi = calcola_millesimi_da_mq(st.session_state.mq_appartamenti)
   tot_millesimi = sum(millesimi.values())
+  dict_riporti = st.session_state.riporti
 
   # --- 1. DASHBOARD & RIEPILOGO ---
   if menu == "Dashboard & Riepilogo":
@@ -207,7 +256,6 @@ else:
           " 'Inserisci Fattura'."
       )
     else:
-      # Filtri in alto
       col_f1, col_f2 = st.columns(2)
       with col_f1:
         anni_disponibili = sorted(df_fatture["anno"].unique())
@@ -221,7 +269,6 @@ else:
             ["Tutte le tipologie", "Energia Elettrica", "Gasolio"],
         )
 
-      # Applicazione filtri principali
       df_filtered = df_fatture.copy()
       if selected_anno != "Tutti gli anni (da 2022)":
         df_filtered = df_filtered[df_filtered["anno"] == selected_anno]
@@ -254,18 +301,10 @@ else:
           descrizione_contesto = (
               f"Anno: {selected_anno} | Tipo: {selected_tipo}"
           )
-          st.info(
-              "Stai visualizzando il riparto cumulativo di tutte le fatture"
-              " filtrate."
-          )
         else:
           id_estratto = int(selected_option.split("|")[0].replace("ID:", "").strip())
           df_calcolo = df_filtered[df_filtered["id"] == id_estratto]
-          descrizione_contesto = f"Fattura Singola ID {id_estratto} ({selected_option})"
-          st.success(
-              "Stai visualizzando il riparto esclusivo per la singola fattura"
-              " selezionata."
-          )
+          descrizione_contesto = f"Fattura Singola ID {id_estratto}"
 
         tot_imp = df_calcolo["imponibile"].sum()
         tot_iva = df_calcolo["iva"].sum()
@@ -273,20 +312,24 @@ else:
 
       st.markdown("---")
 
-      # Indicatori metrici
       col1, col2, col3 = st.columns(3)
       col1.metric("Totale Imponibile", f"€ {tot_imp:,.2f}")
       col2.metric("Totale IVA", f"€ {tot_iva:,.2f}")
       col3.metric("Totale Generale", f"€ {tot_complessivo:,.2f}")
 
       st.markdown("---")
-      st.subheader("Tabella di Riparto per Condomino (Millesimi)")
+      st.subheader(
+          "Tabella di Riparto per Condomino (Millesimi + Addebiti/Accrediti"
+          " 'Riporto')"
+      )
 
       reparto_data = []
       sum_millesimi = 0.0
       sum_imp = 0.0
       sum_iva = 0.0
       sum_tot = 0.0
+      sum_riporto = 0.0
+      sum_dovuto = 0.0
 
       for app, mil in millesimi.items():
         quota_imp = tot_imp * (mil / tot_millesimi) if tot_millesimi > 0 else 0
@@ -294,11 +337,19 @@ else:
         quota_tot = (
             tot_complessivo * (mil / tot_millesimi) if tot_millesimi > 0 else 0
         )
+        
+        # Recupera il riporto (+ addebito / - accredito)
+        val_riporto = dict_riporti.get(app, 0.0)
+        
+        # Calcola il totale complessivo comprensivo di riporto
+        totale_complessivo_dovuto = quota_tot + val_riporto
 
         sum_millesimi += mil
         sum_imp += quota_imp
         sum_iva += quota_iva
         sum_tot += quota_tot
+        sum_riporto += val_riporto
+        sum_dovuto += totale_complessivo_dovuto
 
         reparto_data.append(
             {
@@ -307,10 +358,11 @@ else:
                 "Quota Imponibile (€)": round(quota_imp, 2),
                 "Quota IVA (€)": round(quota_iva, 2),
                 "Quota Totale (€)": round(quota_tot, 2),
+                "Riporto (€)": round(val_riporto, 2),
+                "Totale Dovuto (€)": round(totale_complessivo_dovuto, 2),
             }
         )
 
-      # Aggiunta della riga dei totali
       reparto_data.append(
           {
               "Condomino": "TOTALE",
@@ -318,6 +370,8 @@ else:
               "Quota Imponibile (€)": round(sum_imp, 2),
               "Quota IVA (€)": round(sum_iva, 2),
               "Quota Totale (€)": round(sum_tot, 2),
+              "Riporto (€)": round(sum_riporto, 2),
+              "Totale Dovuto (€)": round(sum_dovuto, 2),
           }
       )
 
@@ -325,21 +379,91 @@ else:
       st.dataframe(df_reparto, use_container_width=True)
 
       # --- BOTTONE STAMPA PDF ---
-      st.markdown("### Stampa o Esportazione")
-      pdf_bytes = genera_pdf_riparto(df_reparto, descrizione_contesto)
+      col_pdf1, col_pdf2 = st.columns([1, 2])
+      with col_pdf1:
+        pdf_bytes = genera_pdf_riparto(df_reparto, descrizione_contesto)
+        st.download_button(
+            label="📥 Scarica / Stampa PDF Riparto",
+            data=pdf_bytes,
+            file_name="riparto_spese_condominio.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
 
-      st.download_button(
-          label="📥 Stampa / Scarica PDF del Riparto",
-          data=pdf_bytes,
-          file_name="riparto_spese_condominio.pdf",
-          mime="application/pdf",
-      )
+      st.markdown("---")
+
+      # --- SEZIONE GESTIONE INTROITI E PAGAMENTI ---
+      st.subheader("💳 Gestione Introiti e Pagamenti Utenti")
+      with st.form("form_registra_pagamento"):
+        col_p1, col_p2 = st.columns(2)
+        with col_p1:
+          condomino_selezionato = st.selectbox(
+              "Seleziona Condomino", APP_NAMES
+          )
+          opzioni_fatture_pagamento = []
+          for _, row in df_fatture.iterrows():
+            opzioni_fatture_pagamento.append(
+                f"ID: {row['id']} | {row['anno']} - {row['mese']} |"
+                f" {row['tipo']} | {row['fornitore']} | Totale: €"
+                f" {row['totale']:,.2f}"
+            )
+
+          if not opzioni_fatture_pagamento:
+            fattura_scelta_str = None
+          else:
+            fattura_scelta_str = st.selectbox(
+                "Seleziona Fattura di Riferimento", opzioni_fatture_pagamento
+            )
+
+        with col_p2:
+          importo_versato = st.number_input(
+              "Importo Pagato (€)", min_value=0.0, format="%.2f"
+          )
+          data_versamento = st.text_input(
+              "Data o Mese di Registrazione Pagamento", value="Agosto 2026"
+          )
+
+        submit_pagamento = st.form_submit_button(
+            "Registra Pagamento su Supabase"
+        )
+
+        if submit_pagamento:
+          if not fattura_scelta_str:
+            st.warning("Seleziona una fattura valida.")
+          else:
+            id_fattura_collegata = int(
+                fattura_scelta_str.split("|")[0]
+                .replace("ID:", "")
+                .strip()
+            )
+            nuovo_pagamento = {
+                "condominio": condomino_selezionato,
+                "fattura_id": id_fattura_collegata,
+                "importo_pagato": float(importo_versato),
+                "data_pagamento": data_versamento,
+            }
+
+            try:
+              supabase.table("pagamenti").insert(nuovo_pagamento).execute()
+              st.session_state.pagamenti = carica_pagamenti_da_supabase()
+              st.success(
+                  f"Pagamento di € {importo_versato:,.2f} registrato con"
+                  f" successo per {condomino_selezionato}!"
+              )
+              st.rerun()
+            except Exception as e:
+              st.error(f"Errore durante il salvataggio del pagamento: {e}")
+
+      df_pag = st.session_state.pagamenti
+      if not df_pag.empty:
+        st.markdown("### Storico Pagamenti Ricevuti")
+        st.dataframe(df_pag, use_container_width=True)
+      else:
+        st.info("Nessun pagamento registrato finora.")
 
   # --- 2. INSERISCI FATTURA ---
   elif menu == "Inserisci Fattura":
     st.title("📝 Inserimento Nuova Fattura")
-    st.markdown("Inserisci i dati distinti tra Imponibile e IVA.")
-
     with st.form("form_fattura"):
       col1, col2 = st.columns(2)
       with col1:
@@ -363,9 +487,7 @@ else:
         )
         tipo = st.selectbox("Tipologia Spesa", ["Energia Elettrica", "Gasolio"])
       with col2:
-        fornitore = st.text_input(
-            "Fornitore (es. Enel, Servizio Elettrico, Deposito Gasolio)"
-        )
+        fornitore = st.text_input("Fornitore")
         imponibile = st.number_input(
             "Imponibile (€)", min_value=0.0, format="%.2f"
         )
@@ -398,7 +520,6 @@ else:
   # --- 3. STORICO E DETTAGLIO ---
   elif menu == "Storico e Dettaglio":
     st.title("📂 Storico Fatture (Dal 2022)")
-
     if df_fatture.empty:
       st.info("Nessuna fattura registrata nello storico.")
     else:
@@ -424,18 +545,21 @@ else:
         except Exception as e:
           st.error(f"Errore durante l'eliminazione: {e}")
 
-  # --- 4. GESTIONE MILLESIMI TRAMITE METRATURA (MQ) ---
-  elif menu == "Gestione Millesimi":
-    st.title("⚙️ Calcolo Millesimi da Metrature (Mq)")
+  # --- 4. GESTIONE MILLESIMI & RIPORTI ---
+  elif menu == "Gestione Millesimi & Riporti":
+    st.title("⚙️ Gestione Metrature (Mq) e Riporti (Addebiti / Accrediti)")
     st.markdown(
-        "Inserisci la superficie in metri quadrati (mq) per ciascun condomino."
-        " I dati verranno salvati direttamente nel database cloud Supabase."
+        "Qui puoi aggiornare le metrature dei condomini e impostare eventuali"
+        " importi di riporto (es. conguagli negativi o positivi da precedenti"
+        " gestioni)."
     )
 
-    with st.form("form_mq"):
+    with st.form("form_mq_riporti"):
       nuovi_mq = {}
+      nuovi_riporti = {}
+      
+      st.subheader("Superfici (Mq)")
       col1, col2 = st.columns(2)
-
       for i, app in enumerate(APP_NAMES):
         with col1 if i < 4 else col2:
           val_corrente = st.session_state.mq_appartamenti.get(app, 70.0)
@@ -446,25 +570,49 @@ else:
               format="%.2f",
           )
 
-      submit_calc = st.form_submit_button("Calcola e Salva su Supabase")
+      st.markdown("---")
+      st.subheader("Riporti (Addebiti o Accrediti in €)")
+      st.markdown(
+          "*Usa valori positivi per addebiti/debiti arretrati, valori negativi"
+          " (-) per accrediti/crediti.*"
+      )
+      
+      col_r1, col_r2 = st.columns(2)
+      for i, app in enumerate(APP_NAMES):
+        with col_r1 if i < 4 else col_r2:
+          rip_corrente = dict_riporti.get(app, 0.0)
+          nuovi_riporti[app] = st.number_input(
+              f"Riporto {app} (€)",
+              value=float(rip_corrente),
+              format="%.2f",
+          )
+
+      submit_calc = st.form_submit_button("Salva Parametri su Supabase")
 
       if submit_calc:
         tot_mq = sum(nuovi_mq.values())
         if tot_mq <= 0:
           st.error("La superficie totale deve essere maggiore di zero.")
         else:
-          successo = salva_mq_su_supabase(nuovi_mq)
-          if successo:
+          successo_mq = salva_mq_su_supabase(nuovi_mq)
+          successo_rip = salva_riporti_su_supabase(nuovi_riporti)
+          if successo_mq and successo_rip:
             st.session_state.mq_appartamenti = carica_mq_da_supabase()
+            st.session_state.riporti = carica_riporti_da_supabase()
             st.success(
-                f"Metrature salvate permanentemente su Supabase! Superficie"
-                f" totale: {tot_mq:.2f} mq"
+                "Metrature e riporti salvati permanentemente su Supabase con"
+                " successo!"
             )
             st.rerun()
 
     st.markdown("---")
-    st.subheader("Tabella Millesimale Attuale")
-    df_mil_current = pd.DataFrame(
-        list(millesimi.items()), columns=["Condomino", "Valore Millesimale"]
-    )
-    st.dataframe(df_mil_current, use_container_width=True)
+    st.subheader("Tabella Millesimale e Riporti Attuale")
+    dati_riepilogo_config = []
+    for app in APP_NAMES:
+      dati_riepilogo_config.append({
+          "Condomino": app,
+          "Mq": st.session_state.mq_appartamenti.get(app, 0),
+          "Valore Millesimale": millesimi.get(app, 0),
+          "Riporto (€)": dict_riporti.get(app, 0.0),
+      })
+    st.dataframe(pd.DataFrame(dati_riepilogo_config), use_container_width=True)
