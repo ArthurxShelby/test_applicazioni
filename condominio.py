@@ -480,26 +480,31 @@ else:
         st.markdown("### Storico Pagamenti Ricevuti")
         st.dataframe(df_pag, use_container_width=True)
 
-        # --- CANCELLA PAGAMENTO ---
+        # --- CANCELLA PAGAMENTO TRAMITE SELEZIONE ---
         st.markdown("### Elimina Pagamento Registrato")
         
-        # Prende il primo ID disponibile nel dataframe come valore predefinito
-        primo_id = int(df_pag["id"].iloc[0]) if "id" in df_pag.columns and len(df_pag) > 0 else 1
-        
-        id_pagamento_da_eliminare = st.number_input(
-            "Inserisci l'ID del pagamento da rimuovere",
-            min_value=1,
-            step=1,
-            value=primo_id,
-            key="input_elimina_pagamento",
+        opzioni_pagamenti_elimina = []
+        for _, row in df_pag.iterrows():
+          opzioni_pagamenti_elimina.append(
+              f"ID: {row['id']} | Condomino: {row['condominio']} | Importo: € {row['importo_pagato']:,.2f} | Data: {row['data_pagamento']}"
+          )
+
+        pagamento_scelto_da_eliminare = st.selectbox(
+            "Seleziona il pagamento da rimuovere",
+            opzioni_pagamenti_elimina,
+            key="select_elimina_pagamento"
         )
-        if st.button("Elimina Pagamento"):
+
+        if st.button("Elimina Pagamento Selezionato"):
           try:
-            # Tenta la cancellazione su entrambe le varianti del nome tabella per sicurezza
+            id_pagamento_da_eliminare = int(
+                pagamento_scelto_da_eliminare.split("|")[0].replace("ID:", "").strip()
+            )
+
             eliminato = False
             try:
               supabase.table("pagamenti").delete().eq(
-                  "id", int(id_pagamento_da_eliminare)
+                  "id", id_pagamento_da_eliminare
               ).execute()
               eliminato = True
             except Exception:
@@ -507,7 +512,7 @@ else:
 
             try:
               supabase.table("pagamneti").delete().eq(
-                  "id", int(id_pagamento_da_eliminare)
+                  "id", id_pagamento_da_eliminare
               ).execute()
               eliminato = True
             except Exception:
@@ -525,7 +530,6 @@ else:
             st.error(f"Errore durante l'eliminazione del pagamento: {e}")
       else:
         st.info("Nessun pagamento registrato finora.")
-
   # --- 2. INSERISCI FATTURA ---
   elif menu == "Inserisci Fattura":
     st.title("📝 Inserimento Nuova Fattura")
