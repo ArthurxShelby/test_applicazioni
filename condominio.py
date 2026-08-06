@@ -120,12 +120,20 @@ def carica_fatture_da_supabase():
 
 def carica_pagamenti_da_supabase():
   try:
-    response = supabase.table("pagamneti").select("*").execute()
+    # Nota: se su Supabase la tabella si chiama 'pagamenti', modifica qui sotto
+    response = supabase.table("pagamenti").select("*").execute()
     data = response.data
     if data:
       return pd.DataFrame(data)
   except Exception as e:
-    pass
+    # Fallback nel caso in cui la tabella su Supabase sia rimasta 'pagamneti'
+    try:
+      response = supabase.table("pagamneti").select("*").execute()
+      data = response.data
+      if data:
+        return pd.DataFrame(data)
+    except Exception as ex:
+      pass
   return pd.DataFrame(
       columns=[
           "id",
@@ -452,7 +460,12 @@ else:
             }
 
             try:
-              supabase.table("pagamneti").insert(nuovo_pagamento).execute()
+              # Prova a salvare nella tabella 'pagamenti', se fallisce prova 'pagamneti'
+              try:
+                supabase.table("pagamenti").insert(nuovo_pagamento).execute()
+              except Exception:
+                supabase.table("pagamneti").insert(nuovo_pagamento).execute()
+
               st.session_state.pagamenti = carica_pagamenti_da_supabase()
               st.success(
                   f"Pagamento di € {importo_versato:,.2f} registrato per {condomino_selezionato} "
@@ -469,23 +482,45 @@ else:
 
         # --- CANCELLA PAGAMENTO ---
         st.markdown("### Elimina Pagamento Registrato")
+        
+        # Prende il primo ID disponibile nel dataframe come valore predefinito
+        primo_id = int(df_pag["id"].iloc[0]) if "id" in df_pag.columns and len(df_pag) > 0 else 1
+        
         id_pagamento_da_eliminare = st.number_input(
             "Inserisci l'ID del pagamento da rimuovere",
             min_value=1,
             step=1,
-            value=1,
+            value=primo_id,
             key="input_elimina_pagamento",
         )
         if st.button("Elimina Pagamento"):
           try:
-            supabase.table("pagamneti").delete().eq(
-                "id", int(id_pagamento_da_eliminare)
-            ).execute()
-            st.session_state.pagamenti = carica_pagamenti_da_supabase()
-            st.success(
-                f"Pagamento ID {id_pagamento_da_eliminare} eliminato da Supabase con successo!"
-            )
-            st.rerun()
+            # Tenta la cancellazione su entrambe le varianti del nome tabella per sicurezza
+            eliminato = False
+            try:
+              supabase.table("pagamenti").delete().eq(
+                  "id", int(id_pagamento_da_eliminare)
+              ).execute()
+              eliminato = True
+            except Exception:
+              pass
+
+            try:
+              supabase.table("pagamneti").delete().eq(
+                  "id", int(id_pagamento_da_eliminare)
+              ).execute()
+              eliminato = True
+            except Exception:
+              pass
+
+            if eliminato:
+              st.session_state.pagamenti = carica_pagamenti_da_supabase()
+              st.success(
+                  f"Pagamento ID {id_pagamento_da_eliminare} eliminato da Supabase con successo!"
+              )
+              st.rerun()
+            else:
+              st.error("Impossibile trovare la tabella o l'ID su Supabase.")
           except Exception as e:
             st.error(f"Errore durante l'eliminazione del pagamento: {e}")
       else:
@@ -556,11 +591,12 @@ else:
       st.dataframe(df_fatture, use_container_width=True)
 
       st.markdown("### Elimina Fattura")
+      primo_id_fat = int(df_fatture["id"].iloc[0]) if "id" in df_fatture.columns and len(df_fatture) > 0 else 1
       id_da_eliminare = st.number_input(
           "Inserisci l'ID della fattura da rimuovere",
           min_value=1,
           step=1,
-          value=1,
+          value=primo_id_fat,
       )
       if st.button("Elimina"):
         try:
@@ -645,4 +681,4 @@ else:
           "Valore Millesimale": millesimi.get(app, 0),
           "Riporto (€)": dict_riporti.get(app, 0.0),
       })
-    st.dataframe(pd.DataFrame(dati_riepilogo_config), use_container_width=True)
+    st.dataframe(pd.DataFrame(dati_riepilogo_config), use_container_width=True)    st.dataframe(pd.DataFrame(dati_riepilogo_config), use_container_width=True)
