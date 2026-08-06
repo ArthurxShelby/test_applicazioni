@@ -38,7 +38,7 @@ def carica_mq_da_supabase():
     response = supabase.table("condominio").select("*").execute()
     data = response.data
     if data and len(data) > 0:
-      return {row["condomino"]: float(row["mq"]) for row in data}
+      return {row["condominio"]: float(row["mq"]) for row in data}
   except Exception as e:
     st.error(f"Errore di connessione a Supabase (condominio): {e}")
 
@@ -57,12 +57,13 @@ def carica_mq_da_supabase():
 
 def salva_mq_su_supabase(mq_dict):
   try:
-    # Prima eliminiamo i vecchi record per evitare conflitti di chiave o doppioni
+    # Pulisce la tabella ed inserisce i nuovi dati
     supabase.table("condominio").delete().neq("id", 0).execute()
 
-    # Poi inseriamo i nuovi dati freschi
     for cond, mq in mq_dict.items():
-      supabase.table("condominio").insert({"condomino": cond, "mq": mq}).execute()
+      supabase.table("condominio").insert(
+          {"condominio": cond, "mq": mq}
+      ).execute()
     return True
   except Exception as e:
     st.error(f"Errore nel salvataggio delle metrature su Supabase: {e}")
