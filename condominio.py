@@ -503,8 +503,10 @@ else:
         
         opzioni_pagamenti_elimina = []
         for _, row in df_pag.iterrows():
+          p_imp_raw = row.get("importo_pagato", 0.0)
+          p_imp = float(p_imp_raw) if p_imp_raw is not None else 0.0
           opzioni_pagamenti_elimina.append(
-              f"ID: {row['id']} | Condomino: {row['condominio']} | Importo: € {row['importo_pagato']:,.2f} | Data: {row['data_pagamento']}"
+              f"ID: {row['id']} | Condomino: {row['condominio']} | Importo: € {p_imp:,.2f} | Data: {row['data_pagamento']}"
           )
 
         pagamento_scelto_da_eliminare = st.selectbox(
