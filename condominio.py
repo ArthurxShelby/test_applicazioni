@@ -681,4 +681,4 @@ else:
           "Valore Millesimale": millesimi.get(app, 0),
           "Riporto (€)": dict_riporti.get(app, 0.0),
       })
-    st.dataframe(pd.DataFrame(dati_riepilogo_config), use_container_width=True)    st.dataframe(pd.DataFrame(dati_riepilogo_config), use_container_width=True)
+    st.dataframe(pd.DataFrame(dati_riepilogo_config), use_container_width=True)    
