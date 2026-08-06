@@ -6,35 +6,35 @@ st.set_page_config(
     page_title="Gestione Spese Condominiali", page_icon="🏢", layout="wide"
 )
 
-# --- CONFIGURAZIONE INIZIALE APPARTAMENTI (7 unità) ---
+# --- CONFIGURAZIONE NOMI E VALORI INIZIALI (7 unità) ---
 APP_NAMES = [
-    "Appartamento 1",
-    "Appartamento 2",
-    "Appartamento 3",
-    "Appartamento 4",
-    "Appartamento 5",
-    "Appartamento 6",
-    "Appartamento 7",
+    "ESPOSITO",
+    "MARANGI",
+    "LINCESSO",
+    "FUSO",
+    "PUCA",
+    "BAVILA",
+    "TESTA",
 ]
 
 DEFAULT_MQ = {
-    "Appartamento 1": 70.0,
-    "Appartamento 2": 75.0,
-    "Appartamento 3": 80.0,
-    "Appartamento 4": 85.0,
-    "Appartamento 5": 90.0,
-    "Appartamento 6": 85.0,
-    "Appartamento 7": 85.0,
+    "ESPOSITO": 70.0,
+    "MARANGI": 75.0,
+    "LINCESSO": 80.0,
+    "FUSO": 85.0,
+    "PUCA": 90.0,
+    "BAVILA": 85.0,
+    "TESTA": 85.0,
 }
 
 DEFAULT_MILLESIMI = {
-    "Appartamento 1": 120,
-    "Appartamento 2": 130,
-    "Appartamento 3": 140,
-    "Appartamento 4": 150,
-    "Appartamento 5": 160,
-    "Appartamento 6": 150,
-    "Appartamento 7": 150,
+    "ESPOSITO": 120,
+    "MARANGI": 130,
+    "LINCESSO": 140,
+    "FUSO": 150,
+    "PUCA": 160,
+    "BAVILA": 150,
+    "TESTA": 150,
 }
 
 # --- SIMULAZIONE DATABASE IN SESSION STATE ---
@@ -132,16 +132,18 @@ else:
       col3.metric("Totale Generale", f"€ {tot_complessivo:,.2f}")
 
       st.markdown("---")
-      st.subheader("Tabella di Riparto per Appartamento (Millesimi)")
+      st.subheader("Tabella di Riparto per Condomino (Millesimi)")
 
       reparto_data = []
       for app, mil in millesimi.items():
-        quota_imp = tot_imp * (mil / tot_millesimi)
-        quota_iva = tot_iva * (mil / tot_millesimi)
-        quota_tot = tot_complessivo * (mil / tot_millesimi)
+        quota_imp = tot_imp * (mil / tot_millesimi) if tot_millesimi > 0 else 0
+        quota_iva = tot_iva * (mil / tot_millesimi) if tot_millesimi > 0 else 0
+        quota_tot = (
+            tot_complessivo * (mil / tot_millesimi) if tot_millesimi > 0 else 0
+        )
         reparto_data.append(
             {
-                "Appartamento": app,
+                "Condomino": app,
                 "Millesimi": mil,
                 "Quota Imponibile (€)": round(quota_imp, 2),
                 "Quota IVA (€)": round(quota_iva, 2),
@@ -243,8 +245,8 @@ else:
   elif menu == "Gestione Millesimi":
     st.title("⚙️ Calcolo Millesimi da Metrature (Mq)")
     st.markdown(
-        "Inserisci la superficie in metri quadrati (mq) per ciascuno dei 7"
-        " appartamenti. I valori rimarranno salvati in memoria."
+        "Inserisci la superficie in metri quadrati (mq) per ciascun condomino."
+        " I valori rimarranno salvati in memoria."
     )
 
     with st.form("form_mq"):
@@ -285,6 +287,6 @@ else:
     st.subheader("Tabella Millesimale Attuale")
     df_mil_current = pd.DataFrame(
         list(st.session_state.millesimi.items()),
-        columns=["Appartamento", "Valore Millesimale"],
+        columns=["Condomino", "Valore Millesimale"],
     )
     st.dataframe(df_mil_current, use_container_width=True)
