@@ -449,21 +449,20 @@ else:
             mil_condomino = millesimi.get(condomino_selezionato, 0.0)
             quota_dovuta_esatta = (totale_singola_fattura * (mil_condomino / tot_millesimi)) if tot_millesimi > 0 else 0.0
             
-            # --- RECUPERO AUTOMATICO ACCREDITO/DEBITO PRECEDENTE DA SUPABASE ---
+            # --- CORRETTO: RECUPERO L'ULTIMO ACCREDITO/DEBITO DALLO STORICO DI SUPABASE ---
             accredito_precedente = 0.0
             df_pag_esistenti = st.session_state.pagamenti
             if not df_pag_esistenti.empty:
               df_cond_prec = df_pag_esistenti[df_pag_esistenti["condominio"] == condomino_selezionato]
               if not df_cond_prec.empty:
                 ultimo_record = df_cond_prec.iloc[-1]
-                # Prende l'ultimo riporto salvato in Supabase e lo mette in accredito
                 accredito_precedente = float(ultimo_record.get("riporto", 0.0))
 
-            # Se l'accredito precedente era negativo (debito), aumenta il dovuto. Se era positivo (credito), lo scala.
+            # Totale da saldare considerando la quota della fattura e l'accredito precedente
             totale_da_saldare = quota_dovuta_esatta - accredito_precedente
             importo_versato_f = float(importo_versato)
             
-            # --- CORREZIONE LOGICA RIPORTO ---
+            # --- CORRETTO: CALCOLO DEL RIPORTO ---
             # Positivo se l'utente paga in più (eccedenza/credito), Negativo se paga in meno (debito)
             riporto_generato = round(importo_versato_f - totale_da_saldare, 2)
 
@@ -486,7 +485,7 @@ else:
               st.session_state.pagamenti = carica_pagamenti_da_supabase()
               st.success(
                   f"Pagamento registrato per {condomino_selezionato} "
-                  f"(Dovuto: € {quota_dovuta_esatta:,.2f} | Saldo/Riporto: € {riporto_generato:,.2f})!"
+                  f"(Dovuto: € {quota_dovuta_esatta:,.2f} | Riporto: € {riporto_generato:,.2f})!"
               )
               st.rerun()
             except Exception as e:
