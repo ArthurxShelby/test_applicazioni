@@ -42,7 +42,7 @@ def carica_mq_da_supabase():
   except Exception as e:
     st.error(f"Errore di connessione a Supabase (condominio): {e}")
 
-  # Valori di default
+  # Valori di default nel caso la tabella sia vuota
   default_mq = {
       "ESPOSITO": 70.0,
       "MARANGI": 75.0,
@@ -52,27 +52,21 @@ def carica_mq_da_supabase():
       "BAVILA": 85.0,
       "TESTA": 85.0,
   }
-
-  # Usa upsert per evitare errori di chiave duplicata se la tabella ha già righe
-  try:
-    for cond, mq in default_mq.items():
-      supabase.table("condominio").upsert(
-          {"condomino": cond, "mq": mq}, on_conflict="condomino"
-      ).execute()
-  except Exception as e:
-    print(f"Nota inserimento default: {e}")
-
   return default_mq
 
 
 def salva_mq_su_supabase(mq_dict):
   try:
+    # Prima eliminiamo i vecchi record per evitare conflitti di chiave o doppioni
+    supabase.table("condominio").delete().neq("id", 0).execute()
+
+    # Poi inseriamo i nuovi dati freschi
     for cond, mq in mq_dict.items():
-      supabase.table("condominio").upsert(
-          {"condomino": cond, "mq": mq}, on_conflict="condomino"
-      ).execute()
+      supabase.table("condominio").insert({"condomino": cond, "mq": mq}).execute()
+    return True
   except Exception as e:
-    st.error(f"Errore nel salvataggio delle metrature: {e}")
+    st.error(f"Errore nel salvataggio delle metrature su Supabase: {e}")
+    return False
 
 
 def carica_fatture_da_supabase():
@@ -325,13 +319,14 @@ else:
         if tot_mq <= 0:
           st.error("La superficie totale deve essere maggiore di zero.")
         else:
-          salva_mq_su_supabase(nuovi_mq)
-          st.session_state.mq_appartamenti = carica_mq_da_supabase()
-          st.success(
-              f"Metrature salvate permanentemente su Supabase! Superficie"
-              f" totale: {tot_mq:.2f} mq"
-          )
-          st.rerun()
+          successo = salva_mq_su_supabase(nuovi_mq)
+          if successo:
+            st.session_state.mq_appartamenti = carica_mq_da_supabase()
+            st.success(
+                f"Metrature salvate permanentemente su Supabase! Superficie"
+                f" totale: {tot_mq:.2f} mq"
+            )
+            st.rerun()
 
     st.markdown("---")
     st.subheader("Tabella Millesimale Attuale")
