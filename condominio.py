@@ -1,4 +1,9 @@
+import io
 import pandas as pd
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
 import streamlit as st
 from supabase import create_client
 
@@ -107,6 +112,52 @@ def calcola_millesimi_da_mq(mq_dict):
   return {app: round((mq / tot_mq) * 1000, 2) for app, mq in mq_dict.items()}
 
 
+# --- FUNZIONE PER GENERARE IL PDF ---
+def genera_pdf_riparto(df_reparto, titolo_contesto):
+  buffer = io.BytesIO()
+  doc = SimpleDocTemplate(buffer, pagesize=letter)
+  elements = []
+
+  styles = getSampleStyleSheet()
+  title_style = ParagraphStyle(
+      'TitleStyle', parent=styles['Heading1'], fontSize=16, alignment=1, spaceAfter=12
+  )
+  subtitle_style = ParagraphStyle(
+      'SubtitleStyle', parent=styles['Normal'], fontSize=10, alignment=1, spaceAfter=20
+  )
+
+  elements.append(Paragraph("<b>RIEPILOGO RIPARTO SPESE CONDOMINIALI</b>", title_style))
+  elements.append(Paragraph(f"Contesto: {titolo_contesto}", subtitle_style))
+  elements.append(Spacer(1, 10))
+
+  # Conversione del DataFrame in lista per ReportLab
+  data = [list(df_reparto.columns)] + df_reparto.values.tolist()
+
+  table = Table(data, colWidths=[110, 70, 110, 100, 110])
+  table.setStyle(
+      TableStyle([
+          ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
+          ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+          ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+          ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+          ('FONTSIZE', (0, 0), (-1, 0), 10),
+          ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+          ('BACKGROUND', (0, 1), (-1, -2), colors.HexColor('#f8f9fa')),
+          ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e2e8f0')),
+          ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+          ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+          ('FONTSIZE', (0, 1), (-1, -1), 9),
+          ('TOPPADDING', (0, 1), (-1, -1), 6),
+          ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
+      ])
+  )
+
+  elements.append(table)
+  doc.build(elements)
+  buffer.seek(0)
+  return buffer.getvalue()
+
+
 # --- SISTEMA DI LOGIN ---
 def login_screen():
   st.title("🏢 Accesso Gestione Condominio")
@@ -183,8 +234,8 @@ else:
       if df_filtered.empty:
         st.warning("Nessuna fattura trovata con i filtri selezionati.")
         tot_imp, tot_iva, tot_complessivo = 0.0, 0.0, 0.0
+        descrizione_contesto = "Nessuna fattura"
       else:
-        # Creiamo un elenco descrittivo per il menu a tendina
         opzioni_fatture = ["-- Tutte le fatture filtrate --"]
         for _, row in df_filtered.iterrows():
           desc = (
@@ -200,14 +251,17 @@ else:
 
         if selected_option == "-- Tutte le fatture filtrate --":
           df_calcolo = df_filtered
+          descrizione_contesto = (
+              f"Anno: {selected_anno} | Tipo: {selected_tipo}"
+          )
           st.info(
               "Stai visualizzando il riparto cumulativo di tutte le fatture"
               " filtrate."
           )
         else:
-          # Estraiamo l'ID della fattura selezionata dalla stringa
           id_estratto = int(selected_option.split("|")[0].replace("ID:", "").strip())
           df_calcolo = df_filtered[df_filtered["id"] == id_estratto]
+          descrizione_contesto = f"Fattura Singola ID {id_estratto} ({selected_option})"
           st.success(
               "Stai visualizzando il riparto esclusivo per la singola fattura"
               " selezionata."
@@ -269,6 +323,17 @@ else:
 
       df_reparto = pd.DataFrame(reparto_data)
       st.dataframe(df_reparto, use_container_width=True)
+
+      # --- BOTTONE STAMPA PDF ---
+      st.markdown("### Stampa o Esportazione")
+      pdf_bytes = genera_pdf_riparto(df_reparto, descrizione_contesto)
+
+      st.download_button(
+          label="📥 Stampa / Scarica PDF del Riparto",
+          data=pdf_bytes,
+          file_name="riparto_spese_condominio.pdf",
+          mime="application/pdf",
+      )
 
   # --- 2. INSERISCI FATTURA ---
   elif menu == "Inserisci Fattura":
