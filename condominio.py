@@ -435,15 +435,12 @@ else:
                 .strip()
             )
             
-            # Calcolo automatico della quota dovuta per questa specifica fattura
             row_fattura = df_fatture[df_fatture["id"] == id_fattura_collegata].iloc[0]
             totale_fattura = float(row_fattura["totale"])
             
             mil_condomino = millesimi.get(condomino_selezionato, 0.0)
             quota_dovuta = (totale_fattura * (mil_condomino / tot_millesimi)) if tot_millesimi > 0 else 0.0
             
-            # Calcolo del riporto generato (Quota Dovuta - Importo Pagato)
-            # Positivo = Debito / Mancato pagamento; Negativo = Credito / Pagamento in eccesso
             riporto_generato = round(quota_dovuta - float(importo_versato), 2)
 
             nuovo_pagamento = {
@@ -469,6 +466,28 @@ else:
       if not df_pag.empty:
         st.markdown("### Storico Pagamenti Ricevuti")
         st.dataframe(df_pag, use_container_width=True)
+
+        # --- CANCELLA PAGAMENTO ---
+        st.markdown("### Elimina Pagamento Registrato")
+        id_pagamento_da_eliminare = st.number_input(
+            "Inserisci l'ID del pagamento da rimuovere",
+            min_value=1,
+            step=1,
+            value=1,
+            key="input_elimina_pagamento",
+        )
+        if st.button("Elimina Pagamento"):
+          try:
+            supabase.table("pagamneti").delete().eq(
+                "id", int(id_pagamento_da_eliminare)
+            ).execute()
+            st.session_state.pagamenti = carica_pagamenti_da_supabase()
+            st.success(
+                f"Pagamento ID {id_pagamento_da_eliminare} eliminato da Supabase con successo!"
+            )
+            st.rerun()
+          except Exception as e:
+            st.error(f"Errore durante l'eliminazione del pagamento: {e}")
       else:
         st.info("Nessun pagamento registrato finora.")
 
