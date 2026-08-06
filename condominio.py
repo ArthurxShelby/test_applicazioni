@@ -57,9 +57,7 @@ def carica_mq_da_supabase():
 
 def salva_mq_su_supabase(mq_dict):
   try:
-    # Pulisce la tabella ed inserisce i nuovi dati
     supabase.table("condominio").delete().neq("id", 0).execute()
-
     for cond, mq in mq_dict.items():
       supabase.table("condominio").insert(
           {"condominio": cond, "mq": mq}
@@ -159,17 +157,30 @@ else:
           " 'Inserisci Fattura'."
       )
     else:
-      anni_disponibili = sorted(df_fatture["anno"].unique())
-      selected_anno = st.selectbox(
-          "Seleziona Anno Fiscale",
-          ["Tutti gli anni (da 2022)"] + list(anni_disponibili),
-      )
+      # Filtri in alto
+      col_f1, col_f2 = st.columns(2)
+      with col_f1:
+        anni_disponibili = sorted(df_fatture["anno"].unique())
+        selected_anno = st.selectbox(
+            "Seleziona Anno Fiscale",
+            ["Tutti gli anni (da 2022)"] + list(anni_disponibili),
+        )
+      with col_f2:
+        selected_tipo = st.selectbox(
+            "Seleziona Tipologia Spesa",
+            ["Tutte le tipologie", "Energia Elettrica", "Gasolio"],
+        )
 
+      # Applicazione filtri
+      df_filtered = df_fatture.copy()
       if selected_anno != "Tutti gli anni (da 2022)":
-        df_filtered = df_fatture[df_fatture["anno"] == selected_anno]
-      else:
-        df_filtered = df_fatture
+        df_filtered = df_filtered[df_filtered["anno"] == selected_anno]
+      if selected_tipo != "Tutte le tipologie":
+        df_filtered = df_filtered[df_filtered["tipo"] == selected_tipo]
 
+      st.markdown("---")
+
+      # Indicatori metrici
       col1, col2, col3 = st.columns(3)
       tot_imp = df_filtered["imponibile"].sum()
       tot_iva = df_filtered["iva"].sum()
@@ -201,6 +212,31 @@ else:
 
       df_reparto = pd.DataFrame(reparto_data)
       st.dataframe(df_reparto, use_container_width=True)
+
+      # Mostra anche l'elenco delle fatture filtrate incluse in questo calcolo
+      with st.expander(
+          "Visualizza l'elenco delle fatture incluse in questo calcolo"
+      ):
+        if df_filtered.empty:
+          st.info(
+              "Nessuna fattura corrisponde ai filtri selezionati."
+          )
+        else:
+          st.dataframe(
+              df_filtered[
+                  [
+                      "id",
+                      "anno",
+                      "mese",
+                      "tipo",
+                      "fornitore",
+                      "imponibile",
+                      "iva",
+                      "totale",
+                  ]
+              ],
+              use_container_width=True,
+          )
 
   # --- 2. INSERISCI FATTURA ---
   elif menu == "Inserisci Fattura":
