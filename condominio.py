@@ -133,6 +133,7 @@ def carica_pagamenti_da_supabase():
           "fattura_id",
           "importo_pagato",
           "data_pagamento",
+          "riporto",
       ]
   )
 
@@ -433,19 +434,32 @@ else:
                 .replace("ID:", "")
                 .strip()
             )
+            
+            # Calcolo automatico della quota dovuta per questa specifica fattura
+            row_fattura = df_fatture[df_fatture["id"] == id_fattura_collegata].iloc[0]
+            totale_fattura = float(row_fattura["totale"])
+            
+            mil_condomino = millesimi.get(condomino_selezionato, 0.0)
+            quota_dovuta = (totale_fattura * (mil_condomino / tot_millesimi)) if tot_millesimi > 0 else 0.0
+            
+            # Calcolo del riporto generato (Quota Dovuta - Importo Pagato)
+            # Positivo = Debito / Mancato pagamento; Negativo = Credito / Pagamento in eccesso
+            riporto_generato = round(quota_dovuta - float(importo_versato), 2)
+
             nuovo_pagamento = {
                 "condominio": condomino_selezionato,
                 "fattura_id": id_fattura_collegata,
                 "importo_pagato": float(importo_versato),
                 "data_pagamento": data_versamento,
+                "riporto": riporto_generato,
             }
 
             try:
               supabase.table("pagamneti").insert(nuovo_pagamento).execute()
               st.session_state.pagamenti = carica_pagamenti_da_supabase()
               st.success(
-                  f"Pagamento di € {importo_versato:,.2f} registrato con"
-                  f" successo per {condomino_selezionato}!"
+                  f"Pagamento di € {importo_versato:,.2f} registrato per {condomino_selezionato} "
+                  f"(Quota dovuta: € {quota_dovuta:,.2f} | Riporto generato: € {riporto_generato:,.2f})!"
               )
               st.rerun()
             except Exception as e:
