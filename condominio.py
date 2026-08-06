@@ -1,12 +1,20 @@
 import pandas as pd
 import streamlit as st
+from supabase import create_client
 
 # Configurazione della pagina
 st.set_page_config(
     page_title="Gestione Spese Condominiali", page_icon="🏢", layout="wide"
 )
 
-# --- CONFIGURAZIONE NOMI E VALORI INIZIALI (7 unità) ---
+# --- CONFIGURAZIONE SUPABASE ---
+# Inserisci qui le tue credenziali prese da Supabase (Project Settings -> API)
+SUPABASE_URL = "IL_TUO_SUPABASE_URL"
+SUPABASE_KEY = "LA_TUA_SUPABASE_KEY"
+
+# Inizializzazione client Supabase
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 APP_NAMES = [
     "ESPOSITO",
     "MARANGI",
@@ -17,49 +25,82 @@ APP_NAMES = [
     "TESTA",
 ]
 
-DEFAULT_MQ = {
-    "ESPOSITO": 70.0,
-    "MARANGI": 75.0,
-    "LINCESSO": 80.0,
-    "FUSO": 85.0,
-    "PUCA": 90.0,
-    "BAVILA": 85.0,
-    "TESTA": 85.0,
-}
 
-DEFAULT_MILLESIMI = {
-    "ESPOSITO": 120,
-    "MARANGI": 130,
-    "LINCESSO": 140,
-    "FUSO": 150,
-    "PUCA": 160,
-    "BAVILA": 150,
-    "TESTA": 150,
-}
+# --- FUNZIONI DI LETTURA E SCRITTURA SU SUPABASE ---
+def carica_mq_da_supabase():
+  try:
+    response = supabase.table("condominio").select("*").execute()
+    data = response.data
+    if data and len(data) > 0:
+      # Converte i dati del db in un dizionario {condomino: mq}
+      return {row["condomino"]: float(row["mq"]) for row in data}
+  except Exception as e:
+    st.error(f"Errore di connessione a Supabase (condominio): {e}")
 
-# --- SIMULAZIONE DATABASE IN SESSION STATE ---
+  # Se la tabella è vuota, restituisce valori di default e li inserisce su DB
+  default_mq = {
+      "ESPOSITO": 70.0,
+      "MARANGI": 75.0,
+      "LINCESSO": 80.0,
+      "FUSO": 85.0,
+      "PUCA": 90.0,
+      "BAVILA": 85.0,
+      "TESTA": 85.0,
+  }
+  for cond, mq in default_mq.items():
+    supabase.table("condominio").insert({"condomino": cond, "mq": mq}).execute()
+  return default_mq
+
+
+def salva_mq_su_supabase(mq_dict):
+  try:
+    for cond, mq in mq_dict.items():
+      # Aggiorna se esiste o inserisce
+      supabase.table("condominio").upsert(
+          {"condomino": cond, "mq": mq}, on_conflict="condomino"
+      ).execute()
+  except Exception as e:
+    st.error(f"Errore nel salvataggio delle metrature: {e}")
+
+
+def carica_fatture_da_supabase():
+  try:
+    response = supabase.table("fatture").select("*").execute()
+    data = response.data
+    if data:
+      return pd.DataFrame(data)
+  except Exception as e:
+    st.error(f"Errore di connessione a Supabase (fatture): {e}")
+  return pd.DataFrame(
+      columns=[
+          "id",
+          "anno",
+          "mese",
+          "tipo",
+          "fornitore",
+          "imponibile",
+          "iva",
+          "totale",
+      ]
+  )
+
+
+# --- INIZIALIZZAZIONE SESSION STATE ---
 if "logged_in" not in st.session_state:
   st.session_state.logged_in = False
 
 if "mq_appartamenti" not in st.session_state:
-  st.session_state.mq_appartamenti = DEFAULT_MQ.copy()
-
-if "millesimi" not in st.session_state:
-  st.session_state.millesimi = DEFAULT_MILLESIMI.copy()
+  st.session_state.mq_appartamenti = carica_mq_da_supabase()
 
 if "fatture" not in st.session_state:
-  st.session_state.fatture = pd.DataFrame(
-      columns=[
-          "ID",
-          "Anno",
-          "Mese",
-          "Tipo",
-          "Fornitore",
-          "Imponibile",
-          "IVA",
-          "Totale",
-      ]
-  )
+  st.session_state.fatture = carica_fatture_da_supabase()
+
+
+def calcola_millesimi_da_mq(mq_dict):
+  tot_mq = sum(mq_dict.values())
+  if tot_mq <= 0:
+    return {k: 0 for k in mq_dict}
+  return {app: round((mq / tot_mq) * 1000, 2) for app, mq in mq_dict.items()}
 
 
 # --- SISTEMA DI LOGIN ---
@@ -98,7 +139,7 @@ else:
     st.rerun()
 
   df_fatture = st.session_state.fatture
-  millesimi = st.session_state.millesimi
+  millesimi = calcola_millesimi_da_mq(st.session_state.mq_appartamenti)
   tot_millesimi = sum(millesimi.values())
 
   # --- 1. DASHBOARD & RIEPILOGO ---
@@ -111,21 +152,21 @@ else:
           " 'Inserisci Fattura'."
       )
     else:
-      anni_disponibili = sorted(df_fatture["Anno"].unique())
+      anni_disponibili = sorted(df_fatture["anno"].unique())
       selected_anno = st.selectbox(
           "Seleziona Anno Fiscale",
           ["Tutti gli anni (da 2022)"] + list(anni_disponibili),
       )
 
       if selected_anno != "Tutti gli anni (da 2022)":
-        df_filtered = df_fatture[df_fatture["Anno"] == selected_anno]
+        df_filtered = df_fatture[df_fatture["anno"] == selected_anno]
       else:
         df_filtered = df_fatture
 
       col1, col2, col3 = st.columns(3)
-      tot_imp = df_filtered["Imponibile"].sum()
-      tot_iva = df_filtered["IVA"].sum()
-      tot_complessivo = df_filtered["Totale"].sum()
+      tot_imp = df_filtered["imponibile"].sum()
+      tot_iva = df_filtered["iva"].sum()
+      tot_complessivo = df_filtered["totale"].sum()
 
       col1.metric("Totale Imponibile", f"€ {tot_imp:,.2f}")
       col2.metric("Totale IVA", f"€ {tot_iva:,.2f}")
@@ -190,30 +231,29 @@ else:
         )
         iva = st.number_input("IVA (€)", min_value=0.0, format="%.2f")
 
-      submit_fat = st.form_submit_button("Salva Fattura")
+      submit_fat = st.form_submit_button("Salva Fattura su Supabase")
 
       if submit_fat:
         if not fornitore:
           st.warning("Inserisci il nome del fornitore.")
         else:
           totale = imponibile + iva
-          new_id = len(st.session_state.fatture) + 1
-          nuova_riga = pd.DataFrame(
-              [{
-                  "ID": new_id,
-                  "Anno": anno,
-                  "Mese": mese,
-                  "Tipo": tipo,
-                  "Fornitore": fornitore,
-                  "Imponibile": imponibile,
-                  "IVA": iva,
-                  "Totale": totale,
-              }]
-          )
-          st.session_state.fatture = pd.concat(
-              [st.session_state.fatture, nuova_riga], ignore_index=True
-          )
-          st.success("Fattura inserita con successo!")
+          nuova_fattura = {
+              "anno": int(anno),
+              "mese": mese,
+              "tipo": tipo,
+              "fornitore": fornitore,
+              "imponibile": float(imponibile),
+              "iva": float(iva),
+              "totale": float(totale),
+          }
+
+          try:
+            supabase.table("fatture").insert(nuova_fattura).execute()
+            st.session_state.fatture = carica_fatture_da_supabase()
+            st.success("Fattura salvata con successo su Supabase!")
+          except Exception as e:
+            st.error(f"Errore durante il salvataggio della fattura: {e}")
 
   # --- 3. STORICO E DETTAGLIO ---
   elif menu == "Storico e Dettaglio":
@@ -232,21 +272,24 @@ else:
           value=1,
       )
       if st.button("Elimina"):
-        if id_da_eliminare in df_fatture["ID"].values:
-          st.session_state.fatture = df_fatture[
-              df_fatture["ID"] != id_da_eliminare
-          ].reset_index(drop=True)
-          st.success(f"Fattura ID {id_da_eliminare} eliminata.")
+        try:
+          supabase.table("fatture").delete().eq(
+              "id", int(id_da_eliminare)
+          ).execute()
+          st.session_state.fatture = carica_fatture_da_supabase()
+          st.success(
+              f"Fattura ID {id_da_eliminare} eliminata da Supabase con successo!"
+          )
           st.rerun()
-        else:
-          st.error("ID non trovato.")
+        except Exception as e:
+          st.error(f"Errore durante l'eliminazione: {e}")
 
-  # --- 4. GESTIONE MILLESIMI TRAMITE METRATURA (MQ) CON PERSISTENZA ---
+  # --- 4. GESTIONE MILLESIMI TRAMITE METRATURA (MQ) ---
   elif menu == "Gestione Millesimi":
     st.title("⚙️ Calcolo Millesimi da Metrature (Mq)")
     st.markdown(
         "Inserisci la superficie in metri quadrati (mq) per ciascun condomino."
-        " I valori rimarranno salvati in memoria."
+        " I dati verranno salvati direttamente nel database cloud Supabase."
     )
 
     with st.form("form_mq"):
@@ -263,30 +306,25 @@ else:
               format="%.2f",
           )
 
-      submit_calc = st.form_submit_button("Calcola e Salva Millesimi")
+      submit_calc = st.form_submit_button("Calcola e Salva su Supabase")
 
       if submit_calc:
         tot_mq = sum(nuovi_mq.values())
         if tot_mq <= 0:
           st.error("La superficie totale deve essere maggiore di zero.")
         else:
-          nuovi_millesimi = {}
-          for app, mq in nuovi_mq.items():
-            nuovi_millesimi[app] = round((mq / tot_mq) * 1000, 2)
-
-          # Salvataggio persistente nello state
-          st.session_state.mq_appartamenti = nuovi_mq
-          st.session_state.millesimi = nuovi_millesimi
+          salva_mq_su_supabase(nuovi_mq)
+          st.session_state.mq_appartamenti = carica_mq_da_supabase()
           st.success(
-              f"Metrature e millesimi salvati con successo! Superficie totale:"
-              f" {tot_mq:.2f} mq"
+              f"Metrature salvate permanentemente su Supabase! Superficie"
+              f" totale: {tot_mq:.2f} mq"
           )
           st.rerun()
 
     st.markdown("---")
     st.subheader("Tabella Millesimale Attuale")
     df_mil_current = pd.DataFrame(
-        list(st.session_state.millesimi.items()),
-        columns=["Condomino", "Valore Millesimale"],
+        list(millesimi.items()), columns=["Condomino", "Valore Millesimale"]
     )
+    st.dataframe(df_mil_current, use_container_width=True)
     st.dataframe(df_mil_current, use_container_width=True)
