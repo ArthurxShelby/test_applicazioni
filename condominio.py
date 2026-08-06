@@ -79,7 +79,7 @@ def carica_riporti_da_supabase():
     if data and len(data) > 0:
       return {row["condominio"]: float(row["riporto"]) for row in data}
   except Exception as e:
-    pass  # Se la tabella non esiste o è vuota, restituisce 0 per tutti
+    pass
   return {app: 0.0 for app in APP_NAMES}
 
 
@@ -338,10 +338,7 @@ else:
             tot_complessivo * (mil / tot_millesimi) if tot_millesimi > 0 else 0
         )
         
-        # Recupera il riporto (+ addebito / - accredito)
         val_riporto = dict_riporti.get(app, 0.0)
-        
-        # Calcola il totale complessivo comprensivo di riporto
         totale_complessivo_dovuto = quota_tot + val_riporto
 
         sum_millesimi += mil
@@ -615,4 +612,4 @@ else:
           "Valore Millesimale": millesimi.get(app, 0),
           "Riporto (€)": dict_riporti.get(app, 0.0),
       })
-    st.dataframe(pd.DataFrame(dati_riepilogo_config), use_container_width=True)
+    st.dataframe(pd.DataFrame(dati_riepilogo_config), use_container_width=True)    st.dataframe(pd.DataFrame(dati_riepilogo_config), use_container_width=True)
