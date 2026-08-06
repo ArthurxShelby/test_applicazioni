@@ -170,7 +170,7 @@ else:
             ["Tutte le tipologie", "Energia Elettrica", "Gasolio"],
         )
 
-      # Applicazione filtri
+      # Applicazione filtri principali
       df_filtered = df_fatture.copy()
       if selected_anno != "Tutti gli anni (da 2022)":
         df_filtered = df_filtered[df_filtered["anno"] == selected_anno]
@@ -178,40 +178,39 @@ else:
         df_filtered = df_filtered[df_filtered["tipo"] == selected_tipo]
 
       st.markdown("---")
-      st.subheader("Elenco Fatture (Seleziona una riga per il riparto mirato)")
+      st.subheader("Selezione Fattura Specifica")
 
       if df_filtered.empty:
         st.warning("Nessuna fattura trovata con i filtri selezionati.")
         tot_imp, tot_iva, tot_complessivo = 0.0, 0.0, 0.0
       else:
-        df_display = df_filtered.copy()
-        df_display.insert(0, "Seleziona", False)
+        # Creiamo un elenco descrittivo per il menu a tendina
+        opzioni_fatture = ["-- Tutte le fatture filtrate --"]
+        for _, row in df_filtered.iterrows():
+          desc = (
+              f"ID: {row['id']} | {row['anno']} - {row['mese']} |"
+              f" {row['tipo']} | {row['fornitore']} | Tot: €"
+              f" {row['totale']:,.2f}"
+          )
+          opzioni_fatture.append(desc)
 
-        edited_df = st.data_editor(
-            df_display,
-            column_config={
-                "Seleziona": st.column_config.CheckboxColumn(
-                    "Seleziona", help="Seleziona la fattura da ripartire", default=False
-                )
-            },
-            disabled=[c for c in df_display.columns if c != "Seleziona"],
-            hide_index=True,
-            use_container_width=True,
+        selected_option = st.selectbox(
+            "Scegli una singola fattura (esclude le altre)", opzioni_fatture
         )
 
-        selezionate = edited_df[edited_df["Seleziona"] == True]
-
-        if not selezionate.empty:
-          df_calcolo = df_filtered[df_filtered["id"].isin(selezionate["id"])]
-          st.info(
-              f"Stai visualizzando il riparto per {len(df_calcolo)} fattura/e"
-              " selezionata/e."
-          )
-        else:
+        if selected_option == "-- Tutte le fatture filtrate --":
           df_calcolo = df_filtered
           st.info(
-              "Nessuna fattura spuntata: il riparto considera TUTTE le fatture"
-              " filtrate sopra."
+              "Stai visualizzando il riparto cumulativo di tutte le fatture"
+              " filtrate."
+          )
+        else:
+          # Estraiamo l'ID della fattura selezionata dalla stringa
+          id_estratto = int(selected_option.split("|")[0].replace("ID:", "").strip())
+          df_calcolo = df_filtered[df_filtered["id"] == id_estratto]
+          st.success(
+              "Stai visualizzando il riparto esclusivo per la singola fattura"
+              " selezionata."
           )
 
         tot_imp = df_calcolo["imponibile"].sum()
