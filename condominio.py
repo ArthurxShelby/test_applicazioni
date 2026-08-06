@@ -1,4 +1,4 @@
-import ioimport io
+import io
 import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
@@ -443,12 +443,10 @@ else:
                 .strip()
             )
             
-            # Recuperiamo unicamente la riga della singola fattura scelta
             row_fattura = df_fatture[df_fatture["id"] == id_fattura_collegata].iloc[0]
             totale_singola_fattura = float(row_fattura["totale"])
             
             mil_condomino = millesimi.get(condomino_selezionato, 0.0)
-            # Calcolo esatto basato esclusivamente sulla singola fattura selezionata
             quota_dovuta_esatta = (totale_singola_fattura * (mil_condomino / tot_millesimi)) if tot_millesimi > 0 else 0.0
             
             accredito_precedente = dict_riporti.get(condomino_selezionato, 0.0)
@@ -472,7 +470,7 @@ else:
 
               st.session_state.pagamenti = carica_pagamenti_da_supabase()
               st.success(
-                  f"Pagamento registrato per {condominio_selezionato} "
+                  f"Pagamento registrato per {condomino_selezionato} "
                   f"(Quota da pagare: € {quota_dovuta_esatta:,.2f} | Riporto: € {riporto_generato:,.2f})!"
               )
               st.rerun()
