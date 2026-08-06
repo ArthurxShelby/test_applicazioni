@@ -120,13 +120,11 @@ def carica_fatture_da_supabase():
 
 def carica_pagamenti_da_supabase():
   try:
-    # Nota: se su Supabase la tabella si chiama 'pagamenti', modifica qui sotto
     response = supabase.table("pagamenti").select("*").execute()
     data = response.data
     if data:
       return pd.DataFrame(data)
   except Exception as e:
-    # Fallback nel caso in cui la tabella su Supabase sia rimasta 'pagamneti'
     try:
       response = supabase.table("pagamneti").select("*").execute()
       data = response.data
@@ -139,8 +137,10 @@ def carica_pagamenti_da_supabase():
           "id",
           "condominio",
           "fattura_id",
-          "importo_pagato",
           "data_pagamento",
+          "importo_da_pagare",
+          "importo_pagato",
+          "accredito",
           "riporto",
       ]
   )
@@ -449,18 +449,22 @@ else:
             mil_condomino = millesimi.get(condomino_selezionato, 0.0)
             quota_dovuta = (totale_fattura * (mil_condomino / tot_millesimi)) if tot_millesimi > 0 else 0.0
             
-            riporto_generato = round(quota_dovuta - float(importo_versato), 2)
+            # Recupero l'accredito ereditato dall'ultimo riporto salvato in precedenza per l'utente
+            accredito_precedente = dict_riporti.get(condomino_selezionato, 0.0)
+            
+            riporto_generato = round(quota_dovuta - float(importo_versato) + accredito_precedente, 2)
 
             nuovo_pagamento = {
                 "condominio": condomino_selezionato,
                 "fattura_id": id_fattura_collegata,
-                "importo_pagato": float(importo_versato),
                 "data_pagamento": data_versamento,
+                "importo_da_pagare": round(quota_dovuta, 2),
+                "importo_pagato": float(importo_versato),
+                "accredito": round(accredito_precedente, 2),
                 "riporto": riporto_generato,
             }
 
             try:
-              # Prova a salvare nella tabella 'pagamenti', se fallisce prova 'pagamneti'
               try:
                 supabase.table("pagamenti").insert(nuovo_pagamento).execute()
               except Exception:
@@ -468,8 +472,8 @@ else:
 
               st.session_state.pagamenti = carica_pagamenti_da_supabase()
               st.success(
-                  f"Pagamento di € {importo_versato:,.2f} registrato per {condomino_selezionato} "
-                  f"(Quota dovuta: € {quota_dovuta:,.2f} | Riporto generato: € {riporto_generato:,.2f})!"
+                  f"Pagamento registrato per {condominio_selezionato} "
+                  f"(Quota da pagare: € {quota_dovuta:,.2f} | Riporto calcolato: € {riporto_generato:,.2f})!"
               )
               st.rerun()
             except Exception as e:
@@ -478,7 +482,21 @@ else:
       df_pag = st.session_state.pagamenti
       if not df_pag.empty:
         st.markdown("### Storico Pagamenti Ricevuti")
-        st.dataframe(df_pag, use_container_width=True)
+        
+        # Riordino le colonne secondo lo schema richiesto
+        col_ordine = [
+            "id",
+            "condominio",
+            "fattura_id",
+            "data_pagamento",
+            "importo_da_pagare",
+            "importo_pagato",
+            "accredito",
+            "riporto",
+        ]
+        # Filtra solo le colonne esistenti nel DataFrame per evitare errori
+        col_presenti = [c for c in col_ordine if c in df_pag.columns]
+        st.dataframe(df_pag[col_presenti], use_container_width=True)
 
         # --- CANCELLA PAGAMENTO TRAMITE SELEZIONE ---
         st.markdown("### Elimina Pagamento Registrato")
@@ -530,6 +548,7 @@ else:
             st.error(f"Errore durante l'eliminazione del pagamento: {e}")
       else:
         st.info("Nessun pagamento registrato finora.")
+
   # --- 2. INSERISCI FATTURA ---
   elif menu == "Inserisci Fattura":
     st.title("📝 Inserimento Nuova Fattura")
@@ -596,16 +615,26 @@ else:
 
       st.markdown("### Elimina Fattura")
       primo_id_fat = int(df_fatture["id"].iloc[0]) if "id" in df_fatture.columns and len(df_fatture) > 0 else 1
-      id_da_eliminare = st.number_input(
-          "Inserisci l'ID della fattura da rimuovere",
-          min_value=1,
-          step=1,
-          value=primo_id_fat,
+      
+      opzioni_fatture_elimina = []
+      for _, row in df_fatture.iterrows():
+        opzioni_fatture_elimina.append(
+            f"ID: {row['id']} | {row['anno']} - {row['mese']} | {row['tipo']} | {row['fornitore']} | Tot: € {row['totale']:,.2f}"
+        )
+
+      fattura_scelta_elimina = st.selectbox(
+          "Seleziona la fattura da rimuovere",
+          opzioni_fatture_elimina,
+          key="select_elimina_fattura"
       )
-      if st.button("Elimina"):
+
+      if st.button("Elimina Fattura Selezionata"):
         try:
+          id_da_eliminare = int(
+              fattura_scelta_elimina.split("|")[0].replace("ID:", "").strip()
+          )
           supabase.table("fatture").delete().eq(
-              "id", int(id_da_eliminare)
+              "id", id_da_eliminare
           ).execute()
           st.session_state.fatture = carica_fatture_da_supabase()
           st.success(
@@ -685,4 +714,4 @@ else:
           "Valore Millesimale": millesimi.get(app, 0),
           "Riporto (€)": dict_riporti.get(app, 0.0),
       })
-    st.dataframe(pd.DataFrame(dati_riepilogo_config), use_container_width=True)    
+    st.dataframe(pd.DataFrame(dati_riepilogo_config), use_container_width=True)
