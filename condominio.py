@@ -449,7 +449,7 @@ else:
             mil_condomino = millesimi.get(condomino_selezionato, 0.0)
             quota_dovuta_esatta = (totale_singola_fattura * (mil_condomino / tot_millesimi)) if tot_millesimi > 0 else 0.0
             
-            # --- CORRETTO: RECUPERO L'ULTIMO ACCREDITO/DEBITO DALLO STORICO DI SUPABASE ---
+            # --- RECUPERO AUTOMATICO ACCREDITO/DEBITO PRECEDENTE DA SUPABASE ---
             accredito_precedente = 0.0
             df_pag_esistenti = st.session_state.pagamenti
             if not df_pag_esistenti.empty:
@@ -458,13 +458,11 @@ else:
                 ultimo_record = df_cond_prec.iloc[-1]
                 accredito_precedente = float(ultimo_record.get("riporto", 0.0))
 
-            # Totale da saldare considerando la quota della fattura e l'accredito precedente
-            totale_da_saldare = quota_dovuta_esatta - accredito_precedente
             importo_versato_f = float(importo_versato)
             
-            # --- CORRETTO: CALCOLO DEL RIPORTO ---
-            # Positivo se l'utente paga in più (eccedenza/credito), Negativo se paga in meno (debito)
-            riporto_generato = round(importo_versato_f - totale_da_saldare, 2)
+            # --- CALCOLO CORRETTO DEL RIPORTO ---
+            # Se l'utente paga più del dovuto, il riporto deve essere positivo (+)
+            riporto_generato = round(importo_versato_f - quota_dovuta_esatta + accredito_precedente, 2)
 
             nuovo_pagamento = {
                 "condominio": condomino_selezionato,
