@@ -456,12 +456,15 @@ else:
               df_cond_prec = df_pag_esistenti[df_pag_esistenti["condominio"] == condomino_selezionato]
               if not df_cond_prec.empty:
                 ultimo_record = df_cond_prec.iloc[-1]
+                # Prende l'ultimo riporto salvato in Supabase e lo mette in accredito
                 accredito_precedente = float(ultimo_record.get("riporto", 0.0))
 
+            # Se l'accredito precedente era negativo (debito), aumenta il dovuto. Se era positivo (credito), lo scala.
             totale_da_saldare = quota_dovuta_esatta - accredito_precedente
             importo_versato_f = float(importo_versato)
             
-            # Riporto: Positivo se l'utente paga in più (eccedenza), Negativo se paga in meno
+            # --- CORREZIONE LOGICA RIPORTO ---
+            # Positivo se l'utente paga in più (eccedenza/credito), Negativo se paga in meno (debito)
             riporto_generato = round(importo_versato_f - totale_da_saldare, 2)
 
             nuovo_pagamento = {
@@ -482,7 +485,7 @@ else:
 
               st.session_state.pagamenti = carica_pagamenti_da_supabase()
               st.success(
-                  f"Pagamento registrato per {condominio_selezionato} "
+                  f"Pagamento registrato per {condomino_selezionato} "
                   f"(Dovuto: € {quota_dovuta_esatta:,.2f} | Saldo/Riporto: € {riporto_generato:,.2f})!"
               )
               st.rerun()
