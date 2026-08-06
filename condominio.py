@@ -1,4 +1,4 @@
-import io
+import ioimport io
 import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
@@ -404,7 +404,7 @@ else:
         col_p1, col_p2 = st.columns(2)
         with col_p1:
           condomino_selezionato = st.selectbox(
-              "Seleziona Condomino", APP_NAMES
+              "Seleziona Condomino", APP_NAMES, key="reg_condomino"
           )
           opzioni_fatture_pagamento = []
           for _, row in df_fatture.iterrows():
@@ -418,15 +418,15 @@ else:
             fattura_scelta_str = None
           else:
             fattura_scelta_str = st.selectbox(
-                "Seleziona Fattura di Riferimento", opzioni_fatture_pagamento
+                "Seleziona Fattura di Riferimento", opzioni_fatture_pagamento, key="reg_fattura"
             )
 
         with col_p2:
           importo_versato = st.number_input(
-              "Importo Pagato (€)", min_value=0.0, format="%.2f"
+              "Importo Pagato (€)", min_value=0.0, format="%.2f", key="reg_importo"
           )
           data_versamento = st.text_input(
-              "Data o Mese di Registrazione Pagamento", value="Agosto 2026"
+              "Data o Mese di Registrazione Pagamento", value="Agosto 2026", key="reg_data"
           )
 
         submit_pagamento = st.form_submit_button(
@@ -443,22 +443,22 @@ else:
                 .strip()
             )
             
+            # Recuperiamo unicamente la riga della singola fattura scelta
             row_fattura = df_fatture[df_fatture["id"] == id_fattura_collegata].iloc[0]
-            totale_fattura = float(row_fattura["totale"])
+            totale_singola_fattura = float(row_fattura["totale"])
             
             mil_condomino = millesimi.get(condomino_selezionato, 0.0)
-            quota_dovuta = (totale_fattura * (mil_condomino / tot_millesimi)) if tot_millesimi > 0 else 0.0
+            # Calcolo esatto basato esclusivamente sulla singola fattura selezionata
+            quota_dovuta_esatta = (totale_singola_fattura * (mil_condomino / tot_millesimi)) if tot_millesimi > 0 else 0.0
             
-            # Recupero l'accredito ereditato dall'ultimo riporto salvato in precedenza per l'utente
             accredito_precedente = dict_riporti.get(condomino_selezionato, 0.0)
-            
-            riporto_generato = round(quota_dovuta - float(importo_versato) + accredito_precedente, 2)
+            riporto_generato = round(quota_dovuta_esatta - float(importo_versato) + accredito_precedente, 2)
 
             nuovo_pagamento = {
                 "condominio": condomino_selezionato,
                 "fattura_id": id_fattura_collegata,
                 "data_pagamento": data_versamento,
-                "importo_da_pagare": round(quota_dovuta, 2),
+                "importo_da_pagare": round(quota_dovuta_esatta, 2),
                 "importo_pagato": float(importo_versato),
                 "accredito": round(accredito_precedente, 2),
                 "riporto": riporto_generato,
@@ -473,7 +473,7 @@ else:
               st.session_state.pagamenti = carica_pagamenti_da_supabase()
               st.success(
                   f"Pagamento registrato per {condominio_selezionato} "
-                  f"(Quota da pagare: € {quota_dovuta:,.2f} | Riporto calcolato: € {riporto_generato:,.2f})!"
+                  f"(Quota da pagare: € {quota_dovuta_esatta:,.2f} | Riporto: € {riporto_generato:,.2f})!"
               )
               st.rerun()
             except Exception as e:
@@ -483,7 +483,6 @@ else:
       if not df_pag.empty:
         st.markdown("### Storico Pagamenti Ricevuti")
         
-        # Riordino le colonne secondo lo schema richiesto
         col_ordine = [
             "id",
             "condominio",
@@ -494,7 +493,6 @@ else:
             "accredito",
             "riporto",
         ]
-        # Filtra solo le colonne esistenti nel DataFrame per evitare errori
         col_presenti = [c for c in col_ordine if c in df_pag.columns]
         st.dataframe(df_pag[col_presenti], use_container_width=True)
 
@@ -616,8 +614,6 @@ else:
       st.dataframe(df_fatture, use_container_width=True)
 
       st.markdown("### Elimina Fattura")
-      primo_id_fat = int(df_fatture["id"].iloc[0]) if "id" in df_fatture.columns and len(df_fatture) > 0 else 1
-      
       opzioni_fatture_elimina = []
       for _, row in df_fatture.iterrows():
         opzioni_fatture_elimina.append(
