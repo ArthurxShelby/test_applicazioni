@@ -449,15 +449,27 @@ else:
             mil_condomino = millesimi.get(condomino_selezionato, 0.0)
             quota_dovuta_esatta = (totale_singola_fattura * (mil_condomino / tot_millesimi)) if tot_millesimi > 0 else 0.0
             
-            accredito_precedente = dict_riporti.get(condomino_selezionato, 0.0)
-            riporto_generato = round(quota_dovuta_esatta - float(importo_versato) + accredito_precedente, 2)
+            # --- RECUPERO AUTOMATICO ACCREDITO/DEBITO PRECEDENTE DA SUPABASE ---
+            accredito_precedente = 0.0
+            df_pag_esistenti = st.session_state.pagamenti
+            if not df_pag_esistenti.empty:
+              df_cond_prec = df_pag_esistenti[df_pag_esistenti["condominio"] == condomino_selezionato]
+              if not df_cond_prec.empty:
+                ultimo_record = df_cond_prec.iloc[-1]
+                accredito_precedente = float(ultimo_record.get("riporto", 0.0))
+
+            totale_da_saldare = quota_dovuta_esatta - accredito_precedente
+            importo_versato_f = float(importo_versato)
+            
+            # Riporto: Positivo se l'utente paga in più (eccedenza), Negativo se paga in meno
+            riporto_generato = round(importo_versato_f - totale_da_saldare, 2)
 
             nuovo_pagamento = {
                 "condominio": condomino_selezionato,
                 "fattura_id": id_fattura_collegata,
                 "data_pagamento": data_versamento,
                 "importo_da_pagare": round(quota_dovuta_esatta, 2),
-                "importo_pagato": float(importo_versato),
+                "importo_pagato": importo_versato_f,
                 "accredito": round(accredito_precedente, 2),
                 "riporto": riporto_generato,
             }
@@ -470,8 +482,8 @@ else:
 
               st.session_state.pagamenti = carica_pagamenti_da_supabase()
               st.success(
-                  f"Pagamento registrato per {condomino_selezionato} "
-                  f"(Quota da pagare: € {quota_dovuta_esatta:,.2f} | Riporto: € {riporto_generato:,.2f})!"
+                  f"Pagamento registrato per {condominio_selezionato} "
+                  f"(Dovuto: € {quota_dovuta_esatta:,.2f} | Saldo/Riporto: € {riporto_generato:,.2f})!"
               )
               st.rerun()
             except Exception as e:
