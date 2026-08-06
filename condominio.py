@@ -6,8 +6,27 @@ st.set_page_config(
     page_title="Gestione Spese Condominiali", page_icon="🏢", layout="wide"
 )
 
-# --- CONFIGURAZIONE MILLESIMI E APPARTAMENTI (7 unità) ---
-# Puoi modificare i nomi dei condomini o i millesimi iniziali (totale deve fare 1000)
+# --- CONFIGURAZIONE INIZIALE APPARTAMENTI (7 unità) ---
+APP_NAMES = [
+    "Appartamento 1",
+    "Appartamento 2",
+    "Appartamento 3",
+    "Appartamento 4",
+    "Appartamento 5",
+    "Appartamento 6",
+    "Appartamento 7",
+]
+
+DEFAULT_MQ = {
+    "Appartamento 1": 70.0,
+    "Appartamento 2": 75.0,
+    "Appartamento 3": 80.0,
+    "Appartamento 4": 85.0,
+    "Appartamento 5": 90.0,
+    "Appartamento 6": 85.0,
+    "Appartamento 7": 85.0,
+}
+
 DEFAULT_MILLESIMI = {
     "Appartamento 1": 120,
     "Appartamento 2": 130,
@@ -22,11 +41,13 @@ DEFAULT_MILLESIMI = {
 if "logged_in" not in st.session_state:
   st.session_state.logged_in = False
 
+if "mq_appartamenti" not in st.session_state:
+  st.session_state.mq_appartamenti = DEFAULT_MQ.copy()
+
 if "millesimi" not in st.session_state:
   st.session_state.millesimi = DEFAULT_MILLESIMI.copy()
 
 if "fatture" not in st.session_state:
-  # Inizializziamo con vuoto (storico dal 2022)
   st.session_state.fatture = pd.DataFrame(
       columns=[
           "ID",
@@ -50,7 +71,6 @@ def login_screen():
     submit = st.form_submit_button("Accedi")
 
     if submit:
-      # Credenziali di esempio (modificabili a piacimento)
       if username == "admin" and password == "condominio2026":
         st.session_state.logged_in = True
         st.rerun()
@@ -91,7 +111,6 @@ else:
           " 'Inserisci Fattura'."
       )
     else:
-      # Filtro per Anno
       anni_disponibili = sorted(df_fatture["Anno"].unique())
       selected_anno = st.selectbox(
           "Seleziona Anno Fiscale",
@@ -103,7 +122,6 @@ else:
       else:
         df_filtered = df_fatture
 
-      # Metriche principali
       col1, col2, col3 = st.columns(3)
       tot_imp = df_filtered["Imponibile"].sum()
       tot_iva = df_filtered["IVA"].sum()
@@ -116,7 +134,6 @@ else:
       st.markdown("---")
       st.subheader("Tabella di Riparto per Appartamento (Millesimi)")
 
-      # Calcolo quote per ogni appartamento
       reparto_data = []
       for app, mil in millesimi.items():
         quota_imp = tot_imp * (mil / tot_millesimi)
@@ -143,9 +160,7 @@ else:
     with st.form("form_fattura"):
       col1, col2 = st.columns(2)
       with col1:
-        anno = st.selectbox(
-            "Anno", options=list(range(2022, 2028)), index=4
-        )  # Default 2026
+        anno = st.selectbox("Anno", options=list(range(2022, 2028)), index=4)
         mese = st.selectbox(
             "Mese",
             [
@@ -224,54 +239,52 @@ else:
         else:
           st.error("ID non trovato.")
 
-  # --- 4. GESTIONE MILLESIMI TRAMITE METRATURA (MQ) ---
+  # --- 4. GESTIONE MILLESIMI TRAMITE METRATURA (MQ) CON PERSISTENZA ---
   elif menu == "Gestione Millesimi":
     st.title("⚙️ Calcolo Millesimi da Metrature (Mq)")
     st.markdown(
         "Inserisci la superficie in metri quadrati (mq) per ciascuno dei 7"
-        " appartamenti. Il sistema calcolerà automaticamente i millesimi in"
-        " proporzione."
+        " appartamenti. I valori rimarranno salvati in memoria."
     )
 
     with st.form("form_mq"):
-      mq_appartamenti = {}
+      nuovi_mq = {}
       col1, col2 = st.columns(2)
 
-      app_names = [
-          "Appartamento 1",
-          "Appartamento 2",
-          "Appartamento 3",
-          "Appartamento 4",
-          "Appartamento 5",
-          "Appartamento 6",
-          "Appartamento 7",
-      ]
-
-      for i, app in enumerate(app_names):
+      for i, app in enumerate(APP_NAMES):
         with col1 if i < 4 else col2:
-          default_mq = 70.0 + (i * 5)  # Valore indicativo iniziale
-          mq_appartamenti[app] = st.number_input(
+          val_corrente = st.session_state.mq_appartamenti.get(app, 70.0)
+          nuovi_mq[app] = st.number_input(
               f"Superficie {app} (mq)",
               min_value=1.0,
-              value=float(default_mq),
+              value=float(val_corrente),
               format="%.2f",
           )
 
-      submit_calc = st.form_submit_button("Calcola e Aggiorna Millesimi")
+      submit_calc = st.form_submit_button("Calcola e Salva Millesimi")
 
       if submit_calc:
-        tot_mq = sum(mq_appartamenti.values())
+        tot_mq = sum(nuovi_mq.values())
         if tot_mq <= 0:
           st.error("La superficie totale deve essere maggiore di zero.")
         else:
           nuovi_millesimi = {}
-          for app, mq in mq_appartamenti.items():
+          for app, mq in nuovi_mq.items():
             nuovi_millesimi[app] = round((mq / tot_mq) * 1000, 2)
 
-          st.session_state.millesimi = nuevos_millesimi if 'nuevos_millesimi' in locals() else nuovi_millesimi
+          # Salvataggio persistente nello state
+          st.session_state.mq_appartamenti = nuovi_mq
           st.session_state.millesimi = nuovi_millesimi
           st.success(
-              f"Millesimi ricalcolati con successo! Superficie totale:"
+              f"Metrature e millesimi salvati con successo! Superficie totale:"
               f" {tot_mq:.2f} mq"
           )
           st.rerun()
+
+    st.markdown("---")
+    st.subheader("Tabella Millesimale Attuale")
+    df_mil_current = pd.DataFrame(
+        list(st.session_state.millesimi.items()),
+        columns=["Appartamento", "Valore Millesimale"],
+    )
+    st.dataframe(df_mil_current, use_container_width=True)
