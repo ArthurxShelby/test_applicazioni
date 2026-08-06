@@ -184,11 +184,9 @@ else:
         st.warning("Nessuna fattura trovata con i filtri selezionati.")
         tot_imp, tot_iva, tot_complessivo = 0.0, 0.0, 0.0
       else:
-        # Aggiungiamo la colonna di selezione (Checkbox) alla tabella
         df_display = df_filtered.copy()
         df_display.insert(0, "Seleziona", False)
 
-        # Tabella con selezione riga attiva
         edited_df = st.data_editor(
             df_display,
             column_config={
@@ -196,29 +194,20 @@ else:
                     "Seleziona", help="Seleziona la fattura da ripartire", default=False
                 )
             },
-            disabled=[
-                c
-                for c in df_display.columns
-                if c != "Seleziona"
-            ],
+            disabled=[c for c in df_display.columns if c != "Seleziona"],
             hide_index=True,
             use_container_width=True,
         )
 
-        # Controlliamo quale fattura è stata selezionata
         selezionate = edited_df[edited_df["Seleziona"] == True]
 
         if not selezionate.empty:
-          # Se l'utente ha selezionato una o più fatture, calcoliamo solo su quelle
-          df_calcolo = df_filtered[
-              df_filtered["id"].isin(selezionate["id"])
-          ]
+          df_calcolo = df_filtered[df_filtered["id"].isin(selezionate["id"])]
           st.info(
               f"Stai visualizzando il riparto per {len(df_calcolo)} fattura/e"
               " selezionata/e."
           )
         else:
-          # Altrimenti usiamo tutte quelle filtrate dai menu a tendina
           df_calcolo = df_filtered
           st.info(
               "Nessuna fattura spuntata: il riparto considera TUTTE le fatture"
@@ -241,12 +230,23 @@ else:
       st.subheader("Tabella di Riparto per Condomino (Millesimi)")
 
       reparto_data = []
+      sum_millesimi = 0.0
+      sum_imp = 0.0
+      sum_iva = 0.0
+      sum_tot = 0.0
+
       for app, mil in millesimi.items():
         quota_imp = tot_imp * (mil / tot_millesimi) if tot_millesimi > 0 else 0
         quota_iva = tot_iva * (mil / tot_millesimi) if tot_millesimi > 0 else 0
         quota_tot = (
             tot_complessivo * (mil / tot_millesimi) if tot_millesimi > 0 else 0
         )
+
+        sum_millesimi += mil
+        sum_imp += quota_imp
+        sum_iva += quota_iva
+        sum_tot += quota_tot
+
         reparto_data.append(
             {
                 "Condomino": app,
@@ -256,6 +256,17 @@ else:
                 "Quota Totale (€)": round(quota_tot, 2),
             }
         )
+
+      # Aggiunta della riga dei totali
+      reparto_data.append(
+          {
+              "Condomino": "TOTALE",
+              "Millesimi": round(sum_millesimi, 2),
+              "Quota Imponibile (€)": round(sum_imp, 2),
+              "Quota IVA (€)": round(sum_iva, 2),
+              "Quota Totale (€)": round(sum_tot, 2),
+          }
+      )
 
       df_reparto = pd.DataFrame(reparto_data)
       st.dataframe(df_reparto, use_container_width=True)
