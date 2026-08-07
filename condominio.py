@@ -597,6 +597,7 @@ else:
         supabase.table("fatture").insert(nuova_fattura).execute()
         st.session_state.fatture = carica_fatture_da_supabase()
         st.success("Nuova fattura salvata con successo!")
+        st.rerun() # <-- Questo forza l'aggiornamento immediato e aggiorna il menu a discesa
 
     # Sezione Eliminazione Fattura Esistente
     st.markdown("---")
