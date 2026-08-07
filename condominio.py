@@ -14,8 +14,8 @@ st.set_page_config(
 
 # --- CONFIGURAZIONE SUPABASE DA SECRETS ---
 try:
-  SUPABASE_URL = st.secrets["SUPABASE_URL"]
-  SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+  SUPABASE_URL = st.secrets.get("SUPABASE_URL") or st.secrets["supabase"]["SUPABASE_URL"]
+  SUPABASE_KEY = st.secrets.get("SUPABASE_KEY") or st.secrets["supabase"]["SUPABASE_KEY"]
 except Exception as e:
   st.error(
       "Configurazione Supabase mancante nei Secrets di Streamlit! Controlla"
@@ -45,7 +45,7 @@ def carica_mq_da_supabase():
     if data and len(data) > 0:
       return {row["condominio"]: float(row["mq"]) for row in data}
   except Exception as e:
-    st.error(f"Errore di connessione a Supabase (condominio): {e}")
+    pass
 
   default_mq = {
       "ESPOSITO": 70.0,
@@ -103,7 +103,13 @@ def carica_fatture_da_supabase():
     if data:
       return pd.DataFrame(data)
   except Exception as e:
-    st.error(f"Errore di connessione a Supabase (fatture): {e}")
+    try:
+      response = supabase.table("fature").select("*").execute()
+      data = response.data
+      if data:
+        return pd.DataFrame(data)
+    except Exception as ex:
+      pass
   return pd.DataFrame(
       columns=[
           "id",
@@ -250,6 +256,12 @@ else:
     st.session_state.logged_in = False
     st.rerun()
 
+  # Aggiornamento dei dati correnti da Supabase a ogni esecuzione
+  st.session_state.fatture = carica_fatture_da_supabase()
+  st.session_state.pagamenti = carica_pagamenti_da_supabase()
+  st.session_state.mq_appartamenti = carica_mq_da_supabase()
+  st.session_state.riporti = carica_riporti_da_supabase()
+
   df_fatture = st.session_state.fatture
   millesimi = calcola_millesimi_da_mq(st.session_state.mq_appartamenti)
   tot_millesimi = sum(millesimi.values())
@@ -267,8 +279,7 @@ else:
 
     if df_fatture.empty:
       st.info(
-          "Nessuna fattura presente. Inizia ad inserirle dalla sezione"
-          " 'Inserisci Fattura'."
+          "Nessuna fattura presente o errore di lettura tabelle da Supabase. Controlla che la tabella 'fatture' esista."
       )
     else:
       df_sorted = df_fatture.copy()
@@ -403,7 +414,6 @@ else:
       # --- SEZIONE GESTIONE INTROITI E PAGAMENTI ---
       st.subheader("💳 Gestione Introiti e Pagamenti Utenti")
       
-      # SELEZIONE GLOBALE: Questa selectbox controlla tutto
       cond_attivo = st.selectbox(
           "Seleziona Condomino (per Pagamento o Storico)", 
           APP_NAMES, 
@@ -485,16 +495,14 @@ else:
             except Exception as e:
               st.error(f"Errore: {e}")
 
-      # --- TABELLA STORICO PAGAMENTI (ARRICCHITA) ---
+      # --- TABELLA STORICO PAGAMENTI ---
       st.markdown("### 📂 Storico Pagamenti Ricevuti")
       st.session_state.pagamenti = carica_pagamenti_da_supabase()
       df_pag = st.session_state.pagamenti
       
-      # Carica fatture per il lookup
       df_fatture_all = carica_fatture_da_supabase() 
       
       if not df_pag.empty:
-        # Aggiunta colonna Riferimento (Anno-Mese)
         if not df_fatture_all.empty:
             df_fatture_all['rif_fattura'] = df_fatture_all['anno'].astype(str) + " - " + df_fatture_all['mese']
             lookup_fat = df_fatture_all.set_index('id')['rif_fattura']
@@ -517,11 +525,11 @@ else:
       else:
         st.info("Nessun pagamento registrato finora.")
 
-      # --- ELIMINAZIONE PAGAMENTO (SINCRONIZZATA) ---
+      # --- ELIMINAZIONE PAGAMENTO ---
       st.markdown("---")
       st.subheader(f"🗑️ Elimina Pagamento per {cond_attivo}")
       
-      df_pag_da_eliminare = df_pag[df_pag["condominio"] == cond_attivo]
+      df_pag_da_eliminare = df_pag[df_pag["condominio"] == cond_attivo] if not df_pag.empty else pd.DataFrame()
       if not df_pag_da_eliminare.empty:
         opzioni_pagamenti_elimina = []
         for _, row in df_pag_da_eliminare.iterrows():
@@ -561,9 +569,13 @@ else:
       submit_fat = st.form_submit_button("Salva Fattura su Supabase")
       if submit_fat:
         nuova_fattura = {"anno": int(anno), "mese": mese, "tipo": tipo, "fornitore": fornitore, "imponibile": float(imponibile), "iva": float(iva), "totale": float(imponibile + iva)}
-        supabase.table("fatture").insert(nuova_fattura).execute()
-        st.session_state.fatture = carica_fatture_da_supabase()
-        st.success("Fattura salvata!")
+        try:
+          supabase.table("fatture").insert(nuova_fattura).execute()
+          st.session_state.fatture = carica_fatture_da_supabase()
+          st.success("Fattura salvata!")
+          st.rerun()
+        except Exception as e:
+          st.error(f"Errore durante il salvataggio della fattura: {e}")
 
   # --- 3. STORICO E DETTAGLIO ---
   elif menu == "Storico e Dettaglio":
