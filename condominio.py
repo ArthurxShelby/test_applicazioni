@@ -290,6 +290,8 @@ else:
       st.markdown("---")
       st.subheader("Selezione Fattura Specifica")
 
+      selected_option = "-- Tutte le fatture filtrate --" # Inizializzazione di sicurezza
+
       if df_filtered.empty:
         st.warning("Nessuna fattura trovata con i filtri selezionati.")
         tot_imp, tot_iva, tot_complessivo = 0.0, 0.0, 0.0
