@@ -255,6 +255,13 @@ else:
   tot_millesimi = sum(millesimi.values())
   dict_riporti = st.session_state.riporti
 
+  # Dizionario di mappatura mesi per ordinamento cronologico
+  mese_map = {
+      "Gennaio": 1, "Febbraio": 2, "Marzo": 3, "Aprile": 4, 
+      "Maggio": 5, "Giugno": 6, "Luglio": 7, "Agosto": 8, 
+      "Settembre": 9, "Ottobre": 10, "Novembre": 11, "Dicembre": 12
+  }
+
   # --- 1. DASHBOARD & RIEPILOGO ---
   if menu == "Dashboard & Riepilogo":
     st.title("📊 Dashboard e Riparto Spese")
@@ -265,9 +272,14 @@ else:
           " 'Inserisci Fattura'."
       )
     else:
+      # Ordiniamo le fatture cronologicamente (dal più recente)
+      df_sorted = df_fatture.copy()
+      df_sorted['mese_num'] = df_sorted['mese'].map(mese_map)
+      df_sorted = df_sorted.sort_values(by=['anno', 'mese_num'], ascending=[False, False])
+
       col_f1, col_f2 = st.columns(2)
       with col_f1:
-        anni_disponibili = sorted(df_fatture["anno"].unique())
+        anni_disponibili = sorted(df_fatture["anno"].unique(), reverse=True)
         selected_anno = st.selectbox(
             "Filtra per Anno Fiscale",
             ["Tutti gli anni (da 2022)"] + list(anni_disponibili),
@@ -278,7 +290,7 @@ else:
             ["Tutte le tipologie", "Energia Elettrica", "Gasolio"],
         )
 
-      df_filtered = df_fatture.copy()
+      df_filtered = df_sorted.copy()
       if selected_anno != "Tutti gli anni (da 2022)":
         df_filtered = df_filtered[df_filtered["anno"] == selected_anno]
       if selected_tipo != "Tutte le tipologie":
@@ -407,7 +419,7 @@ else:
               "Seleziona Condomino", APP_NAMES, key="reg_condomino"
           )
           opzioni_fatture_pagamento = []
-          for _, row in df_fatture.iterrows():
+          for _, row in df_sorted.iterrows():
             opzioni_fatture_pagamento.append(
                 f"ID: {row['id']} | {row['anno']} - {row['mese']} |"
                 f" {row['tipo']} | {row['fornitore']} | Totale: €"
@@ -449,7 +461,6 @@ else:
             mil_condomino = millesimi.get(condomino_selezionato, 0.0)
             quota_dovuta_esatta = (totale_singola_fattura * (mil_condomino / tot_millesimi)) if tot_millesimi > 0 else 0.0
             
-            # --- RECUPERO AUTOMATICO ACCREDITO/DEBITO PRECEDENTE DA SUPABASE ---
             accredito_precedente = 0.0
             df_pag_esistenti = st.session_state.pagamenti
             if not df_pag_esistenti.empty:
@@ -460,8 +471,6 @@ else:
 
             importo_versato_f = float(importo_versato)
             
-            # --- CALCOLO CORRETTO DEL RIPORTO ---
-            # Se l'utente paga più del dovuto, il riporto deve essere positivo (+)
             riporto_generato = round(importo_versato_f - quota_dovuta_esatta + accredito_precedente, 2)
 
             nuovo_pagamento = {
@@ -506,7 +515,6 @@ else:
         col_presenti = [c for c in col_ordine if c in df_pag.columns]
         st.dataframe(df_pag[col_presenti], use_container_width=True)
 
-        # --- CANCELLA PAGAMENTO TRAMITE SELEZIONE ---
         st.markdown("### Elimina Pagamento Registrato")
         
         opzioni_pagamenti_elimina = []
@@ -621,30 +629,15 @@ else:
     if df_fatture.empty:
       st.info("Nessuna fattura registrata nello storico.")
     else:
-      # --- LOGICA DI ORDINAMENTO ---
-      # Creiamo un dizionario per mappare i nomi dei mesi a numeri
-      mese_map = {
-          "Gennaio": 1, "Febbraio": 2, "Marzo": 3, "Aprile": 4, 
-          "Maggio": 5, "Giugno": 6, "Luglio": 7, "Agosto": 8, 
-          "Settembre": 9, "Ottobre": 10, "Novembre": 11, "Dicembre": 12
-      }
-      
-      # Creiamo una copia per non modificare l'originale
+      # Ordinamento cronologico per anno e mese
       df_storico = df_fatture.copy()
-      
-      # Convertiamo il mese in numero per l'ordinamento
       df_storico['mese_num'] = df_storico['mese'].map(mese_map)
-      
-      # Ordiniamo: prima per Anno (decrescente), poi per Mese (decrescente)
       df_storico = df_storico.sort_values(by=['anno', 'mese_num'], ascending=[False, False])
-      
-      # Rimuoviamo la colonna di supporto prima di visualizzare
       df_visual = df_storico.drop(columns=['mese_num'])
       
       st.dataframe(df_visual, use_container_width=True)
 
       st.markdown("### Elimina Fattura")
-      # Anche qui usiamo lo stesso ordinamento per la selezione
       opzioni_fatture_elimina = []
       for _, row in df_storico.iterrows():
         opzioni_fatture_elimina.append(
@@ -672,6 +665,7 @@ else:
           st.rerun()
         except Exception as e:
           st.error(f"Errore durante l'eliminazione: {e}")
+
   # --- 4. GESTIONE MILLESIMI & RIPORTI ---
   elif menu == "Gestione Millesimi & Riporti":
     st.title("⚙️ Gestione Metrature (Mq) e Riporti (Addebiti / Accrediti)")
