@@ -523,63 +523,132 @@ else:
       else:
         st.info(f"Nessun pagamento trovato per {cond_attivo}.")
 
-  # --- 2. INSERISCI FATTURA ---
+  # --- 2. INSERISCI O AGGIORNA FATTURA ---
   elif menu == "Inserisci Fattura":
     st.title("📝 Inserimento Nuova Fattura")
-    with st.form("form_fattura"):
-      col1, col2 = st.columns(2)
-      with col1:
-        anno = st.selectbox("Anno", options=list(range(2022, 2028)), index=4)
-        mese = st.selectbox("Mese", ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"])
-        tipo = st.selectbox("Tipologia Spesa", ["Energia Elettrica", "Gasolio"])
-      with col2:
-        fornitore = st.text_input("Fornitore")
-        imponibile = st.number_input("Imponibile (€)", min_value=0.0, format="%.2f")
-        iva = st.number_input("IVA (€)", min_value=0.0, format="%.2f")
 
-      st.markdown("---")
-      scelta_file = st.radio(
-          "Gestione File PDF",
-          ["Carica nuovo file PDF", "Puntare a un file già inserito in precedenza"]
-      )
+    modalita_form = st.radio(
+        "Seleziona Operazione",
+        ["Inserisci Nuova Fattura", "Associa PDF a Fattura Esistente"]
+    )
 
-      uploaded_file = None
-      file_esistente_selezionato = ""
+    if modalita_form == "Inserisci Nuova Fattura":
+      with st.form("form_fattura_nuova"):
+        col1, col2 = st.columns(2)
+        with col1:
+          anno = st.selectbox("Anno", options=list(range(2022, 2028)), index=4)
+          mese = st.selectbox("Mese", ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"])
+          tipo = st.selectbox("Tipologia Spesa", ["Energia Elettrica", "Gasolio"])
+        with col2:
+          fornitore = st.text_input("Fornitore")
+          imponibile = st.number_input("Imponibile (€)", min_value=0.0, format="%.2f")
+          iva = st.number_input("IVA (€)", min_value=0.0, format="%.2f")
 
-      if scelta_file == "Carica nuovo file PDF":
-        uploaded_file = st.file_uploader("Carica File PDF Fattura", type=["pdf"])
-      else:
-        # Estrae i file già presenti nelle fatture registrate (escludendo i valori vuoti/nulli)
-        file_disponibili = []
-        if not df_fatture.empty and "file" in df_fatture.columns:
-          file_disponibili = [str(f) for f in df_fatture["file"].dropna().unique() if str(f).strip() != "" and str(f).lower() != "nan"]
-        
-        if file_disponibili:
-          file_esistente_selezionato = st.selectbox("Seleziona file esistente", file_disponibili)
-        else:
-          st.info("Nessun file precedentemente registrato trovato nel database.")
+        st.markdown("---")
+        st.write("Gestione File PDF")
+        scelta_file = st.radio(
+            "Gestione File PDF",
+            ["Carica nuovo file PDF", "Puntare a un file già inserito in precedenza"],
+            label_visibility="collapsed"
+        )
 
-      submit_fat = st.form_submit_button("Salva Fattura su Supabase")
-      if submit_fat:
+        uploaded_file = None
+        file_esistente_selezionato = ""
+
         if scelta_file == "Carica nuovo file PDF":
-          nome_file = uploaded_file.name if uploaded_file is not None else ""
+          st.markdown("Carica File PDF Fattura")
+          uploaded_file = st.file_uploader("Carica File PDF Fattura", type=["pdf"], label_visibility="collapsed")
         else:
-          nome_file = file_esistente_selezionato
+          file_disponibili = []
+          if not df_fatture.empty and "file" in df_fatture.columns:
+            file_disponibili = [str(f) for f in df_fatture["file"].dropna().unique() if str(f).strip() != "" and str(f).lower() != "nan"]
+          
+          if file_disponibili:
+            file_esistente_selezionato = st.selectbox("Seleziona file esistente", file_disponibili)
+          else:
+            st.info("Nessun file precedentemente registrato trovato nel database.")
 
-        nuova_fattura = {
-            "anno": int(anno), 
-            "mese": mese, 
-            "tipo": tipo, 
-            "fornitore": fornitore, 
-            "imponibile": float(imponibile), 
-            "iva": float(iva), 
-            "totale": float(imponibile + iva),
-            "file": nome_file
-        }
-        supabase.table("fatture").insert(nuova_fattura).execute()
-        st.session_state.fatture = carica_fatture_da_supabase()
-        st.success("Fattura e riferimento file salvati con successo!")
-        st.rerun()
+        submit_fat = st.form_submit_button("Salva Fattura su Supabase")
+        if submit_fat:
+          if scelta_file == "Carica nuovo file PDF":
+            nome_file = uploaded_file.name if uploaded_file is not None else ""
+          else:
+            nome_file = file_esistente_selezionato
+
+          nuova_fattura = {
+              "anno": int(anno), 
+              "mese": mese, 
+              "tipo": tipo, 
+              "fornitore": fornitore, 
+              "imponibile": float(imponibile), 
+              "iva": float(iva), 
+              "totale": float(imponibile + iva),
+              "file": nome_file
+          }
+          supabase.table("fatture").insert(nuova_fattura).execute()
+          st.session_state.fatture = carica_fatture_da_supabase()
+          st.success("Nuova fattura salvata con successo!")
+          st.rerun()
+
+    else:
+      with st.form("form_aggiorna_pdf"):
+        st.subheader("Associa PDF a Fattura Già Inserita")
+        
+        if df_fatture.empty:
+          st.warning("Nessuna fattura presente nel database.")
+          opzioni_esistenti = []
+        else:
+          opzioni_esistenti = []
+          for _, row in df_fatture.iterrows():
+            file_attuale = row.get("file", "Nessuno")
+            opzioni_esistenti.append(
+                f"ID: {row['id']} | {row['anno']} - {row['mese']} | {row['tipo']} | Fornitore: {row['fornitore']} | Tot: € {row['totale']:,.2f} [File attuale: {file_attuale}]"
+            )
+
+        fattura_target_str = st.selectbox("Seleziona la fattura da aggiornare", opzioni_esistenti if opzioni_esistenti else ["Nessuna fattura disponibile"])
+
+        st.markdown("---")
+        st.write("Gestione File PDF")
+        scelta_aggiornamento_pdf = st.radio(
+            "Gestione File PDF",
+            ["Carica nuovo file PDF", "Puntare a un file già inserito in precedenza"],
+            key="radio_aggiorna",
+            label_visibility="collapsed"
+        )
+
+        up_file_agg = None
+        file_scelto_esistente_agg = ""
+
+        if scelta_aggiornamento_pdf == "Carica nuovo file PDF":
+          st.markdown("Carica File PDF Fattura")
+          up_file_agg = st.file_uploader("Carica File PDF Fattura", type=["pdf"], key="up_agg", label_visibility="collapsed")
+        else:
+          file_disponibili_agg = []
+          if not df_fatture.empty and "file" in df_fatture.columns:
+            file_disponibili_agg = [str(f) for f in df_fatture["file"].dropna().unique() if str(f).strip() != "" and str(f).lower() != "nan"]
+          
+          if file_disponibili_agg:
+            file_scelto_esistente_agg = st.selectbox("Seleziona file esistente", file_disponibili_agg, key="sel_esistente_agg")
+          else:
+            st.info("Nessun file precedentemente registrato trovato nel database.")
+
+        submit_agg = st.form_submit_button("Salva Fattura su Supabase")
+
+        if submit_agg:
+          if not opzioni_esistenti:
+            st.warning("Seleziona una fattura valida.")
+          else:
+            id_da_aggiornare = int(fattura_target_str.split("|")[0].replace("ID:", "").strip())
+            
+            if scelta_aggiornamento_pdf == "Carica nuovo file PDF":
+              nuovo_nome_file = up_file_agg.name if up_file_agg is not None else ""
+            else:
+              nuovo_nome_file = file_scelto_esistente_agg
+
+            supabase.table("fatture").update({"file": nuovo_nome_file}).eq("id", id_da_aggiornare).execute()
+            st.session_state.fatture = carica_fatture_da_supabase()
+            st.success(f"PDF aggiornato con successo per la fattura ID {id_da_aggiornare}!")
+            st.rerun()
 
   # --- 3. STORICO E DETTAGLIO ---
   elif menu == "Storico e Dettaglio":
