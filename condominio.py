@@ -544,7 +544,6 @@ else:
     df_db = carica_pagamenti_da_supabase()
     
     # 2. Applichiamo la modifica manuale fatta nell'editor (df_editato)
-    # Troviamo la riga modificata nel DataFrame locale
     for _, riga_mod in df_editato.iterrows():
         mask = df_db["id"] == riga_mod["id"]
         df_db.loc[mask, "accredito"] = riga_mod["accredito"]
@@ -553,29 +552,22 @@ else:
     condomini = df_db["condominio"].unique()
     
     for c in condomini:
-        # Filtriamo per condomino e ordiniamo per id (importante per la sequenza)
         subset = df_db[df_db["condominio"] == c].sort_values(by="id")
-        
-        # Variabile per trascinare il riporto alla riga successiva
         riporto_precedente = 0.0
         
         for idx, row in subset.iterrows():
-            # Il nuovo accredito è il riporto della riga precedente (tranne per la prima riga)
             if idx == subset.index[0]:
                 accredito_effettivo = float(row["accredito"])
             else:
                 accredito_effettivo = riporto_precedente
             
-            # Calcolo del nuovo riporto
             nuovo_riporto = round(float(row["importo_pagato"]) - float(row["importo_da_pagare"]) + accredito_effettivo, 2)
             
-            # Invio al DB
             supabase.table("pagamenti").update({
                 "accredito": accredito_effettivo,
                 "riporto": nuovo_riporto
             }).eq("id", int(row["id"])).execute()
             
-            # Aggiorniamo la variabile per il prossimo ciclo
             riporto_precedente = nuovo_riporto
             
     st.success("Salvataggio completato e storico ricalcolato!")
