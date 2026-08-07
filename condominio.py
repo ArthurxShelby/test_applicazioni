@@ -556,7 +556,8 @@ else:
     if "form_submitted" not in st.session_state:
       st.session_state.form_submitted = False
 
-    with st.form("form_fattura_nuova"):
+    # Sezione Inserimento Nuova Fattura con clear_on_submit=True
+    with st.form("form_fattura_nuova", clear_on_submit=True):
       col1, col2 = st.columns(2)
       with col1:
         anno = st.selectbox("Anno", options=list(range(2022, 2028)), index=4)
@@ -596,7 +597,6 @@ else:
         supabase.table("fatture").insert(nuova_fattura).execute()
         st.session_state.fatture = carica_fatture_da_supabase()
         st.success("Nuova fattura salvata con successo!")
-        st.rerun()
 
     # Sezione Eliminazione Fattura Esistente
     st.markdown("---")
