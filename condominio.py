@@ -7,7 +7,6 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 import streamlit as st
-import streamlit.components.v1 as components
 from supabase import create_client
 
 # Configurazione della pagina
@@ -327,7 +326,7 @@ else:
         tot_iva = df_calcolo["iva"].sum()
         tot_complessivo = df_calcolo["totale"].sum()
 
-      # --- VISUALIZZAZIONE ANTEPRIMA PDF E DOWNLOAD DA SUPABASE STORAGE ---
+      # --- GESTIONE FILE PDF DA SUPABASE STORAGE ---
       if selected_option != "-- Tutte le fatture filtrate --" and not df_filtered.empty:
         st.markdown("### 📎 File Fattura Collegato")
         if file_selezionato and str(file_selezionato).strip() != "" and str(file_selezionato).lower() != "nan":
@@ -336,22 +335,24 @@ else:
           try:
             res = supabase.storage.from_(BUCKET_NAME).download(str(file_selezionato).strip())
             if res:
-              st.download_button(
-                  label="📥 Scarica PDF Collegato",
-                  data=res,
-                  file_name=str(file_selezionato).strip(),
-                  mime="application/pdf",
-                  key="dl_supabase_storage",
-                  use_container_width=True
-              )
-              
-              st.markdown("### 🔍 Anteprima Documento")
-              base64_pdf = base64.b64encode(res).decode('utf-8')
-              pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600px" type="application/pdf"></iframe>'
-              components.html(pdf_display, height=600)
+              col_dl1, col_dl2 = st.columns(2)
+              with col_dl1:
+                st.download_button(
+                    label="📥 Scarica PDF Fattura",
+                    data=res,
+                    file_name=str(file_selezionato).strip(),
+                    mime="application/pdf",
+                    key="dl_supabase_storage",
+                    use_container_width=True
+                )
+              with col_dl2:
+                # Genera un link in base64 per aprire il PDF direttamente in una nuova scheda del browser
+                b64_pdf = base64.b64encode(res).decode('utf-8')
+                href_pdf = f'<a href="data:application/pdf;base64,{b64_pdf}" target="_blank" style="text-decoration: none;"><div style="background-color: #f0f2f6; color: #31333F; padding: 0.5rem 1rem; border-radius: 0.5rem; text-align: center; font-weight: 500; border: 1px solid rgba(49, 51, 63, 0.2);">🔗 Apri PDF in Nuova Scheda</div></a>'
+                st.markdown(href_pdf, unsafe_allow_html=True)
           except Exception as e:
-            st.warning(f"Impossibile caricare l'anteprima dal bucket '{BUCKET_NAME}': {e}")
-            st.info("Assicurati che il file sia stato caricato correttamente nel bucket su Supabase.")
+            st.warning(f"Impossibile scaricare il file dal bucket '{BUCKET_NAME}': {e}")
+            st.info("Assicurati che il file sia presente nel bucket su Supabase.")
         else:
           st.info("Nessun file PDF associato a questa fattura.")
 
