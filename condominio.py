@@ -403,7 +403,7 @@ else:
       # --- SEZIONE GESTIONE INTROITI E PAGAMENTI ---
       st.subheader("💳 Gestione Introiti e Pagamenti Utenti")
       
-      # SELEZIONE GLOBALE: Questa selectbox controlla sia il form che la tabella
+      # SELEZIONE GLOBALE: Questa selectbox controlla tutto
       cond_attivo = st.selectbox(
           "Seleziona Condomino (per Pagamento o Storico)", 
           APP_NAMES, 
@@ -413,7 +413,6 @@ else:
       with st.form("form_registra_pagamento"):
         col_p1, col_p2 = st.columns(2)
         with col_p1:
-          # Usiamo cond_attivo invece di crearne uno nuovo
           st.write(f"Stai registrando un pagamento per: **{cond_attivo}**")
           
           opzioni_fatture_pagamento = []
@@ -446,7 +445,6 @@ else:
             st.warning("Seleziona una fattura valida.")
           else:
             id_fattura_collegata = int(fattura_scelta_str.split("|")[0].replace("ID:", "").strip())
-            
             row_fattura = df_fatture[df_fatture["id"] == id_fattura_collegata].iloc[0]
             totale_singola_fattura = float(row_fattura["totale"])
             
@@ -481,30 +479,39 @@ else:
                 supabase.table("pagamenti").insert(nuovo_pagamento).execute()
               except Exception:
                 supabase.table("pagamneti").insert(nuovo_pagamento).execute()
-
               st.session_state.pagamenti = carica_pagamenti_da_supabase()
               st.success(f"Pagamento registrato per {cond_attivo}!")
               st.rerun()
             except Exception as e:
               st.error(f"Errore: {e}")
 
-      # --- TABELLA STORICO PAGAMENTI (SINCRONIZZATA AUTOMATICAMENTE) ---
-      st.markdown("### Storico Pagamenti Ricevuti")
+      # --- TABELLA STORICO PAGAMENTI (ARRICCHITA) ---
+      st.markdown("### 📂 Storico Pagamenti Ricevuti")
       st.session_state.pagamenti = carica_pagamenti_da_supabase()
       df_pag = st.session_state.pagamenti
       
+      # Carica fatture per il lookup
+      df_fatture_all = carica_fatture_da_supabase() 
+      
       if not df_pag.empty:
-        # Il filtro è ora legato direttamente alla selectbox 'cond_attivo'
+        # Aggiunta colonna Riferimento (Anno-Mese)
+        if not df_fatture_all.empty:
+            df_fatture_all['rif_fattura'] = df_fatture_all['anno'].astype(str) + " - " + df_fatture_all['mese']
+            lookup_fat = df_fatture_all.set_index('id')['rif_fattura']
+            df_pag['Riferimento'] = df_pag['fattura_id'].map(lookup_fat).fillna("N/A")
+        else:
+            df_pag['Riferimento'] = "N/A"
+
         mostra_tutti = st.checkbox("Mostra storico completo di tutti i condomini", value=False)
-        
         df_visual = df_pag.copy()
+        
         if not mostra_tutti:
             df_visual = df_visual[df_visual["condominio"] == cond_attivo]
             st.write(f"Visualizzazione filtrata per: **{cond_attivo}**")
         else:
             st.write("Visualizzazione: **Storico Completo**")
         
-        col_ordine = ["id", "condominio", "fattura_id", "data_pagamento", "importo_da_pagare", "importo_pagato", "accredito", "riporto"]
+        col_ordine = ["id", "condominio", "Riferimento", "data_pagamento", "importo_da_pagare", "importo_pagato", "accredito", "riporto"]
         col_presenti = [c for c in col_ordine if c in df_visual.columns]
         st.dataframe(df_visual[col_presenti], use_container_width=True)
       else:
@@ -514,41 +521,28 @@ else:
       st.markdown("---")
       st.subheader(f"🗑️ Elimina Pagamento per {cond_attivo}")
       
-      # Filtriamo i pagamenti disponibili per l'eliminazione basandoci sul condomino scelto
       df_pag_da_eliminare = df_pag[df_pag["condominio"] == cond_attivo]
-
       if not df_pag_da_eliminare.empty:
         opzioni_pagamenti_elimina = []
         for _, row in df_pag_da_eliminare.iterrows():
-          p_imp = float(row.get("importo_pagato") or 0.0)
-          opzioni_pagamenti_elimina.append(
-              f"ID: {row['id']} | Data: {row['data_pagamento']} | Importo: € {p_imp:,.2f}"
-          )
+          opzioni_pagamenti_elimina.append(f"ID: {row['id']} | Rif: {row.get('Riferimento', 'N/A')} | Importo: € {float(row['importo_pagato']):,.2f}")
 
-        # La selectbox mostra solo i pagamenti del condomino selezionato
-        pagamento_scelto_da_eliminare = st.selectbox(
-            f"Seleziona il pagamento di {cond_attivo} da rimuovere",
-            opzioni_pagamenti_elimina,
-            key="select_elimina_pagamento"
-        )
-
-        if st.button(f"Conferma Eliminazione Pagamento ID {pagamento_scelto_da_eliminare.split('|')[0].replace('ID:', '').strip()}"):
+        pagamento_scelto = st.selectbox("Seleziona pagamento da rimuovere", opzioni_pagamenti_elimina, key="select_elimina")
+        
+        if st.button("Conferma Eliminazione"):
+          id_da_el = int(pagamento_scelto.split("|")[0].replace("ID:", "").strip())
           try:
-            id_pagamento_da_eliminare = int(
-                pagamento_scelto_da_eliminare.split("|")[0].replace("ID:", "").strip()
-            )
             try:
-              supabase.table("pagamenti").delete().eq("id", id_pagamento_da_eliminare).execute()
+              supabase.table("pagamenti").delete().eq("id", id_da_el).execute()
             except:
-              supabase.table("pagamneti").delete().eq("id", id_pagamento_da_eliminare).execute()
-            
+              supabase.table("pagamneti").delete().eq("id", id_da_el).execute()
             st.session_state.pagamenti = carica_pagamenti_da_supabase()
-            st.success("Pagamento eliminato con successo!")
+            st.success("Pagamento eliminato!")
             st.rerun()
           except Exception as e:
-            st.error(f"Errore durante l'eliminazione: {e}")
+            st.error(f"Errore: {e}")
       else:
-        st.info(f"Nessun pagamento registrato per {cond_attivo} da poter eliminare.")
+        st.info(f"Nessun pagamento trovato per {cond_attivo}.")
 
   # --- 2. INSERISCI FATTURA ---
   elif menu == "Inserisci Fattura":
