@@ -1,5 +1,6 @@
 import io
 import os
+import base64
 import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
@@ -23,6 +24,7 @@ except Exception:
 
 # Inizializzazione client Supabase
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+BUCKET_NAME = "fatture-pdf"
 
 APP_NAMES = [
     "ESPOSITO",
@@ -320,28 +322,34 @@ else:
         tot_iva = df_calcolo["iva"].sum()
         tot_complessivo = df_calcolo["totale"].sum()
 
-      # --- VISUALIZZAZIONE FILE FATTURA DI RIFERIMENTO E VISUALIZZATORE PDF ---
+      # --- VISUALIZZAZIONE ANTEPRIMA PDF E DOWNLOAD DA SUPABASE STORAGE ---
       if selected_option != "-- Tutte le fatture filtrate --" and not df_filtered.empty:
         st.markdown("### 📎 File Fattura Collegato")
         if file_selezionato and str(file_selezionato).strip() != "" and str(file_selezionato).lower() != "nan":
           st.success(f"File allegato registrato: **{file_selezionato}**")
           
-          # Controllo se il file esiste localmente nella cartella di esecuzione o se è un percorso valido
-          nome_f_str = str(file_selezionato).strip()
-          if os.path.exists(nome_f_str):
-            with open(nome_f_str, "rb") as f_pdf:
-              pdf_data = f_pdf.read()
-            st.download_button(
-                label="📥 Scarica / Apri PDF Collegato",
-                data=pdf_data,
-                file_name=nome_f_str,
-                mime="application/pdf",
-                key="download_pdf_collegato",
-                use_container_width=True
-            )
-          else:
-            # Se il file non è locale ma è registrato come nome, informiamo l'utente
-            st.info("Il file è associato nel database. Se è stato caricato tramite storage remoto o non si trova nella cartella locale, assicurati che sia accessibile o ricaricalo se necessario.")
+          try:
+            # Scarica il file binario dal bucket Supabase Storage
+            res = supabase.storage.from_(BUCKET_NAME).download(str(file_selezionato).strip())
+            if res:
+              # Pulsante di download
+              st.download_button(
+                  label="📥 Scarica PDF Collegato",
+                  data=res,
+                  file_name=str(file_selezionato).strip(),
+                  mime="application/pdf",
+                  key="dl_supabase_storage",
+                  use_container_width=True
+              )
+              
+              # Visualizzatore integrato a schermo (iframe)
+              base64_pdf = base64.b64encode(res).decode('utf-8')
+              pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600px" type="application/pdf"></iframe>'
+              st.markdown("### 🔍 Anteprima Documento")
+              st.markdown(pdf_display, unsafe_allow_html=True)
+          except Exception as e:
+            st.warning(f"Impossibile caricare l'anteprima dal bucket '{BUCKET_NAME}': {e}")
+            st.info("Assicurati di aver caricato il file tramite l'apposita sezione 'Inserisci Fattura' o che il bucket sia pubblico.")
         else:
           st.info("Nessun file PDF associato a questa fattura.")
 
@@ -588,12 +596,13 @@ else:
 
         submit_fat = st.form_submit_button("Salva Fattura su Supabase")
         if submit_fat:
-          if scelta_file == "Carica nuovo file PDF":
-            nome_file = uploaded_file.name if uploaded_file is not None else ""
-            # Salvataggio locale opzionale del file caricato per permetterne l'apertura immediata
-            if uploaded_file is not None:
-              with open(uploaded_file.name, "wb") as f_out:
-                f_out.write(uploaded_file.getbuffer())
+          if scelta_file == "Carica nuovo file PDF" and uploaded_file is not None:
+            nome_file = uploaded_file.name
+            try:
+              file_bytes = uploaded_file.getvalue()
+              supabase.storage.from_(BUCKET_NAME).upload(nome_file, file_bytes, file_options={"upsert": "true"})
+            except Exception as e:
+              st.error(f"Errore caricamento file su Supabase Storage: {e}")
           else:
             nome_file = file_esistente_selezionato
 
@@ -662,11 +671,13 @@ else:
           else:
             id_da_aggiornare = int(fattura_target_str.split("|")[0].replace("ID:", "").strip())
             
-            if scelta_aggiornamento_pdf == "Carica nuovo file PDF":
-              nuovo_nome_file = up_file_agg.name if up_file_agg is not None else ""
-              if up_file_agg is not None:
-                with open(up_file_agg.name, "wb") as f_out:
-                  f_out.write(up_file_agg.getbuffer())
+            if scelta_aggiornamento_pdf == "Carica nuovo file PDF" and up_file_agg is not None:
+              nuovo_nome_file = up_file_agg.name
+              try:
+                file_bytes_agg = up_file_agg.getvalue()
+                supabase.storage.from_(BUCKET_NAME).upload(nuovo_nome_file, file_bytes_agg, file_options={"upsert": "true"})
+              except Exception as e:
+                st.error(f"Errore caricamento file su Supabase Storage: {e}")
             else:
               nuovo_nome_file = file_scelto_esistente_agg
 
