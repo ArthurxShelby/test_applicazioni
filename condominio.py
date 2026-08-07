@@ -290,7 +290,7 @@ else:
       st.markdown("---")
       st.subheader("Selezione Fattura Specifica")
 
-      selected_option = "-- Tutte le fatture filtrate --" # Inizializzazione di sicurezza
+      selected_option = "-- Tutte le fatture filtrate --"
 
       if df_filtered.empty:
         st.warning("Nessuna fattura trovata con i filtri selezionati.")
@@ -496,7 +496,7 @@ else:
           st.success(f"Pagamento registrato per {cond_attivo}!")
           st.rerun()
 
-    # --- TABELLA STORICO PAGAMENTI ---
+    # --- TABELLA STORICO PAGAMENTI (CON ACCREDITO EDITABILE E RICALCOLO A CATENA) ---
     st.markdown("### 📂 Storico Pagamenti Ricevuti")
     df_pag = st.session_state.pagamenti
     df_fatture_all = carica_fatture_da_supabase() 
@@ -514,13 +514,55 @@ else:
       
       if not mostra_tutti:
           df_visual = df_visual[df_visual["condominio"] == cond_attivo]
-          st.write(f"Visualizzazione filtrata per: **{cond_attivo}**")
+          st.write(f"Visualizzazione filtrata per: **{cond_attivo}** (Modifica la cella 'accredito' e clicca salva sotto)")
       else:
-          st.write("Visualizzazione: **Storico Completo**")
+          df_visual = df_visual.copy()
+          st.write("Visualizzazione: **Storico Completo** (Modifica la cella 'accredito' e clicca salva sotto)")
       
       col_ordine = ["id", "condominio", "Riferimento", "data_pagamento", "importo_da_pagare", "importo_pagato", "accredito", "riporto"]
       col_presenti = [c for c in col_ordine if c in df_visual.columns]
-      st.dataframe(df_visual[col_presenti], use_container_width=True)
+      
+      # Editor interattivo per la colonna accredito
+      df_editato = st.data_editor(
+          df_visual[col_presenti],
+          key="editor_pagamenti",
+          num_rows="fixed",
+          disabled=[c for c in col_presenti if c != "accredito"]
+      )
+
+      if st.button("💾 Salva Modifiche Accredito"):
+        try:
+          df_db = carica_pagamenti_da_supabase()
+          
+          # Aggiorniamo i valori di accredito modificati dall'utente
+          for _, r in df_editato.iterrows():
+            df_db.loc[df_db["id"] == r["id"], "accredito"] = r["accredito"]
+          
+          # Ricalcoliamo la catena per ogni condomino separatamente
+          for c in df_db["condominio"].unique():
+            s = df_db[df_db["condominio"] == c].sort_values(by="id")
+            rip = 0.0
+            for idx, row in s.iterrows():
+              acc = float(row["accredito"]) if idx == s.index[0] else rip
+              rip = round(float(row["importo_pagato"]) - float(row["importo_da_pagare"]) + acc, 2)
+              
+              # Aggiornamento riga per riga su Supabase (gestendo sia pagamenti che pagamneti)
+              try:
+                supabase.table("pagamenti").update({
+                    "accredito": acc,
+                    "riporto": rip
+                }).eq("id", int(row["id"])).execute()
+              except Exception:
+                supabase.table("pagamneti").update({
+                    "accredito": acc,
+                    "riporto": rip
+                }).eq("id", int(row["id"])).execute()
+          
+          st.session_state.pagamenti = carica_pagamenti_da_supabase()
+          st.success("Salvataggio completato e storico ricalcolato con successo!")
+          st.rerun()
+        except Exception as e:
+          st.error(f"Errore durante il salvataggio: {e}")
     else:
       st.info("Nessun pagamento registrato finora.")
 
@@ -554,11 +596,9 @@ else:
 
     st.subheader("Nuova Fattura")
     
-    # Gestione dello stato di reset pulito per i campi del form
     if "form_submitted" not in st.session_state:
       st.session_state.form_submitted = False
 
-    # Sezione Inserimento Nuova Fattura con clear_on_submit=True
     with st.form("form_fattura_nuova", clear_on_submit=True):
       col1, col2 = st.columns(2)
       with col1:
@@ -599,9 +639,8 @@ else:
         supabase.table("fatture").insert(nuova_fattura).execute()
         st.session_state.fatture = carica_fatture_da_supabase()
         st.success("Nuova fattura salvata con successo!")
-        st.rerun() # <-- Questo forza l'aggiornamento immediato e aggiorna il menu a discesa
+        st.rerun()
 
-    # Sezione Eliminazione Fattura Esistente
     st.markdown("---")
     st.subheader("🗑️ Elimina Fattura Esistente")
     
