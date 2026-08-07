@@ -24,7 +24,7 @@ except Exception:
 
 # Inizializzazione client Supabase
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-BUCKET_NAME = "fatture-pdf"
+BUCKET_NAME = "fatture_pdf"  # <--- Modifica questa riga (prima era "fatture-pdf")
 
 APP_NAMES = [
     "ESPOSITO",
