@@ -333,16 +333,23 @@ else:
           st.success(f"File allegato registrato: **{file_selezionato}**")
           
           try:
-            public_url = supabase.storage.from_(BUCKET_NAME).get_public_url(str(file_selezionato).strip())
-            st.markdown(f"[📥 Scarica PDF Collegato]({public_url})")
-            
-            st.subheader("🔍 Anteprima Documento")
-            st.markdown(
-                f'<embed src="{public_url}" width="100%" height="600px" type="application/pdf">',
-                unsafe_allow_html=True
-            )
+            res = supabase.storage.from_(BUCKET_NAME).download(str(file_selezionato).strip())
+            if res:
+              st.download_button(
+                  label="📥 Scarica PDF Collegato",
+                  data=res,
+                  file_name=str(file_selezionato).strip(),
+                  mime="application/pdf",
+                  key="dl_supabase_storage",
+                  use_container_width=True
+              )
+              
+              base64_pdf = base64.b64encode(res).decode('utf-8')
+              pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600px" type="application/pdf"></iframe>'
+              st.markdown("### 🔍 Anteprima Documento")
+              st.markdown(pdf_display, unsafe_allow_html=True)
           except Exception as e:
-            st.warning(f"Anteprima non disponibile dal bucket '{BUCKET_NAME}': {e}")
+            st.warning(f"Impossibile caricare l'anteprima dal bucket '{BUCKET_NAME}': {e}")
             st.info("Assicurati che il file sia stato caricato correttamente nel bucket su Supabase.")
         else:
           st.info("Nessun file PDF associato a questa fattura.")
@@ -650,7 +657,7 @@ else:
         
         if st.form_submit_button("Salva Metrature"):
           if salva_mq_su_supabase(nuovi_mq):
-            st.session_state.mq_appartamenti = nuovi_mq
+            st.session_state.mq_appartamenti = nuevos_mq = nuovi_mq
             st.success("Metrature aggiornate con successo!")
             st.rerun()
 
@@ -669,3 +676,4 @@ else:
             st.session_state.riporti = nuovi_riporti
             st.success("Riporti aggiornati con successo!")
             st.rerun()
+
