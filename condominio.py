@@ -406,8 +406,7 @@ else:
         st.info(f"Nessun pagamento trovato per {cond_attivo}.")
 
       st.markdown("---")
-
-     # --- SEZIONE GESTIONE INTROITI E PAGAMENTI ---
+   # --- SEZIONE GESTIONE INTROITI E PAGAMENTI ---
       st.subheader("💳 Gestione Introiti e Pagamenti Utenti")
       
       # SELEZIONE GLOBALE: Questa selectbox controlla tutto
@@ -497,11 +496,9 @@ else:
       st.session_state.pagamenti = carica_pagamenti_da_supabase()
       df_pag = st.session_state.pagamenti
       
-      # Carica fatture per il lookup
       df_fatture_all = carica_fatture_da_supabase() 
       
       if not df_pag.empty:
-        # Aggiunta colonna Riferimento (Anno-Mese)
         if not df_fatture_all.empty:
             df_fatture_all['rif_fattura'] = df_fatture_all['anno'].astype(str) + " - " + df_fatture_all['mese']
             lookup_fat = df_fatture_all.set_index('id')['rif_fattura']
