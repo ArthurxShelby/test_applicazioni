@@ -1,4 +1,4 @@
-import io
+import ioimport io
 import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
@@ -20,7 +20,7 @@ except Exception:
   st.error("Configurazione Supabase mancante nei Secrets di Streamlit!")
   st.stop()
 
-# Inizializzazione client Supabase (senza path finali errati)
+# Inizializzazione client Supabase
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 APP_NAMES = [
@@ -173,20 +173,21 @@ def genera_pdf_riparto(df_reparto, titolo_contesto):
 
   data = [list(df_reparto.columns)] + df_reparto.values.tolist()
 
-  table = Table(data, colWidths=[100, 70, 95, 95, 95, 95])
+  # Dimensioni colonne aggiornate per 5 colonne
+  table = Table(data, colWidths=[110, 80, 110, 110, 110])
   table.setStyle(
       TableStyle([
           ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
           ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
           ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
           ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-          ('FONTSIZE', (0, 0), (-1, 0), 8),
+          ('FONTSIZE', (0, 0), (-1, 0), 9),
           ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
           ('BACKGROUND', (0, 1), (-1, -2), colors.HexColor('#f8f9fa')),
           ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e2e8f0')),
           ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
           ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-          ('FONTSIZE', (0, 1), (-1, -1), 8),
+          ('FONTSIZE', (0, 1), (-1, -1), 9),
           ('TOPPADDING', (0, 1), (-1, -1), 5),
           ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
       ])
@@ -242,7 +243,6 @@ else:
   df_fatture = st.session_state.fatture
   millesimi = calcola_millesimi_da_mq(st.session_state.mq_appartamenti)
   tot_millesimi = sum(millesimi.values())
-  dict_riporti = st.session_state.riporti
 
   mese_map = {
       "Gennaio": 1, "Febbraio": 2, "Marzo": 3, "Aprile": 4, 
@@ -329,21 +329,16 @@ else:
       sum_imp = 0.0
       sum_iva = 0.0
       sum_tot = 0.0
-      sum_dovuto = 0.0
 
       for app, mil in millesimi.items():
         quota_imp = tot_imp * (mil / tot_millesimi) if tot_millesimi > 0 else 0
         quota_iva = tot_iva * (mil / tot_millesimi) if tot_millesimi > 0 else 0
         quota_tot = tot_complessivo * (mil / tot_millesimi) if tot_millesimi > 0 else 0
-        
-        val_riporto = dict_riporti.get(app, 0.0)
-        totale_complessivo_dovuto = quota_tot + val_riporto
 
         sum_millesimi += mil
         sum_imp += quota_imp
         sum_iva += quota_iva
         sum_tot += quota_tot
-        sum_dovuto += totale_complessivo_dovuto
 
         reparto_data.append(
             {
@@ -352,7 +347,6 @@ else:
                 "Quota Imponibile (€)": round(quota_imp, 2),
                 "Quota IVA (€)": round(quota_iva, 2),
                 "Quota Totale (€)": round(quota_tot, 2),
-                "Totale Dovuto (€)": round(totale_complessivo_dovuto, 2),
             }
         )
 
@@ -363,7 +357,6 @@ else:
               "Quota Imponibile (€)": round(sum_imp, 2),
               "Quota IVA (€)": round(sum_iva, 2),
               "Quota Totale (€)": round(sum_tot, 2),
-              "Totale Dovuto (€)": round(sum_dovuto, 2),
           }
       )
 
