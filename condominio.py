@@ -190,7 +190,7 @@ def genera_pdf_riparto(df_reparto, titolo_contesto):
 
   data = [list(df_reparto.columns)] + df_reparto.values.tolist()
 
-  table = Table(data, colWidths=[90, 60, 80, 75, 75, 70, 75])
+  table = Table(data, colWidths=[100, 70, 95, 95, 95, 95])
   table.setStyle(
       TableStyle([
           ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
@@ -272,7 +272,6 @@ else:
           " 'Inserisci Fattura'."
       )
     else:
-      # Ordiniamo le fatture cronologicamente (dal più recente)
       df_sorted = df_fatture.copy()
       df_sorted['mese_num'] = df_sorted['mese'].map(mese_map)
       df_sorted = df_sorted.sort_values(by=['anno', 'mese_num'], ascending=[False, False])
@@ -349,7 +348,6 @@ else:
       sum_imp = 0.0
       sum_iva = 0.0
       sum_tot = 0.0
-      sum_riporto = 0.0
       sum_dovuto = 0.0
 
       for app, mil in millesimi.items():
@@ -366,7 +364,6 @@ else:
         sum_imp += quota_imp
         sum_iva += quota_iva
         sum_tot += quota_tot
-        sum_riporto += val_riporto
         sum_dovuto += totale_complessivo_dovuto
 
         reparto_data.append(
@@ -376,7 +373,6 @@ else:
                 "Quota Imponibile (€)": round(quota_imp, 2),
                 "Quota IVA (€)": round(quota_iva, 2),
                 "Quota Totale (€)": round(quota_tot, 2),
-                "Riporto (€)": round(val_riporto, 2),
                 "Totale Dovuto (€)": round(totale_complessivo_dovuto, 2),
             }
         )
@@ -388,7 +384,6 @@ else:
               "Quota Imponibile (€)": round(sum_imp, 2),
               "Quota IVA (€)": round(sum_iva, 2),
               "Quota Totale (€)": round(sum_tot, 2),
-              "Riporto (€)": round(sum_riporto, 2),
               "Totale Dovuto (€)": round(sum_dovuto, 2),
           }
       )
