@@ -333,13 +333,9 @@ else:
           st.success(f"File allegato registrato: **{file_selezionato}**")
           
           try:
-            # Recupera l'URL pubblico del file
             public_url = supabase.storage.from_(BUCKET_NAME).get_public_url(str(file_selezionato).strip())
-            
-            # Aggiunge il link di download
             st.markdown(f"[📥 Scarica PDF Collegato]({public_url})")
             
-            # Aggiunge l'anteprima integrata
             st.subheader("🔍 Anteprima Documento")
             st.markdown(
                 f'<embed src="{public_url}" width="100%" height="600px" type="application/pdf">',
