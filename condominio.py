@@ -7,6 +7,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 import streamlit as st
+from streamlit_pdf_viewer import pdf_viewer
 from supabase import create_client
 
 # Configurazione della pagina
@@ -344,10 +345,9 @@ else:
                   use_container_width=True
               )
               
-              base64_pdf = base64.b64encode(res).decode('utf-8')
-              pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600px" type="application/pdf"></iframe>'
               st.markdown("### 🔍 Anteprima Documento")
-              st.markdown(pdf_display, unsafe_allow_html=True)
+              # Utilizzo di streamlit-pdf-viewer per renderizzare correttamente i byte del PDF
+              pdf_viewer(res, width=700)
           except Exception as e:
             st.warning(f"Impossibile caricare l'anteprima dal bucket '{BUCKET_NAME}': {e}")
             st.info("Assicurati che il file sia stato caricato correttamente nel bucket su Supabase.")
