@@ -550,22 +550,22 @@ else:
   elif menu == "Inserisci Fattura":
     st.title("📝 Inserimento e Gestione Fatture")
 
-    # Sezione Inserimento Nuova Fattura
+    # Sezione Inserimento Nuova Fattura con chiavi per il reset automatico
     st.subheader("Nuova Fattura")
-    with st.form("form_fattura_nuova"):
+    with st.form("form_fattura_nuova", clear_on_submit=True):
       col1, col2 = st.columns(2)
       with col1:
-        anno = st.selectbox("Anno", options=list(range(2022, 2028)), index=4)
-        mese = st.selectbox("Mese", ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"])
-        tipo = st.selectbox("Tipologia Spesa", ["Energia Elettrica", "Gasolio"])
+        anno = st.selectbox("Anno", options=list(range(2022, 2028)), index=4, key="input_anno")
+        mese = st.selectbox("Mese", ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"], key="input_mese")
+        tipo = st.selectbox("Tipologia Spesa", ["Energia Elettrica", "Gasolio"], key="input_tipo")
       with col2:
-        fornitore = st.text_input("Fornitore")
-        imponibile = st.number_input("Imponibile (€)", min_value=0.0, format="%.2f")
-        iva = st.number_input("IVA (€)", min_value=0.0, format="%.2f")
+        fornitore = st.text_input("Fornitore", key="input_fornitore")
+        imponibile = st.number_input("Imponibile (€)", min_value=0.0, format="%.2f", key="input_imponibile")
+        iva = st.number_input("IVA (€)", min_value=0.0, format="%.2f", key="input_iva")
 
       st.markdown("---")
       st.markdown("### 📄 Carica File PDF Fattura")
-      uploaded_file = st.file_uploader("Carica File PDF Fattura", type=["pdf"], label_visibility="collapsed")
+      uploaded_file = st.file_uploader("Carica File PDF Fattura", type=["pdf"], label_visibility="collapsed", key="input_file")
 
       submit_fat = st.form_submit_button("Salva Fattura su Supabase")
       if submit_fat:
@@ -651,7 +651,7 @@ else:
         
         if st.form_submit_button("Salva Metrature"):
           if salva_mq_su_supabase(nuovi_mq):
-            st.session_state.mq_appartamenti = nuovi_mq
+            st.session_state.mq_appartamenti = novos_mq if 'novos_mq' in locals() else nuovi_mq
             st.success("Metrature aggiornate con successo!")
             st.rerun()
 
