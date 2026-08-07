@@ -60,7 +60,7 @@ if menu == "Dashboard & Riepilogo":
                         # Generazione link pubblico o download dal bucket Supabase
                         res = supabase.storage.from_(BUCKET_NAME).get_public_url(file_collegato)
                         if res:
-                            st.success(File collegato correttamente nel bucket: {file_collegato})
+                            st.success(f"File collegato correttamente nel bucket: {file_collegato}")
                     except Exception as e:
                         st.warning(f"Impossibile caricare l'anteprima dal bucket: {e}")
 
