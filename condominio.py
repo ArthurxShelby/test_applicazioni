@@ -657,7 +657,7 @@ else:
         
         if st.form_submit_button("Salva Metrature"):
           if salva_mq_su_supabase(nuovi_mq):
-            st.session_state.mq_appartamenti = nuevos_mq = nuovi_mq
+            st.session_state.mq_appartamenti = nuovi_mq
             st.success("Metrature aggiornate con successo!")
             st.rerun()
 
@@ -676,4 +676,3 @@ else:
             st.session_state.riporti = nuovi_riporti
             st.success("Riporti aggiornati con successo!")
             st.rerun()
-
