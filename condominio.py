@@ -540,32 +540,18 @@ else:
       )
 
       if st.button("💾 Salva Modifiche Accredito"):
-    df_db = carica_pagamenti_da_supabase()
-    for _, riga_mod in df_editato.iterrows():
-        mask = df_db["id"] == riga_mod["id"]
-        df_db.loc[mask, "accredito"] = riga_mod["accredito"]
-    
-    condomini = df_db["condominio"].unique()
-    for c in condomini:
-        subset = df_db[df_db["condominio"] == c].sort_values(by="id")
-        riporto_precedente = 0.0
-        for idx, row in subset.iterrows():
-            if idx == subset.index[0]:
-                accredito_effettivo = float(row["accredito"])
-            else:
-                accredito_effettivo = riporto_precedente
-            
-            nuovo_riporto = round(float(row["importo_pagato"]) - float(row["importo_da_pagare"]) + accredito_effettivo, 2)
-            
-            supabase.table("pagamenti").update({
-                "accredito": accredito_effettivo,
-                "riporto": nuovo_riporto
-            }).eq("id", int(row["id"])).execute()
-            
-            riporto_precedente = nuovo_riporto
-            
-    st.success("Salvataggio completato e storico ricalcolato!")
-    st.rerun()
+  df_db = carica_pagamenti_da_supabase()
+  for _, r in df_editato.iterrows():
+    df_db.loc[df_db["id"] == r["id"], "accredito"] = r["accredito"]
+  for c in df_db["condominio"].unique():
+    s = df_db[df_db["condominio"] == c].sort_values(by="id")
+    rip = 0.0
+    for idx, row in s.iterrows():
+      acc = float(row["accredito"]) if idx == s.index[0] else rip
+      rip = round(float(row["importo_pagato"]) - float(row["importo_da_pagare"]) + acc, 2)
+      supabase.table("pagamenti").update({"accredito": acc, "riporto": rip}).eq("id", int(row["id"])).execute()
+  st.success("Aggiornato!")
+  st.rerun()
     else:
       st.info("Nessun pagamento registrato finora.")
 
