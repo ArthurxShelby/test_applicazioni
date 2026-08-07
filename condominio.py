@@ -24,7 +24,7 @@ except Exception:
 
 # Inizializzazione client Supabase
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-BUCKET_NAME = "fatture_pdf"  # <--- Modifica questa riga (prima era "fatture-pdf")
+BUCKET_NAME = "fatture_pdf"
 
 APP_NAMES = [
     "ESPOSITO",
@@ -329,10 +329,8 @@ else:
           st.success(f"File allegato registrato: **{file_selezionato}**")
           
           try:
-            # Scarica il file binario dal bucket Supabase Storage
             res = supabase.storage.from_(BUCKET_NAME).download(str(file_selezionato).strip())
             if res:
-              # Pulsante di download
               st.download_button(
                   label="📥 Scarica PDF Collegato",
                   data=res,
@@ -342,14 +340,13 @@ else:
                   use_container_width=True
               )
               
-              # Visualizzatore integrato a schermo (iframe)
               base64_pdf = base64.b64encode(res).decode('utf-8')
               pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600px" type="application/pdf"></iframe>'
               st.markdown("### 🔍 Anteprima Documento")
               st.markdown(pdf_display, unsafe_allow_html=True)
           except Exception as e:
             st.warning(f"Impossibile caricare l'anteprima dal bucket '{BUCKET_NAME}': {e}")
-            st.info("Assicurati di aver caricato il file tramite l'apposita sezione 'Inserisci Fattura' o che il bucket sia pubblico.")
+            st.info("Assicurati che il file sia stato caricato correttamente nel bucket su Supabase.")
         else:
           st.info("Nessun file PDF associato a questa fattura.")
 
@@ -571,40 +568,19 @@ else:
           iva = st.number_input("IVA (€)", min_value=0.0, format="%.2f")
 
         st.markdown("---")
-        st.write("Gestione File PDF")
-        scelta_file = st.radio(
-            "Gestione File PDF",
-            ["Carica nuovo file PDF", "Puntare a un file già inserito in precedenza"],
-            label_visibility="collapsed"
-        )
-
-        uploaded_file = None
-        file_esistente_selezionato = ""
-
-        if scelta_file == "Carica nuovo file PDF":
-          st.markdown("Carica File PDF Fattura")
-          uploaded_file = st.file_uploader("Carica File PDF Fattura", type=["pdf"], label_visibility="collapsed")
-        else:
-          file_disponibili = []
-          if not df_fatture.empty and "file" in df_fatture.columns:
-            file_disponibili = [str(f) for f in df_fatture["file"].dropna().unique() if str(f).strip() != "" and str(f).lower() != "nan"]
-          
-          if file_disponibili:
-            file_esistente_selezionato = st.selectbox("Seleziona file esistente", file_disponibili)
-          else:
-            st.info("Nessun file precedentemente registrato trovato nel database.")
+        st.markdown("### 📄 Carica File PDF Fattura")
+        uploaded_file = st.file_uploader("Carica File PDF Fattura", type=["pdf"], label_visibility="collapsed")
 
         submit_fat = st.form_submit_button("Salva Fattura su Supabase")
         if submit_fat:
-          if scelta_file == "Carica nuovo file PDF" and uploaded_file is not None:
+          nome_file = ""
+          if uploaded_file is not None:
             nome_file = uploaded_file.name
             try:
               file_bytes = uploaded_file.getvalue()
               supabase.storage.from_(BUCKET_NAME).upload(nome_file, file_bytes, file_options={"upsert": "true"})
             except Exception as e:
               st.error(f"Errore caricamento file su Supabase Storage: {e}")
-          else:
-            nome_file = file_esistente_selezionato
 
           nuova_fattura = {
               "anno": int(anno), 
@@ -639,29 +615,8 @@ else:
         fattura_target_str = st.selectbox("Seleziona la fattura da aggiornare", opzioni_esistenti if opzioni_esistenti else ["Nessuna fattura disponibile"])
 
         st.markdown("---")
-        st.write("Gestione File PDF")
-        scelta_aggiornamento_pdf = st.radio(
-            "Gestione File PDF",
-            ["Carica nuovo file PDF", "Puntare a un file già inserito in precedenza"],
-            key="radio_aggiorna",
-            label_visibility="collapsed"
-        )
-
-        up_file_agg = None
-        file_scelto_esistente_agg = ""
-
-        if scelta_aggiornamento_pdf == "Carica nuovo file PDF":
-          st.markdown("Carica File PDF Fattura")
-          up_file_agg = st.file_uploader("Carica File PDF Fattura", type=["pdf"], key="up_agg", label_visibility="collapsed")
-        else:
-          file_disponibili_agg = []
-          if not df_fatture.empty and "file" in df_fatture.columns:
-            file_disponibili_agg = [str(f) for f in df_fatture["file"].dropna().unique() if str(f).strip() != "" and str(f).lower() != "nan"]
-          
-          if file_disponibili_agg:
-            file_scelto_esistente_agg = st.selectbox("Seleziona file esistente", file_disponibili_agg, key="sel_esistente_agg")
-          else:
-            st.info("Nessun file precedentemente registrato trovato nel database.")
+        st.markdown("### 📄 Carica File PDF")
+        up_file_agg = st.file_uploader("Carica File PDF Fattura", type=["pdf"], key="up_agg", label_visibility="collapsed")
 
         submit_agg = st.form_submit_button("Salva Fattura su Supabase")
 
@@ -671,15 +626,14 @@ else:
           else:
             id_da_aggiornare = int(fattura_target_str.split("|")[0].replace("ID:", "").strip())
             
-            if scelta_aggiornamento_pdf == "Carica nuovo file PDF" and up_file_agg is not None:
+            nuovo_nome_file = ""
+            if up_file_agg is not None:
               nuovo_nome_file = up_file_agg.name
               try:
                 file_bytes_agg = up_file_agg.getvalue()
                 supabase.storage.from_(BUCKET_NAME).upload(nuovo_nome_file, file_bytes_agg, file_options={"upsert": "true"})
               except Exception as e:
                 st.error(f"Errore caricamento file su Supabase Storage: {e}")
-            else:
-              nuovo_nome_file = file_scelto_esistente_agg
 
             supabase.table("fatture").update({"file": nuovo_nome_file}).eq("id", id_da_aggiornare).execute()
             st.session_state.fatture = carica_fatture_da_supabase()
