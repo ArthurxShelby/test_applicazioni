@@ -312,7 +312,6 @@ else:
           df_calcolo = df_filtered[df_filtered["id"] == id_estratto]
           descrizione_contesto = f"Fattura Singola ID {id_estratto}"
           
-          # Recupera il nome del file associato alla fattura selezionata
           row_selezionata = df_calcolo.iloc[0]
           file_selezionato = row_selezionata.get("file", None)
 
@@ -325,7 +324,6 @@ else:
         st.markdown("### 📎 File Fattura Collegato")
         if file_selezionato and str(file_selezionato).strip() != "" and str(file_selezionato).lower() != "nan":
           st.success(f"File allegato registrato: **{file_selezionato}**")
-          # Se in futuro salverai l'URL o il path completo di Supabase Storage, potrai aggiungere un link o un visualizzatore PDF qui.
         else:
           st.info("Nessun file PDF associato a questa fattura.")
 
@@ -539,11 +537,35 @@ else:
         imponibile = st.number_input("Imponibile (€)", min_value=0.0, format="%.2f")
         iva = st.number_input("IVA (€)", min_value=0.0, format="%.2f")
 
-      uploaded_file = st.file_uploader("Carica File PDF Fattura", type=["pdf"])
+      st.markdown("---")
+      scelta_file = st.radio(
+          "Gestione File PDF",
+          ["Carica nuovo file PDF", "Puntare a un file già inserito in precedenza"]
+      )
+
+      uploaded_file = None
+      file_esistente_selezionato = ""
+
+      if scelta_file == "Carica nuovo file PDF":
+        uploaded_file = st.file_uploader("Carica File PDF Fattura", type=["pdf"])
+      else:
+        # Estrae i file già presenti nelle fatture registrate (escludendo i valori vuoti/nulli)
+        file_disponibili = []
+        if not df_fatture.empty and "file" in df_fatture.columns:
+          file_disponibili = [str(f) for f in df_fatture["file"].dropna().unique() if str(f).strip() != "" and str(f).lower() != "nan"]
+        
+        if file_disponibili:
+          file_esistente_selezionato = st.selectbox("Seleziona file esistente", file_disponibili)
+        else:
+          st.info("Nessun file precedentemente registrato trovato nel database.")
 
       submit_fat = st.form_submit_button("Salva Fattura su Supabase")
       if submit_fat:
-        nome_file = uploaded_file.name if uploaded_file is not None else ""
+        if scelta_file == "Carica nuovo file PDF":
+          nome_file = uploaded_file.name if uploaded_file is not None else ""
+        else:
+          nome_file = file_esistente_selezionato
+
         nuova_fattura = {
             "anno": int(anno), 
             "mese": mese, 
@@ -556,7 +578,7 @@ else:
         }
         supabase.table("fatture").insert(nuova_fattura).execute()
         st.session_state.fatture = carica_fatture_da_supabase()
-        st.success("Fattura e file salvati con successo!")
+        st.success("Fattura e riferimento file salvati con successo!")
         st.rerun()
 
   # --- 3. STORICO E DETTAGLIO ---
