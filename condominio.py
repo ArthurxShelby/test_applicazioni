@@ -522,31 +522,29 @@ else:
       col_ordine = ["id", "condominio", "Riferimento", "data_pagamento", "importo_da_pagare", "importo_pagato", "accredito", "riporto"]
       col_presenti = [c for c in col_ordine if c in df_visual.columns]
       
-      # Editor interattivo per la colonna accredito
+      # Salviamo il risultato dell'editor in una chiave dedicata del session_state
       df_editato = st.data_editor(
           df_visual[col_presenti],
-          key="editor_pagamenti",
+          key="editor_pagamenti_tabella",
           num_rows="fixed",
           disabled=[c for c in col_presenti if c != "accredito"]
       )
 
-      if st.button("💾 Salva Modifiche Accredito"):
+      if st.button("💾 Salva Modifiche Accredito", key="btn_salva_accredito"):
         try:
-          # 1. Carichiamo il database attuale da Supabase
+          # Carichiamo il database attuale da Supabase
           df_db = carica_pagamenti_da_supabase()
           
           if df_db.empty:
             st.warning("Nessun dato presente nel database.")
           else:
-            # 2. Confrontiamo riga per riga il dataframe editato con quello precedente per trovare le modifiche all'accredito
-            for _, row_edited in df_editato.iterrows():
+            # Aggiorniamo il dataframe di lavoro prendendo i valori direttamente dall'editor interattivo
+            for index, row_edited in df_editato.iterrows():
               id_riga = int(row_edited["id"])
               nuovo_accredito = float(row_edited["accredito"])
-              
-              # Aggiorniamo direttamente il valore nel database locale
               df_db.loc[df_db["id"] == id_riga, "accredito"] = nuovo_accredito
 
-            # 3. Eseguiamo il ricalcolo a catena rigoroso per ciascun condomino ordinato per ID crescente
+            # Eseguiamo il ricalcolo a catena rigoroso per ciascun condomino ordinato per ID crescente
             for c in df_db["condominio"].unique():
               sub_df = df_db[df_db["condominio"] == c].sort_values(by="id", ascending=True)
               
@@ -556,7 +554,6 @@ else:
               for index, row in sub_df.iterrows():
                 id_riga = int(row["id"])
                 
-                # Per la prima riga prendiamo il suo accredito, per le successive ereditiamo il riporto precedente
                 if primo_giro:
                   accredito_corrente = float(row["accredito"])
                   primo_giro = False
@@ -566,7 +563,7 @@ else:
                 importo_pagato = float(row["importo_pagato"])
                 importo_da_pagare = float(row["importo_da_pagare"])
                 
-                # Ricalcolo del riporto
+                # Ricalcolo matematico del riporto
                 riporto_corrente = round(importo_pagato - importo_da_pagare + accredito_corrente, 2)
                 
                 # Aggiornamento nel DataFrame locale
@@ -586,7 +583,7 @@ else:
                 
                 riporto_precedente = riporto_corrente
 
-            # 4. Aggiorniamo lo state e ricarichiamo la pagina
+            # Aggiorniamo lo state e ricarichiamo la pagina per mostrare i nuovi valori calcolati
             st.session_state.pagamenti = carica_pagamenti_da_supabase()
             st.success("Modifiche salvate e catena di calcolo aggiornata con successo!")
             st.rerun()
