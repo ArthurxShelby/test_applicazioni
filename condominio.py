@@ -106,6 +106,7 @@ def carica_fatture_da_supabase():
           "imponibile",
           "iva",
           "totale",
+          "file",
       ]
   )
 
@@ -523,12 +524,24 @@ else:
         imponibile = st.number_input("Imponibile (€)", min_value=0.0, format="%.2f")
         iva = st.number_input("IVA (€)", min_value=0.0, format="%.2f")
 
+      uploaded_file = st.file_uploader("Carica File PDF Fattura", type=["pdf"])
+
       submit_fat = st.form_submit_button("Salva Fattura su Supabase")
       if submit_fat:
-        nuova_fattura = {"anno": int(anno), "mese": mese, "tipo": tipo, "fornitore": fornitore, "imponibile": float(imponibile), "iva": float(iva), "totale": float(imponibile + iva)}
+        nome_file = uploaded_file.name if uploaded_file is not None else ""
+        nuova_fattura = {
+            "anno": int(anno), 
+            "mese": mese, 
+            "tipo": tipo, 
+            "fornitore": fornitore, 
+            "imponibile": float(imponibile), 
+            "iva": float(iva), 
+            "totale": float(imponibile + iva),
+            "file": nome_file
+        }
         supabase.table("fatture").insert(nuova_fattura).execute()
         st.session_state.fatture = carica_fatture_da_supabase()
-        st.success("Fattura salvata!")
+        st.success("Fattura e file salvati con successo!")
         st.rerun()
 
   # --- 3. STORICO E DETTAGLIO ---
