@@ -493,18 +493,29 @@ else:
             except Exception as e:
               st.error(f"Errore durante il salvataggio del pagamento: {e}")
 
-      # --- TABELLA STORICO PAGAMENTI RIPRISTINATA ---
+      # --- TABELLA STORICO PAGAMENTI (DINAMICA E FILTRATA) ---
       st.markdown("### Storico Pagamenti Ricevuti")
       st.session_state.pagamenti = carica_pagamenti_da_supabase()
       df_pag = st.session_state.pagamenti
       
       if not df_pag.empty:
+        filtro_condomino = st.selectbox(
+            "Filtra storico per Condomino", 
+            ["Tutti"] + APP_NAMES, 
+            index=0,
+            key="filtro_storico_pagamenti"
+        )
+        
+        df_visual = df_pag.copy()
+        if filtro_condomino != "Tutti":
+            df_visual = df_visual[df_visual["condominio"] == filtro_condomino]
+        
         col_ordine = [
             "id", "condominio", "fattura_id", "data_pagamento",
             "importo_da_pagare", "importo_pagato", "accredito", "riporto",
         ]
-        col_presenti = [c for c in col_ordine if c in df_pag.columns]
-        st.dataframe(df_pag[col_presenti], use_container_width=True)
+        col_presenti = [c for c in col_ordine if c in df_visual.columns]
+        st.dataframe(df_visual[col_presenti], use_container_width=True)
       else:
         st.info("Nessun pagamento registrato finora.")
 
@@ -529,7 +540,6 @@ else:
             id_pagamento_da_eliminare = int(
                 pagamento_scelto_da_eliminare.split("|")[0].replace("ID:", "").strip()
             )
-            # Logica eliminazione...
             try:
               supabase.table("pagamenti").delete().eq("id", id_pagamento_da_eliminare).execute()
             except:
@@ -570,5 +580,3 @@ else:
   # --- 4. GESTIONE MILLESIMI & RIPORTI ---
   elif menu == "Gestione Millesimi & Riporti":
     st.title("⚙️ Gestione Metrature e Riporti")
-    # Form per aggiornamento mq e riporti (omesso per brevità nel blocco, identico al precedente)
-    # ...
