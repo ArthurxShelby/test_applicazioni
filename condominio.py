@@ -1,4 +1,4 @@
-import ioimport io
+import io
 import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
@@ -173,7 +173,6 @@ def genera_pdf_riparto(df_reparto, titolo_contesto):
 
   data = [list(df_reparto.columns)] + df_reparto.values.tolist()
 
-  # Dimensioni colonne aggiornate per 5 colonne
   table = Table(data, colWidths=[110, 80, 110, 110, 110])
   table.setStyle(
       TableStyle([
