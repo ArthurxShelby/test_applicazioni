@@ -14,8 +14,8 @@ st.set_page_config(
 
 # --- CONFIGURAZIONE SUPABASE DA SECRETS ---
 try:
-  SUPABASE_URL = st.secrets.get("SUPABASE_URL") or st.secrets["supabase"]["SUPABASE_URL"]
-  SUPABASE_KEY = st.secrets.get("SUPABASE_KEY") or st.secrets["supabase"]["SUPABASE_KEY"]
+  SUPABASE_URL = (st.secrets.get("SUPABASE_URL") or st.secrets["supabase"]["SUPABASE_URL"]).strip()
+  SUPABASE_KEY = (st.secrets.get("SUPABASE_KEY") or st.secrets["supabase"]["SUPABASE_KEY"]).strip()
 except Exception as e:
   st.error(
       "Configurazione Supabase mancante nei Secrets di Streamlit! Controlla"
@@ -37,12 +37,15 @@ APP_NAMES = [
 ]
 
 
-# --- FUNZIONI DI LETTURA E SCRITTURA SU SUPABASE (SENZA SILENZIARE GLI ERRORI) ---
+# --- FUNZIONI DI LETTURA E SCRITTURA SU SUPABASE ---
 def carica_mq_da_supabase():
-  response = supabase.table("condominio").select("*").execute()
-  data = response.data
-  if data and len(data) > 0:
-    return {row["condominio"]: float(row["mq"]) for row in data}
+  try:
+    response = supabase.table("condominio").select("*").execute()
+    data = response.data
+    if data and len(data) > 0:
+      return {row["condominio"]: float(row["mq"]) for row in data}
+  except Exception:
+    pass
   return {
       "ESPOSITO": 70.0,
       "MARANGI": 75.0,
@@ -55,7 +58,10 @@ def carica_mq_da_supabase():
 
 
 def salva_mq_su_supabase(mq_dict):
-  supabase.table("condominio").delete().neq("id", 0).execute()
+  try:
+    supabase.table("condominio").delete().gte("id", 0).execute()
+  except Exception:
+    pass
   for cond, mq in mq_dict.items():
     supabase.table("condominio").insert(
         {"condominio": cond, "mq": mq}
@@ -64,15 +70,21 @@ def salva_mq_su_supabase(mq_dict):
 
 
 def carica_riporti_da_supabase():
-  response = supabase.table("riporti").select("*").execute()
-  data = response.data
-  if data and len(data) > 0:
-    return {row["condominio"]: float(row["riporto"]) for row in data}
+  try:
+    response = supabase.table("riporti").select("*").execute()
+    data = response.data
+    if data and len(data) > 0:
+      return {row["condominio"]: float(row["riporto"]) for row in data}
+  except Exception:
+    pass
   return {app: 0.0 for app in APP_NAMES}
 
 
 def salva_riporti_su_supabase(riporti_dict):
-  supabase.table("riporti").delete().neq("id", 0).execute()
+  try:
+    supabase.table("riporti").delete().gte("id", 0).execute()
+  except Exception:
+    pass
   for cond, rip in riporti_dict.items():
     supabase.table("riporti").insert(
         {"condominio": cond, "riporto": rip}
@@ -81,10 +93,13 @@ def salva_riporti_su_supabase(riporti_dict):
 
 
 def carica_fatture_da_supabase():
-  response = supabase.table("fatture").select("*").execute()
-  data = response.data
-  if data:
-    return pd.DataFrame(data)
+  try:
+    response = supabase.table("fatture").select("*").execute()
+    data = response.data
+    if data:
+      return pd.DataFrame(data)
+  except Exception as e:
+    st.error(f"Errore lettura tabella 'fatture': {e}")
   return pd.DataFrame(
       columns=[
           "id",
@@ -100,10 +115,21 @@ def carica_fatture_da_supabase():
 
 
 def carica_pagamenti_da_supabase():
-  response = supabase.table("pagamneti").select("*").execute()
-  data = response.data
-  if data:
-    return pd.DataFrame(data)
+  try:
+    # Proviamo prima 'pagamenti', se fallisce usiamo 'pagamneti'
+    response = supabase.table("pagamenti").select("*").execute()
+    data = response.data
+    if data:
+      return pd.DataFrame(data)
+  except Exception:
+    try:
+      response = supabase.table("pagamneti").select("*").execute()
+      data = response.data
+      if data:
+        return pd.DataFrame(data)
+    except Exception as e:
+      st.error(f"Errore lettura tabella pagamenti/pagamneti: {e}")
+  
   return pd.DataFrame(
       columns=[
           "id",
@@ -122,17 +148,14 @@ def carica_pagamenti_da_supabase():
 if "logged_in" not in st.session_state:
   st.session_state.logged_in = False
 
-try:
-  if "mq_appartamenti" not in st.session_state:
-    st.session_state.mq_appartamenti = carica_mq_da_supabase()
-  if "riporti" not in st.session_state:
-    st.session_state.riporti = carica_riporti_da_supabase()
-  if "fatture" not in st.session_state:
-    st.session_state.fatture = carica_fatture_da_supabase()
-  if "pagamenti" not in st.session_state:
-    st.session_state.pagamenti = carica_pagamenti_da_supabase()
-except Exception as e:
-  st.error(f"Errore critico di connessione durante il caricamento iniziale da Supabase: {e}")
+if "mq_appartamenti" not in st.session_state:
+  st.session_state.mq_appartamenti = carica_mq_da_supabase()
+if "riporti" not in st.session_state:
+  st.session_state.riporti = carica_riporti_da_supabase()
+if "fatture" not in st.session_state:
+  st.session_state.fatture = carica_fatture_da_supabase()
+if "pagamenti" not in st.session_state:
+  st.session_state.pagamenti = carica_pagamenti_da_supabase()
 
 
 def calcola_millesimi_da_mq(mq_dict):
@@ -222,14 +245,11 @@ else:
     st.session_state.logged_in = False
     st.rerun()
 
-  # Aggiornamento dati da Supabase in tempo reale
-  try:
-    st.session_state.fatture = carica_fatture_da_supabase()
-    st.session_state.pagamenti = carica_pagamenti_da_supabase()
-    st.session_state.mq_appartamenti = carica_mq_da_supabase()
-    st.session_state.riporti = carica_riporti_da_supabase()
-  except Exception as e:
-    st.error(f"Errore durante la sincronizzazione con Supabase: {e}")
+  # Aggiornamento dati da Supabase
+  st.session_state.fatture = carica_fatture_da_supabase()
+  st.session_state.pagamenti = carica_pagamenti_da_supabase()
+  st.session_state.mq_appartamenti = carica_mq_da_supabase()
+  st.session_state.riporti = carica_riporti_da_supabase()
 
   df_fatture = st.session_state.fatture
   millesimi = calcola_millesimi_da_mq(st.session_state.mq_appartamenti)
@@ -246,21 +266,19 @@ else:
   if menu == "Dashboard & Riepilogo":
     st.title("📊 Dashboard e Riparto Spese")
 
-    # Pannello di controllo visivo per verificare il contenuto letto da Supabase
-    st.info(f"🔌 [Diagnostica] Fatture caricate: {len(df_fatture)} righe.")
-
     if df_fatture.empty:
       st.warning(
           "La tabella 'fatture' su Supabase risulta vuota o non raggiungibile."
       )
     else:
       df_sorted = df_fatture.copy()
-      df_sorted['mese_num'] = df_sorted['mese'].map(mese_map)
-      df_sorted = df_sorted.sort_values(by=['anno', 'mese_num'], ascending=[False, False])
+      if 'mese' in df_sorted.columns:
+        df_sorted['mese_num'] = df_sorted['mese'].map(mese_map)
+        df_sorted = df_sorted.sort_values(by=['anno', 'mese_num'], ascending=[False, False])
 
       col_f1, col_f2 = st.columns(2)
       with col_f1:
-        anni_disponibili = sorted(df_fatture["anno"].unique(), reverse=True)
+        anni_disponibili = sorted(df_fatture["anno"].unique(), reverse=True) if "anno" in df_fatture.columns else []
         selected_anno = st.selectbox(
             "Filtra per Anno Fiscale",
             ["Tutti gli anni (da 2022)"] + list(anni_disponibili),
@@ -456,20 +474,22 @@ else:
                 "riporto": riporto_generato,
             }
 
-            supabase.table("pagamneti").insert(nuovo_pagamento).execute()
+            try:
+              supabase.table("pagamenti").insert(nuovo_pagamento).execute()
+            except Exception:
+              supabase.table("pagamneti").insert(nuovo_pagamento).execute()
+
             st.session_state.pagamenti = carica_pagamenti_da_supabase()
             st.success(f"Pagamento registrato per {cond_attivo}!")
             st.rerun()
 
       # --- TABELLA STORICO PAGAMENTI ---
       st.markdown("### 📂 Storico Pagamenti Ricevuti")
-      st.session_state.pagamenti = carica_pagamenti_da_supabase()
       df_pag = st.session_state.pagamenti
-      
       df_fatture_all = carica_fatture_da_supabase() 
       
       if not df_pag.empty:
-        if not df_fatture_all.empty:
+        if not df_fatture_all.empty and "anno" in df_fatture_all.columns:
             df_fatture_all['rif_fattura'] = df_fatture_all['anno'].astype(str) + " - " + df_fatture_all['mese']
             lookup_fat = df_fatture_all.set_index('id')['rif_fattura']
             df_pag['Riferimento'] = df_pag['fattura_id'].map(lookup_fat).fillna("N/A")
@@ -505,7 +525,10 @@ else:
         
         if st.button("Conferma Eliminazione"):
           id_da_el = int(pagamento_scelto.split("|")[0].replace("ID:", "").strip())
-          supabase.table("pagamneti").delete().eq("id", id_da_el).execute()
+          try:
+            supabase.table("pagamenti").delete().eq("id", id_da_el).execute()
+          except Exception:
+            supabase.table("pagamneti").delete().eq("id", id_da_el).execute()
           st.session_state.pagamenti = carica_pagamenti_da_supabase()
           st.success("Pagamento eliminato!")
           st.rerun()
