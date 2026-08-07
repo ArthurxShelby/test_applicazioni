@@ -540,55 +540,50 @@ else:
       )
 
       if st.button("💾 Salva Modifiche Accredito"):
-        # 1. Recuperiamo i dati dall'editor
-        df_modificato = df_editato
+        # 1. Recuperiamo i dati più freschi possibili dal DB
+        df_attuale = carica_pagamenti_da_supabase()
         
-        # 2. Aggiorniamo il database in modo robusto riga per riga
-        for _, row in df_modificato.iterrows():
-          try:
-            p_id = int(row["id"])
-            # Pulizia esplicita dei dati per evitare errori di tipo
-            val_accredito = float(row["accredito"])
-            val_dovuto = float(row["importo_da_pagare"])
-            val_pagato = float(row["importo_pagato"])
-            calcolo_riporto = round(val_pagato - val_dovuto + val_accredito, 2)
-            
-            # Invio dati a Supabase
-            supabase.table("pagamenti").update({
-                "accredito": float(val_accredito),
-                "riporto": float(calcolo_riporto)
-            }).eq("id", p_id).execute()
-            
-          except Exception as e:
-            st.error(f"Errore nella riga ID {row['id']}: {e}")
-            st.stop()
-
-        # 3. Ricalcolo a cascata per allineare l'intera catena (come richiesto)
-        df_totale = carica_pagamenti_da_supabase()
-        condomini = df_totale["condominio"].unique()
+        # 2. Integriamo le modifiche fatte nell'editor nel dataframe locale
+        # (questo assicura che usiamo i valori che hai appena digitato)
+        for _, row_edit in df_editato.iterrows():
+            mask = df_attuale["id"] == row_edit["id"]
+            df_attuale.loc[mask, "accredito"] = row_edit["accredito"]
+        
+        # 3. Ora ricalcoliamo la catena completa in memoria per ogni condomino
+        # per essere sicuri che i conti tornino prima di scrivere
+        condomini = df_attuale["condominio"].unique()
         
         for c in condomini:
-            df_c = df_totale[df_totale["condominio"] == c].sort_values(by="id")
+            # Filtriamo e ordiniamo per ID
+            df_c = df_attuale[df_attuale["condominio"] == c].sort_values(by="id")
+            
             ultimo_riporto = 0.0
             
             for index, row in df_c.iterrows():
-                # La prima riga mantiene l'accredito editato, le successive ereditano il riporto
+                p_id = int(row["id"])
+                
+                # Se è la prima riga, l'accredito è quello editato, 
+                # altrimenti è il riporto della riga precedente
                 if index == df_c.index[0]:
                     nuovo_accredito = float(row["accredito"])
                 else:
                     nuovo_accredito = ultimo_riporto
                 
+                # Ricalcolo: (Pagato - Dovuto) + Accredito
                 nuovo_riporto = round(float(row["importo_pagato"]) - float(row["importo_da_pagare"]) + nuovo_accredito, 2)
                 
+                # Scrittura nel DB
                 supabase.table("pagamenti").update({
                     "accredito": float(nuovo_accredito),
                     "riporto": float(nuovo_riporto)
-                }).eq("id", int(row["id"])).execute()
+                }).eq("id", p_id).execute()
                 
+                # Aggiorniamo per il prossimo giro
                 ultimo_riporto = nuovo_riporto
 
+        # 4. Aggiorniamo lo stato della sessione per aggiornare la UI
         st.session_state.pagamenti = carica_pagamenti_da_supabase()
-        st.success("Salvataggio e riallineamento completati!")
+        st.success("Catena ricalcolata e salvata correttamente!")
         st.rerun()
     else:
       st.info("Nessun pagamento registrato finora.")
