@@ -621,11 +621,32 @@ else:
     if df_fatture.empty:
       st.info("Nessuna fattura registrata nello storico.")
     else:
-      st.dataframe(df_fatture, use_container_width=True)
+      # --- LOGICA DI ORDINAMENTO ---
+      # Creiamo un dizionario per mappare i nomi dei mesi a numeri
+      mese_map = {
+          "Gennaio": 1, "Febbraio": 2, "Marzo": 3, "Aprile": 4, 
+          "Maggio": 5, "Giugno": 6, "Luglio": 7, "Agosto": 8, 
+          "Settembre": 9, "Ottobre": 10, "Novembre": 11, "Dicembre": 12
+      }
+      
+      # Creiamo una copia per non modificare l'originale
+      df_storico = df_fatture.copy()
+      
+      # Convertiamo il mese in numero per l'ordinamento
+      df_storico['mese_num'] = df_storico['mese'].map(mese_map)
+      
+      # Ordiniamo: prima per Anno (decrescente), poi per Mese (decrescente)
+      df_storico = df_storico.sort_values(by=['anno', 'mese_num'], ascending=[False, False])
+      
+      # Rimuoviamo la colonna di supporto prima di visualizzare
+      df_visual = df_storico.drop(columns=['mese_num'])
+      
+      st.dataframe(df_visual, use_container_width=True)
 
       st.markdown("### Elimina Fattura")
+      # Anche qui usiamo lo stesso ordinamento per la selezione
       opzioni_fatture_elimina = []
-      for _, row in df_fatture.iterrows():
+      for _, row in df_storico.iterrows():
         opzioni_fatture_elimina.append(
             f"ID: {row['id']} | {row['anno']} - {row['mese']} | {row['tipo']} | {row['fornitore']} | Tot: € {row['totale']:,.2f}"
         )
@@ -651,7 +672,6 @@ else:
           st.rerun()
         except Exception as e:
           st.error(f"Errore durante l'eliminazione: {e}")
-
   # --- 4. GESTIONE MILLESIMI & RIPORTI ---
   elif menu == "Gestione Millesimi & Riporti":
     st.title("⚙️ Gestione Metrature (Mq) e Riporti (Addebiti / Accrediti)")
