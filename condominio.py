@@ -402,12 +402,20 @@ else:
 
       # --- SEZIONE GESTIONE INTROITI E PAGAMENTI ---
       st.subheader("💳 Gestione Introiti e Pagamenti Utenti")
+      
+      # SELEZIONE GLOBALE: Questa selectbox controlla sia il form che la tabella
+      cond_attivo = st.selectbox(
+          "Seleziona Condomino (per Pagamento o Storico)", 
+          APP_NAMES, 
+          key="reg_condomino"
+      )
+
       with st.form("form_registra_pagamento"):
         col_p1, col_p2 = st.columns(2)
         with col_p1:
-          condomino_selezionato = st.selectbox(
-              "Seleziona Condomino", APP_NAMES, key="reg_condomino"
-          )
+          # Usiamo cond_attivo invece di crearne uno nuovo
+          st.write(f"Stai registrando un pagamento per: **{cond_attivo}**")
+          
           opzioni_fatture_pagamento = []
           for _, row in df_sorted.iterrows():
             opzioni_fatture_pagamento.append(
@@ -431,24 +439,18 @@ else:
               "Data o Mese di Registrazione Pagamento", value="Agosto 2026", key="reg_data"
           )
 
-        submit_pagamento = st.form_submit_button(
-            "Registra Pagamento su Supabase"
-        )
+        submit_pagamento = st.form_submit_button("Registra Pagamento su Supabase")
 
         if submit_pagamento:
           if not fattura_scelta_str:
             st.warning("Seleziona una fattura valida.")
           else:
-            id_fattura_collegata = int(
-                fattura_scelta_str.split("|")[0]
-                .replace("ID:", "")
-                .strip()
-            )
+            id_fattura_collegata = int(fattura_scelta_str.split("|")[0].replace("ID:", "").strip())
             
             row_fattura = df_fatture[df_fatture["id"] == id_fattura_collegata].iloc[0]
             totale_singola_fattura = float(row_fattura["totale"])
             
-            mil_condomino = millesimi.get(condomino_selezionato, 0.0)
+            mil_condomino = millesimi.get(cond_attivo, 0.0)
             quota_dovuta_esatta = (totale_singola_fattura * (mil_condomino / tot_millesimi)) if tot_millesimi > 0 else 0.0
             
             st.session_state.pagamenti = carica_pagamenti_da_supabase()
@@ -456,7 +458,7 @@ else:
             
             accredito_precedente = 0.0
             if not df_pag_corrente.empty:
-              df_cond_prec = df_pag_corrente[df_pag_corrente["condominio"] == condomino_selezionato]
+              df_cond_prec = df_pag_corrente[df_pag_corrente["condominio"] == cond_attivo]
               if not df_cond_prec.empty:
                 ultimo_record = df_cond_prec.iloc[-1]
                 accredito_precedente = float(ultimo_record.get("riporto", 0.0))
@@ -465,7 +467,7 @@ else:
             riporto_generato = round(importo_versato_f - quota_dovuta_esatta + accredito_precedente, 2)
 
             nuovo_pagamento = {
-                "condominio": condomino_selezionato,
+                "condominio": cond_attivo,
                 "fattura_id": id_fattura_collegata,
                 "data_pagamento": data_versamento,
                 "importo_da_pagare": round(quota_dovuta_esatta, 2),
@@ -481,21 +483,18 @@ else:
                 supabase.table("pagamneti").insert(nuovo_pagamento).execute()
 
               st.session_state.pagamenti = carica_pagamenti_da_supabase()
-              st.success(
-                  f"Pagamento registrato per {condomino_selezionato} "
-                  f"(Dovuto: € {quota_dovuta_esatta:,.2f} | Riporto: € {riporto_generato:,.2f})!"
-              )
+              st.success(f"Pagamento registrato per {cond_attivo}!")
               st.rerun()
             except Exception as e:
-              st.error(f"Errore durante il salvataggio del pagamento: {e}")
+              st.error(f"Errore: {e}")
 
-      # --- TABELLA STORICO PAGAMENTI (SINCRONIZZATA CON IL FORM) ---
+      # --- TABELLA STORICO PAGAMENTI (SINCRONIZZATA AUTOMATICAMENTE) ---
       st.markdown("### Storico Pagamenti Ricevuti")
       st.session_state.pagamenti = carica_pagamenti_da_supabase()
       df_pag = st.session_state.pagamenti
       
       if not df_pag.empty:
-        cond_attivo = st.session_state.get("reg_condomino", APP_NAMES[0])
+        # Il filtro è ora legato direttamente alla selectbox 'cond_attivo'
         mostra_tutti = st.checkbox("Mostra storico completo di tutti i condomini", value=False)
         
         df_visual = df_pag.copy()
@@ -505,10 +504,7 @@ else:
         else:
             st.write("Visualizzazione: **Storico Completo**")
         
-        col_ordine = [
-            "id", "condominio", "fattura_id", "data_pagamento",
-            "importo_da_pagare", "importo_pagato", "accredito", "riporto",
-        ]
+        col_ordine = ["id", "condominio", "fattura_id", "data_pagamento", "importo_da_pagare", "importo_pagato", "accredito", "riporto"]
         col_presenti = [c for c in col_ordine if c in df_visual.columns]
         st.dataframe(df_visual[col_presenti], use_container_width=True)
       else:
