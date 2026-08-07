@@ -509,23 +509,29 @@ else:
         st.dataframe(df_visual[col_presenti], use_container_width=True)
       else:
         st.info("Nessun pagamento registrato finora.")
-      # --- ELIMINAZIONE PAGAMENTO ---
-      st.markdown("### Elimina Pagamento Registrato")
-      if not df_pag.empty:
+      # --- ELIMINAZIONE PAGAMENTO (SINCRONIZZATA) ---
+      st.markdown("---")
+      st.subheader(f"🗑️ Elimina Pagamento per {cond_attivo}")
+      
+      # Filtriamo i pagamenti disponibili per l'eliminazione basandoci sul condomino scelto
+      df_pag_da_eliminare = df_pag[df_pag["condominio"] == cond_attivo]
+
+      if not df_pag_da_eliminare.empty:
         opzioni_pagamenti_elimina = []
-        for _, row in df_pag.iterrows():
+        for _, row in df_pag_da_eliminare.iterrows():
           p_imp = float(row.get("importo_pagato") or 0.0)
           opzioni_pagamenti_elimina.append(
-              f"ID: {row['id']} | Condomino: {row['condominio']} | Importo: € {p_imp:,.2f} | Data: {row['data_pagamento']}"
+              f"ID: {row['id']} | Data: {row['data_pagamento']} | Importo: € {p_imp:,.2f}"
           )
 
+        # La selectbox mostra solo i pagamenti del condomino selezionato
         pagamento_scelto_da_eliminare = st.selectbox(
-            "Seleziona il pagamento da rimuovere",
+            f"Seleziona il pagamento di {cond_attivo} da rimuovere",
             opzioni_pagamenti_elimina,
             key="select_elimina_pagamento"
         )
 
-        if st.button("Elimina Pagamento Selezionato"):
+        if st.button(f"Conferma Eliminazione Pagamento ID {pagamento_scelto_da_eliminare.split('|')[0].replace('ID:', '').strip()}"):
           try:
             id_pagamento_da_eliminare = int(
                 pagamento_scelto_da_eliminare.split("|")[0].replace("ID:", "").strip()
@@ -536,10 +542,12 @@ else:
               supabase.table("pagamneti").delete().eq("id", id_pagamento_da_eliminare).execute()
             
             st.session_state.pagamenti = carica_pagamenti_da_supabase()
-            st.success("Pagamento eliminato!")
+            st.success("Pagamento eliminato con successo!")
             st.rerun()
           except Exception as e:
             st.error(f"Errore durante l'eliminazione: {e}")
+      else:
+        st.info(f"Nessun pagamento registrato per {cond_attivo} da poter eliminare.")
 
   # --- 2. INSERISCI FATTURA ---
   elif menu == "Inserisci Fattura":
