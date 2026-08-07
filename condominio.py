@@ -532,54 +532,67 @@ else:
 
       if st.button("💾 Salva Modifiche Accredito"):
         try:
+          # 1. Carichiamo tutto il database pagamenti aggiornato
           df_db = carica_pagamenti_da_supabase()
           
-          # Creiamo una mappa temporanea con i nuovi valori di accredito inseriti dall'utente nell'editor
-          nuovi_accrediti_map = {row["id"]: float(row["accredito"]) for _, row in df_editato.iterrows()}
-          
-          # Aggiorniamo il dataframe locale con i valori editati
-          for id_p, acc_val in nuovi_accrediti_map.items():
-            df_db.loc[df_db["id"] == id_p, "accredito"] = acc_val
-          
-          # Ricalcoliamo la catena per ogni condomino separatamente in ordine cronologico (per id)
-          for c in df_db["condominio"].unique():
-            s = df_db[df_db["condominio"] == c].sort_values(by="id")
-            
-            rip_precedente = None
-            for idx, row in s.iterrows():
-              id_riga = int(row["id"])
+          if df_db.empty:
+            st.warning("Nessun dato presente nel database.")
+          else:
+            # 2. Aggiorniamo nel dataframe generale i valori di accredito modificati dall'utente nell'editor
+            # Usiamo l'ID come chiave univoca di riscontro
+            for _, row_edit in df_editato.iterrows():
+              id_riga = int(row_edit["id"])
+              nuovo_acc = float(row_edit["accredito"])
+              df_db.loc[df_db["id"] == id_riga, "accredito"] = nuovo_acc
+
+            # 3. Eseguiamo il ricalcolo a catena condomino per condomino
+            for c in df_db["condominio"].unique():
+              # Isoliamo i pagamenti del singolo condomino ordinandoli strettamente per ID crescente (cronologia)
+              sub_df = df_db[df_db["condominio"] == c].sort_values(by="id", ascending=True)
               
-              # Per la prima riga prendiamo il valore editato dall'utente (o il primo accredito), 
-              # per le righe successive l'accredito diventa il riporto della riga precedente
-              if rip_precedente is None:
-                acc_corrente = nuovi_accrediti_map.get(id_riga, float(row["accredito"]))
-              else:
-                acc_corrente = rip_precedente
+              riporto_precedente = 0.0
+              
+              for index, row in sub_df.iterrows():
+                id_riga = int(row["id"])
                 
-              imp_pagato = float(row["importo_pagato"])
-              imp_dovuto = float(row["importo_da_pagare"])
-              
-              # Calcolo del nuovo riporto per la riga corrente
-              rip_corrente = round(imp_pagato - imp_dovuto + acc_corrente, 2)
-              
-              # Salvataggio immediato su Supabase (aggiornando sia accredito che riporto)
-              try:
-                supabase.table("pagamenti").update({
-                    "accredito": round(acc_corrente, 2),
-                    "riporto": rip_corrente
-                }).eq("id", id_riga).execute()
-              except Exception:
-                supabase.table("pagamneti").update({
-                    "accredito": round(acc_corrente, 2),
-                    "riporto": rip_corrente
-                }).eq("id", id_riga).execute()
-              
-              # Il riporto corrente diventa l'accredito della riga successiva nel ciclo
-              rip_precedente = rip_corrente
-          
-          st.session_state.pagamenti = carica_pagamenti_da_supabase()
-          st.success("Modifiche salvate e ricalcolo a catena completato con successo!")
-          st.rerun()
+                # Per la prima riga in assoluto del condomino, manteniamo l'accredito inserito/modificato dall'utente.
+                # Per le righe successive, l'accredito DEVE diventare esattamente il riporto della riga precedente.
+                if row.equals(sub_df.iloc[0]):
+                  accredito_corrente = float(row["accredito"])
+                else:
+                  accredito_corrente = riporto_precedente
+                
+                importo_pagato = float(row["importo_pagato"])
+                importo_da_pagare = float(row["importo_da_pagare"])
+                
+                # Calcolo del nuovo riporto
+                riporto_corrente = round(importo_pagato - importo_da_pagare + accredito_corrente, 2)
+                
+                # Aggiorniamo il dataframe locale per riflettere il calcolo a cascata immediato
+                df_db.loc[df_db["id"] == id_riga, "accredito"] = round(accredito_corrente, 2)
+                df_db.loc[df_db["id"] == id_riga, "riporto"] = riporto_corrente
+                
+                # Salvataggio immediato sul database Supabase (supportando entrambe le tabelle)
+                payload_update = {
+                    "accredito": round(accredito_corrente, 2),
+                    "riporto": riporto_corrente
+                }
+                
+                try:
+                  supabase.table("pagamenti").update(payload_update).eq("id", id_riga).execute()
+                except Exception:
+                  supabase.table("pagamneti").update(payload_update).eq("id", id_riga).execute()
+                
+                # Il riporto appena calcolato diventa la base per il giro successivo (la riga dopo)
+                riporto_precedente = riporto_corrente
+
+            # 4. Ricarica lo stato dell'applicazione
+            st.session_state.pagamenti = carica_pagamenti_da_supabase()
+            st.success("Modifiche salvate e catena di calcolo aggiornata con successo su Supabase!")
+            st.rerun()
+
+        except Exception as e:
+          st.error(f"Errore durante il salvataggio a catena: {e}")
         except Exception as e:
           st.error(f"Errore durante il salvataggio: {e}")
         except Exception as e:
