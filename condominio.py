@@ -288,6 +288,7 @@ else:
         st.warning("Nessuna fattura trovata con i filtri selezionati.")
         tot_imp, tot_iva, tot_complessivo = 0.0, 0.0, 0.0
         descrizione_contesto = "Nessuna fattura"
+        file_selezionato = None
       else:
         opzioni_fatture = ["-- Tutte le fatture filtrate --"]
         for _, row in df_filtered.iterrows():
@@ -305,14 +306,28 @@ else:
         if selected_option == "-- Tutte le fatture filtrate --":
           df_calcolo = df_filtered
           descrizione_contesto = f"Anno: {selected_anno} | Tipo: {selected_tipo}"
+          file_selezionato = None
         else:
           id_estratto = int(selected_option.split("|")[0].replace("ID:", "").strip())
           df_calcolo = df_filtered[df_filtered["id"] == id_estratto]
           descrizione_contesto = f"Fattura Singola ID {id_estratto}"
+          
+          # Recupera il nome del file associato alla fattura selezionata
+          row_selezionata = df_calcolo.iloc[0]
+          file_selezionato = row_selezionata.get("file", None)
 
         tot_imp = df_calcolo["imponibile"].sum()
         tot_iva = df_calcolo["iva"].sum()
         tot_complessivo = df_calcolo["totale"].sum()
+
+      # --- VISUALIZZAZIONE FILE FATTURA DI RIFERIMENTO ---
+      if selected_option != "-- Tutte le fatture filtrate --" and not df_filtered.empty:
+        st.markdown("### 📎 File Fattura Collegato")
+        if file_selezionato and str(file_selezionato).strip() != "" and str(file_selezionato).lower() != "nan":
+          st.success(f"File allegato registrato: **{file_selezionato}**")
+          # Se in futuro salverai l'URL o il path completo di Supabase Storage, potrai aggiungere un link o un visualizzatore PDF qui.
+        else:
+          st.info("Nessun file PDF associato a questa fattura.")
 
       st.markdown("---")
 
