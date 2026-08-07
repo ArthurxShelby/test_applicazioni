@@ -532,25 +532,21 @@ else:
 
       if st.button("💾 Salva Modifiche Accredito"):
         try:
-          # 1. Recuperiamo lo stato dell'editor dal session_state di Streamlit
-          edit_state = st.session_state.get("editor_pagamenti", {})
-          
-          # Carichiamo il database attuale da Supabase
+          # 1. Carichiamo il database attuale da Supabase
           df_db = carica_pagamenti_da_supabase()
           
           if df_db.empty:
             st.warning("Nessun dato presente nel database.")
           else:
-            # 2. Aggiorniamo nel DataFrame di lavoro i valori modificati tramite le righe editate dall'utente
-            edited_rows = edit_state.get("edited_rows", {})
-            
-            for index_riga, modifiche in edited_rows.items():
-              if "accredito" in modifiche:
-                id_riga_corrente = df_visual.iloc[index_riga]["id"]
-                nuovo_valore_accredito = float(modifiche["accredito"])
-                df_db.loc[df_db["id"] == id_riga_corrente, "accredito"] = nuovo_valore_accredito
+            # 2. Confrontiamo riga per riga il dataframe editato con quello precedente per trovare le modifiche all'accredito
+            for _, row_edited in df_editato.iterrows():
+              id_riga = int(row_edited["id"])
+              nuovo_accredito = float(row_edited["accredito"])
+              
+              # Aggiorniamo direttamente il valore nel database locale
+              df_db.loc[df_db["id"] == id_riga, "accredito"] = nuovo_accredito
 
-            # 3. Eseguiamo il ricalcolo a catena per ciascun condomino ordinato per ID crescente
+            # 3. Eseguiamo il ricalcolo a catena rigoroso per ciascun condomino ordinato per ID crescente
             for c in df_db["condominio"].unique():
               sub_df = df_db[df_db["condominio"] == c].sort_values(by="id", ascending=True)
               
@@ -560,8 +556,7 @@ else:
               for index, row in sub_df.iterrows():
                 id_riga = int(row["id"])
                 
-                # Per la prima riga prendiamo il suo accredito (eventualmente modificato), 
-                # per le successive ereditiamo il riporto della riga precedente.
+                # Per la prima riga prendiamo il suo accredito, per le successive ereditiamo il riporto precedente
                 if primo_giro:
                   accredito_corrente = float(row["accredito"])
                   primo_giro = False
@@ -571,14 +566,14 @@ else:
                 importo_pagato = float(row["importo_pagato"])
                 importo_da_pagare = float(row["importo_da_pagare"])
                 
-                # Calcolo del nuovo riporto
+                # Ricalcolo del riporto
                 riporto_corrente = round(importo_pagato - importo_da_pagare + accredito_corrente, 2)
                 
-                # Aggiorniamo il DataFrame locale
+                # Aggiornamento nel DataFrame locale
                 df_db.loc[df_db["id"] == id_riga, "accredito"] = round(accredito_corrente, 2)
                 df_db.loc[df_db["id"] == id_riga, "riporto"] = riporto_corrente
                 
-                # Salvataggio su Supabase
+                # Salvataggio immediato su Supabase
                 payload_update = {
                     "accredito": round(accredito_corrente, 2),
                     "riporto": riporto_corrente
@@ -591,7 +586,7 @@ else:
                 
                 riporto_precedente = riporto_corrente
 
-            # 4. Aggiorniamo il session state forzando il reload dei dati da Supabase
+            # 4. Aggiorniamo lo state e ricarichiamo la pagina
             st.session_state.pagamenti = carica_pagamenti_da_supabase()
             st.success("Modifiche salvate e catena di calcolo aggiornata con successo!")
             st.rerun()
