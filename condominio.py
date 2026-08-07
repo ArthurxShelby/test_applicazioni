@@ -190,7 +190,7 @@ def genera_pdf_riparto(df_reparto, titolo_contesto):
 
   data = [list(df_reparto.columns)] + df_reparto.values.tolist()
 
-  table = Table(data, colWidths=[90, 60, 80, 75, 75, 70, 75])
+  table = Table(data, colWidths=[100, 70, 95, 95, 95, 95])
   table.setStyle(
       TableStyle([
           ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
@@ -255,6 +255,12 @@ else:
   tot_millesimi = sum(millesimi.values())
   dict_riporti = st.session_state.riporti
 
+  mese_map = {
+      "Gennaio": 1, "Febbraio": 2, "Marzo": 3, "Aprile": 4, 
+      "Maggio": 5, "Giugno": 6, "Luglio": 7, "Agosto": 8, 
+      "Settembre": 9, "Ottobre": 10, "Novembre": 11, "Dicembre": 12
+  }
+
   # --- 1. DASHBOARD & RIEPILOGO ---
   if menu == "Dashboard & Riepilogo":
     st.title("📊 Dashboard e Riparto Spese")
@@ -265,9 +271,13 @@ else:
           " 'Inserisci Fattura'."
       )
     else:
+      df_sorted = df_fatture.copy()
+      df_sorted['mese_num'] = df_sorted['mese'].map(mese_map)
+      df_sorted = df_sorted.sort_values(by=['anno', 'mese_num'], ascending=[False, False])
+
       col_f1, col_f2 = st.columns(2)
       with col_f1:
-        anni_disponibili = sorted(df_fatture["anno"].unique())
+        anni_disponibili = sorted(df_fatture["anno"].unique(), reverse=True)
         selected_anno = st.selectbox(
             "Filtra per Anno Fiscale",
             ["Tutti gli anni (da 2022)"] + list(anni_disponibili),
@@ -278,7 +288,7 @@ else:
             ["Tutte le tipologie", "Energia Elettrica", "Gasolio"],
         )
 
-      df_filtered = df_fatture.copy()
+      df_filtered = df_sorted.copy()
       if selected_anno != "Tutti gli anni (da 2022)":
         df_filtered = df_filtered[df_filtered["anno"] == selected_anno]
       if selected_tipo != "Tutte le tipologie":
@@ -327,17 +337,13 @@ else:
       col3.metric("Totale Generale", f"€ {tot_complessivo:,.2f}")
 
       st.markdown("---")
-      st.subheader(
-          "Tabella di Riparto per Condomino (Millesimi + Addebiti/Accrediti"
-          " 'Riporto')"
-      )
+      st.subheader("Tabella di Riparto per Condomino")
 
       reparto_data = []
       sum_millesimi = 0.0
       sum_imp = 0.0
       sum_iva = 0.0
       sum_tot = 0.0
-      sum_riporto = 0.0
       sum_dovuto = 0.0
 
       for app, mil in millesimi.items():
@@ -354,7 +360,6 @@ else:
         sum_imp += quota_imp
         sum_iva += quota_iva
         sum_tot += quota_tot
-        sum_riporto += val_riporto
         sum_dovuto += totale_complessivo_dovuto
 
         reparto_data.append(
@@ -364,7 +369,6 @@ else:
                 "Quota Imponibile (€)": round(quota_imp, 2),
                 "Quota IVA (€)": round(quota_iva, 2),
                 "Quota Totale (€)": round(quota_tot, 2),
-                "Riporto (€)": round(val_riporto, 2),
                 "Totale Dovuto (€)": round(totale_complessivo_dovuto, 2),
             }
         )
@@ -376,7 +380,6 @@ else:
               "Quota Imponibile (€)": round(sum_imp, 2),
               "Quota IVA (€)": round(sum_iva, 2),
               "Quota Totale (€)": round(sum_tot, 2),
-              "Riporto (€)": round(sum_riporto, 2),
               "Totale Dovuto (€)": round(sum_dovuto, 2),
           }
       )
@@ -384,7 +387,6 @@ else:
       df_reparto = pd.DataFrame(reparto_data)
       st.dataframe(df_reparto, use_container_width=True)
 
-      # --- BOTTONE STAMPA PDF ---
       col_pdf1, col_pdf2 = st.columns([1, 2])
       with col_pdf1:
         pdf_bytes = genera_pdf_riparto(df_reparto, descrizione_contesto)
@@ -400,14 +402,21 @@ else:
 
       # --- SEZIONE GESTIONE INTROITI E PAGAMENTI ---
       st.subheader("💳 Gestione Introiti e Pagamenti Utenti")
+      
+      # SELEZIONE GLOBALE: Questa selectbox controlla tutto
+      cond_attivo = st.selectbox(
+          "Seleziona Condomino (per Pagamento o Storico)", 
+          APP_NAMES, 
+          key="reg_condomino"
+      )
+
       with st.form("form_registra_pagamento"):
         col_p1, col_p2 = st.columns(2)
         with col_p1:
-          condomino_selezionato = st.selectbox(
-              "Seleziona Condomino", APP_NAMES, key="reg_condomino"
-          )
+          st.write(f"Stai registrando un pagamento per: **{cond_attivo}**")
+          
           opzioni_fatture_pagamento = []
-          for _, row in df_fatture.iterrows():
+          for _, row in df_sorted.iterrows():
             opzioni_fatture_pagamento.append(
                 f"ID: {row['id']} | {row['anno']} - {row['mese']} |"
                 f" {row['tipo']} | {row['fornitore']} | Totale: €"
@@ -429,35 +438,38 @@ else:
               "Data o Mese di Registrazione Pagamento", value="Agosto 2026", key="reg_data"
           )
 
-        submit_pagamento = st.form_submit_button(
-            "Registra Pagamento su Supabase"
-        )
+        submit_pagamento = st.form_submit_button("Registra Pagamento su Supabase")
 
         if submit_pagamento:
           if not fattura_scelta_str:
             st.warning("Seleziona una fattura valida.")
           else:
-            id_fattura_collegata = int(
-                fattura_scelta_str.split("|")[0]
-                .replace("ID:", "")
-                .strip()
-            )
-            
+            id_fattura_collegata = int(fattura_scelta_str.split("|")[0].replace("ID:", "").strip())
             row_fattura = df_fatture[df_fatture["id"] == id_fattura_collegata].iloc[0]
             totale_singola_fattura = float(row_fattura["totale"])
             
-            mil_condomino = millesimi.get(condomino_selezionato, 0.0)
+            mil_condomino = millesimi.get(cond_attivo, 0.0)
             quota_dovuta_esatta = (totale_singola_fattura * (mil_condomino / tot_millesimi)) if tot_millesimi > 0 else 0.0
             
-            accredito_precedente = dict_riporti.get(condomino_selezionato, 0.0)
-            riporto_generato = round(quota_dovuta_esatta - float(importo_versato) + accredito_precedente, 2)
+            st.session_state.pagamenti = carica_pagamenti_da_supabase()
+            df_pag_corrente = st.session_state.pagamenti
+            
+            accredito_precedente = 0.0
+            if not df_pag_corrente.empty:
+              df_cond_prec = df_pag_corrente[df_pag_corrente["condominio"] == cond_attivo]
+              if not df_cond_prec.empty:
+                ultimo_record = df_cond_prec.iloc[-1]
+                accredito_precedente = float(ultimo_record.get("riporto", 0.0))
+
+            importo_versato_f = float(importo_versato)
+            riporto_generato = round(importo_versato_f - quota_dovuta_esatta + accredito_precedente, 2)
 
             nuovo_pagamento = {
-                "condominio": condomino_selezionato,
+                "condominio": cond_attivo,
                 "fattura_id": id_fattura_collegata,
                 "data_pagamento": data_versamento,
                 "importo_da_pagare": round(quota_dovuta_esatta, 2),
-                "importo_pagato": float(importo_versato),
+                "importo_pagato": importo_versato_f,
                 "accredito": round(accredito_precedente, 2),
                 "riporto": riporto_generato,
             }
@@ -467,85 +479,70 @@ else:
                 supabase.table("pagamenti").insert(nuovo_pagamento).execute()
               except Exception:
                 supabase.table("pagamneti").insert(nuovo_pagamento).execute()
-
               st.session_state.pagamenti = carica_pagamenti_da_supabase()
-              st.success(
-                  f"Pagamento registrato per {condomino_selezionato} "
-                  f"(Quota da pagare: € {quota_dovuta_esatta:,.2f} | Riporto: € {riporto_generato:,.2f})!"
-              )
+              st.success(f"Pagamento registrato per {cond_attivo}!")
               st.rerun()
             except Exception as e:
-              st.error(f"Errore durante il salvataggio del pagamento: {e}")
+              st.error(f"Errore: {e}")
 
+      # --- TABELLA STORICO PAGAMENTI (ARRICCHITA) ---
+      st.markdown("### 📂 Storico Pagamenti Ricevuti")
+      st.session_state.pagamenti = carica_pagamenti_da_supabase()
       df_pag = st.session_state.pagamenti
+      
+      # Carica fatture per il lookup
+      df_fatture_all = carica_fatture_da_supabase() 
+      
       if not df_pag.empty:
-        st.markdown("### Storico Pagamenti Ricevuti")
+        # Aggiunta colonna Riferimento (Anno-Mese)
+        if not df_fatture_all.empty:
+            df_fatture_all['rif_fattura'] = df_fatture_all['anno'].astype(str) + " - " + df_fatture_all['mese']
+            lookup_fat = df_fatture_all.set_index('id')['rif_fattura']
+            df_pag['Riferimento'] = df_pag['fattura_id'].map(lookup_fat).fillna("N/A")
+        else:
+            df_pag['Riferimento'] = "N/A"
+
+        mostra_tutti = st.checkbox("Mostra storico completo di tutti i condomini", value=False)
+        df_visual = df_pag.copy()
         
-        col_ordine = [
-            "id",
-            "condominio",
-            "fattura_id",
-            "data_pagamento",
-            "importo_da_pagare",
-            "importo_pagato",
-            "accredito",
-            "riporto",
-        ]
-        col_presenti = [c for c in col_ordine if c in df_pag.columns]
-        st.dataframe(df_pag[col_presenti], use_container_width=True)
-
-        # --- CANCELLA PAGAMENTO TRAMITE SELEZIONE ---
-        st.markdown("### Elimina Pagamento Registrato")
+        if not mostra_tutti:
+            df_visual = df_visual[df_visual["condominio"] == cond_attivo]
+            st.write(f"Visualizzazione filtrata per: **{cond_attivo}**")
+        else:
+            st.write("Visualizzazione: **Storico Completo**")
         
-        opzioni_pagamenti_elimina = []
-        for _, row in df_pag.iterrows():
-          p_imp_raw = row.get("importo_pagato", 0.0)
-          p_imp = float(p_imp_raw) if p_imp_raw is not None else 0.0
-          opzioni_pagamenti_elimina.append(
-              f"ID: {row['id']} | Condomino: {row['condominio']} | Importo: € {p_imp:,.2f} | Data: {row['data_pagamento']}"
-          )
-
-        pagamento_scelto_da_eliminare = st.selectbox(
-            "Seleziona il pagamento da rimuovere",
-            opzioni_pagamenti_elimina,
-            key="select_elimina_pagamento"
-        )
-
-        if st.button("Elimina Pagamento Selezionato"):
-          try:
-            id_pagamento_da_eliminare = int(
-                pagamento_scelto_da_eliminare.split("|")[0].replace("ID:", "").strip()
-            )
-
-            eliminato = False
-            try:
-              supabase.table("pagamenti").delete().eq(
-                  "id", id_pagamento_da_eliminare
-              ).execute()
-              eliminato = True
-            except Exception:
-              pass
-
-            try:
-              supabase.table("pagamneti").delete().eq(
-                  "id", id_pagamento_da_eliminare
-              ).execute()
-              eliminato = True
-            except Exception:
-              pass
-
-            if eliminato:
-              st.session_state.pagamenti = carica_pagamenti_da_supabase()
-              st.success(
-                  f"Pagamento ID {id_pagamento_da_eliminare} eliminato da Supabase con successo!"
-              )
-              st.rerun()
-            else:
-              st.error("Impossibile trovare la tabella o l'ID su Supabase.")
-          except Exception as e:
-            st.error(f"Errore durante l'eliminazione del pagamento: {e}")
+        col_ordine = ["id", "condominio", "Riferimento", "data_pagamento", "importo_da_pagare", "importo_pagato", "accredito", "riporto"]
+        col_presenti = [c for c in col_ordine if c in df_visual.columns]
+        st.dataframe(df_visual[col_presenti], use_container_width=True)
       else:
         st.info("Nessun pagamento registrato finora.")
+
+      # --- ELIMINAZIONE PAGAMENTO (SINCRONIZZATA) ---
+      st.markdown("---")
+      st.subheader(f"🗑️ Elimina Pagamento per {cond_attivo}")
+      
+      df_pag_da_eliminare = df_pag[df_pag["condominio"] == cond_attivo]
+      if not df_pag_da_eliminare.empty:
+        opzioni_pagamenti_elimina = []
+        for _, row in df_pag_da_eliminare.iterrows():
+          opzioni_pagamenti_elimina.append(f"ID: {row['id']} | Rif: {row.get('Riferimento', 'N/A')} | Importo: € {float(row['importo_pagato']):,.2f}")
+
+        pagamento_scelto = st.selectbox("Seleziona pagamento da rimuovere", opzioni_pagamenti_elimina, key="select_elimina")
+        
+        if st.button("Conferma Eliminazione"):
+          id_da_el = int(pagamento_scelto.split("|")[0].replace("ID:", "").strip())
+          try:
+            try:
+              supabase.table("pagamenti").delete().eq("id", id_da_el).execute()
+            except:
+              supabase.table("pagamneti").delete().eq("id", id_da_el).execute()
+            st.session_state.pagamenti = carica_pagamenti_da_supabase()
+            st.success("Pagamento eliminato!")
+            st.rerun()
+          except Exception as e:
+            st.error(f"Errore: {e}")
+      else:
+        st.info(f"Nessun pagamento trovato per {cond_attivo}.")
 
   # --- 2. INSERISCI FATTURA ---
   elif menu == "Inserisci Fattura":
@@ -554,161 +551,61 @@ else:
       col1, col2 = st.columns(2)
       with col1:
         anno = st.selectbox("Anno", options=list(range(2022, 2028)), index=4)
-        mese = st.selectbox(
-            "Mese",
-            [
-                "Gennaio",
-                "Febbraio",
-                "Marzo",
-                "Aprile",
-                "Maggio",
-                "Giugno",
-                "Luglio",
-                "Agosto",
-                "Settembre",
-                "Ottobre",
-                "Novembre",
-                "Dicembre",
-            ],
-        )
+        mese = st.selectbox("Mese", ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"])
         tipo = st.selectbox("Tipologia Spesa", ["Energia Elettrica", "Gasolio"])
       with col2:
         fornitore = st.text_input("Fornitore")
-        imponibile = st.number_input(
-            "Imponibile (€)", min_value=0.0, format="%.2f"
-        )
+        imponibile = st.number_input("Imponibile (€)", min_value=0.0, format="%.2f")
         iva = st.number_input("IVA (€)", min_value=0.0, format="%.2f")
 
       submit_fat = st.form_submit_button("Salva Fattura su Supabase")
-
       if submit_fat:
-        if not fornitore:
-          st.warning("Inserisci il nome del fornitore.")
-        else:
-          totale = imponibile + iva
-          nuova_fattura = {
-              "anno": int(anno),
-              "mese": mese,
-              "tipo": tipo,
-              "fornitore": fornitore,
-              "imponibile": float(imponibile),
-              "iva": float(iva),
-              "totale": float(totale),
-          }
-
-          try:
-            supabase.table("fatture").insert(nuova_fattura).execute()
-            st.session_state.fatture = carica_fatture_da_supabase()
-            st.success("Fattura salvata con successo su Supabase!")
-          except Exception as e:
-            st.error(f"Errore durante il salvataggio della fattura: {e}")
+        nuova_fattura = {"anno": int(anno), "mese": mese, "tipo": tipo, "fornitore": fornitore, "imponibile": float(imponibile), "iva": float(iva), "totale": float(imponibile + iva)}
+        supabase.table("fatture").insert(nuova_fattura).execute()
+        st.session_state.fatture = carica_fatture_da_supabase()
+        st.success("Fattura salvata!")
 
   # --- 3. STORICO E DETTAGLIO ---
   elif menu == "Storico e Dettaglio":
-    st.title("📂 Storico Fatture (Dal 2022)")
-    if df_fatture.empty:
-      st.info("Nessuna fattura registrata nello storico.")
-    else:
-      st.dataframe(df_fatture, use_container_width=True)
-
-      st.markdown("### Elimina Fattura")
-      opzioni_fatture_elimina = []
-      for _, row in df_fatture.iterrows():
-        opzioni_fatture_elimina.append(
-            f"ID: {row['id']} | {row['anno']} - {row['mese']} | {row['tipo']} | {row['fornitore']} | Tot: € {row['totale']:,.2f}"
-        )
-
-      fattura_scelta_elimina = st.selectbox(
-          "Seleziona la fattura da rimuovere",
-          opzioni_fatture_elimina,
-          key="select_elimina_fattura"
-      )
-
-      if st.button("Elimina Fattura Selezionata"):
-        try:
-          id_da_eliminare = int(
-              fattura_scelta_elimina.split("|")[0].replace("ID:", "").strip()
-          )
-          supabase.table("fatture").delete().eq(
-              "id", id_da_eliminare
-          ).execute()
-          st.session_state.fatture = carica_fatture_da_supabase()
-          st.success(
-              f"Fattura ID {id_da_eliminare} eliminata da Supabase con successo!"
-          )
-          st.rerun()
-        except Exception as e:
-          st.error(f"Errore durante l'eliminazione: {e}")
+    st.title("📂 Storico Fatture")
+    st.dataframe(df_fatture, use_container_width=True)
 
   # --- 4. GESTIONE MILLESIMI & RIPORTI ---
   elif menu == "Gestione Millesimi & Riporti":
-    st.title("⚙️ Gestione Metrature (Mq) e Riporti (Addebiti / Accrediti)")
-    st.markdown(
-        "Qui puoi aggiornare le metrature dei condomini e impostare eventuali"
-        " importi di riporto (es. conguagli negativi o positivi da precedenti"
-        " gestioni)."
-    )
-
-    with st.form("form_mq_riporti"):
-      nuovi_mq = {}
-      nuovi_riporti = {}
-      
-      st.subheader("Superfici (Mq)")
-      col1, col2 = st.columns(2)
-      for i, app in enumerate(APP_NAMES):
-        with col1 if i < 4 else col2:
-          val_corrente = st.session_state.mq_appartamenti.get(app, 70.0)
-          nuovi_mq[app] = st.number_input(
-              f"Superficie {app} (mq)",
-              min_value=1.0,
-              value=float(val_corrente),
-              format="%.2f",
-          )
-
-      st.markdown("---")
-      st.subheader("Riporti (Addebiti o Accrediti in €)")
-      st.markdown(
-          "*Usa valori positivi per addebiti/debiti arretrati, valori negativi"
-          " (-) per accrediti/crediti.*"
-      )
-      
-      col_r1, col_r2 = st.columns(2)
-      for i, app in enumerate(APP_NAMES):
-        with col_r1 if i < 4 else col_r2:
-          rip_corrente = dict_riporti.get(app, 0.0)
-          nuovi_riporti[app] = st.number_input(
-              f"Riporto {app} (€)",
-              value=float(rip_corrente),
-              format="%.2f",
-          )
-
-      submit_calc = st.form_submit_button("Salva Parametri su Supabase")
-
-      if submit_calc:
-        tot_mq = sum(nuovi_mq.values())
-        if tot_mq <= 0:
-          st.error("La superficie totale deve essere maggiore di zero.")
-        else:
-          successo_mq = salva_mq_su_supabase(nuovi_mq)
-          successo_rip = salva_riporti_su_supabase(nuovi_riporti)
-          if successo_mq and successo_rip:
-            st.session_state.mq_appartamenti = carica_mq_da_supabase()
-            st.session_state.riporti = carica_riporti_da_supabase()
-            st.success(
-                "Metrature e riporti salvati permanentemente su Supabase con"
-                " successo!"
-            )
+    st.title("⚙️ Gestione Metrature e Riporti")
+    
+    tab1, tab2 = st.tabs(["Metrature (MQ) & Millesimi", "Riporti Iniziali"])
+    
+    with tab1:
+      st.subheader("Modifica Metrature Appartamenti")
+      with st.form("form_mq"):
+        nuovi_mq = {}
+        c1, c2 = st.columns(2)
+        for i, app in enumerate(APP_NAMES):
+          val_attuale = st.session_state.mq_appartamenti.get(app, 70.0)
+          col_target = c1 if i % 2 == 0 else c2
+          nuovi_mq[app] = col_target.number_input(f"MQ {app}", min_value=1.0, value=val_attuale, format="%.1f", key=f"mq_{app}")
+        
+        if st.form_submit_button("Salva Metrature"):
+          if salva_mq_su_supabase(nuovi_mq):
+            st.session_state.mq_appartamenti = nuovi_mq
+            st.success("Metrature aggiornate con successo!")
             st.rerun()
 
-    st.markdown("---")
-    st.subheader("Tabella Millesimale e Riporti Attuale")
-    dati_riepilogo_config = []
-    for app in APP_NAMES:
-      dati_riepilogo_config.append({
-          "Condomino": app,
-          "Mq": st.session_state.mq_appartamenti.get(app, 0),
-          "Valore Millesimale": millesimi.get(app, 0),
-          "Riporto (€)": dict_riporti.get(app, 0.0),
-      })
-    st.dataframe(pd.DataFrame(dati_riepilogo_config), use_container_width=True)
+    with tab2:
+      st.subheader("Modifica Riporti Iniziali (Debiti/Crediti)")
+      with st.form("form_rip"):
+        nuovi_riporti = {}
+        c1, c2 = st.columns(2)
+        for i, app in enumerate(APP_NAMES):
+          val_attuale = st.session_state.riporti.get(app, 0.0)
+          col_target = c1 if i % 2 == 0 else c2
+          nuovi_riporti[app] = col_target.number_input(f"Riporto {app} (€)", value=val_attuale, format="%.2f", key=f"rip_{app}")
+        
+        if st.form_submit_button("Salva Riporti"):
+          if salva_riporti_su_supabase(nuovi_riporti):
+            st.session_state.riporti = nuovi_riporti
+            st.success("Riporti aggiornati con successo!")
+            st.rerun()
+
 
