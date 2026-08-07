@@ -540,13 +540,14 @@ else:
       )
 
       if st.button("💾 Salva Modifiche Accredito"):
-        # 1. Prima salviamo le modifiche fatte dall'utente sulla tabella editata
+        # 1. Salviamo le modifiche e ricalcoliamo il riporto immediato per ogni riga modificata
         for _, row in df_editato.iterrows():
           p_id = int(row["id"])
           nuovo_accredito = float(row["accredito"])
           imp_da_pagare = float(row["importo_da_pagare"])
           imp_pagato = float(row["importo_pagato"])
           
+          # Ricalcolo immediato del riporto della riga corrente
           nuovo_riporto = round(imp_pagato - imp_da_pagare + nuovo_accredito, 2)
           
           try:
@@ -560,12 +561,12 @@ else:
                 "riporto": nuovo_riporto
             }).eq("id", p_id).execute()
 
-        # 2. Ricarichiamo i dati aggiornati da Supabase per eseguire il ricalcolo a catena basato sull'ID (cronologico)
+        # 2. Ricarichiamo i dati aggiornati ed eseguiamo la propagazione sequenziale (a catena) per ogni condomino
         df_aggiornato = carica_pagamenti_da_supabase()
         if not df_aggiornato.empty:
           condomini_presenti = df_aggiornato["condominio"].unique()
           for c_nome in condomini_presenti:
-            # Ordiniamo per ID in modo rigorosamente cronologico
+            # Ordiniamo rigorosamente per ID in ordine cronologico
             df_c = df_aggiornato[df_aggiornato["condominio"] == c_nome].sort_values(by="id")
             
             ultimo_rip = 0.0
@@ -577,16 +578,17 @@ else:
               c_dovuto = float(c_row["importo_da_pagare"])
               
               if primo_giro:
-                # Per la prima riga manteniamo l'accredito che l'utente ha appena inserito/salvato
+                # Per la prima riga manteniamo l'accredito che l'utente ha appena modificato a mano
                 c_acc = float(c_row["accredito"])
                 primo_giro = False
               else:
-                # Per le righe successive, l'accredito deve essere esattamente il riporto della riga precedente
+                # Per le righe successive, l'accredito DEVE ereditare esattamente il riporto della riga precedente
                 c_acc = ultimo_rip
               
+              # Calcoliamo il nuovo riporto basato sul nuovo accredito ereditato
               c_rip = round(c_pagato - c_dovuto + c_acc, 2)
               
-              # Aggiorniamo la riga con l'accredito concatenato e il nuovo riporto
+              # Aggiorniamo il database con i valori corretti concatenati
               try:
                 supabase.table("pagamenti").update({
                     "accredito": round(c_acc, 2),
@@ -601,7 +603,7 @@ else:
               ultimo_rip = c_rip
 
         st.session_state.pagamenti = carica_pagamenti_da_supabase()
-        st.success("Accrediti modificati e riportati correttamente sulla riga successiva!")
+        st.success("Accrediti modificati, riporti ricalcolati e catena allineata con successo!")
         st.rerun()
     else:
       st.info("Nessun pagamento registrato finora.")
