@@ -1,6 +1,5 @@
 import io
 import os
-import base64
 import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
@@ -326,7 +325,7 @@ else:
         tot_iva = df_calcolo["iva"].sum()
         tot_complessivo = df_calcolo["totale"].sum()
 
-      # --- GESTIONE FILE PDF DA SUPABASE STORAGE ---
+      # --- GESTIONE DOWNLOAD FILE PDF DA SUPABASE STORAGE ---
       if selected_option != "-- Tutte le fatture filtrate --" and not df_filtered.empty:
         st.markdown("### 📎 File Fattura Collegato")
         if file_selezionato and str(file_selezionato).strip() != "" and str(file_selezionato).lower() != "nan":
@@ -335,21 +334,14 @@ else:
           try:
             res = supabase.storage.from_(BUCKET_NAME).download(str(file_selezionato).strip())
             if res:
-              col_dl1, col_dl2 = st.columns(2)
-              with col_dl1:
-                st.download_button(
-                    label="📥 Scarica PDF Fattura",
-                    data=res,
-                    file_name=str(file_selezionato).strip(),
-                    mime="application/pdf",
-                    key="dl_supabase_storage",
-                    use_container_width=True
-                )
-              with col_dl2:
-                # Genera un link in base64 per aprire il PDF direttamente in una nuova scheda del browser
-                b64_pdf = base64.b64encode(res).decode('utf-8')
-                href_pdf = f'<a href="data:application/pdf;base64,{b64_pdf}" target="_blank" style="text-decoration: none;"><div style="background-color: #f0f2f6; color: #31333F; padding: 0.5rem 1rem; border-radius: 0.5rem; text-align: center; font-weight: 500; border: 1px solid rgba(49, 51, 63, 0.2);">🔗 Apri PDF in Nuova Scheda</div></a>'
-                st.markdown(href_pdf, unsafe_allow_html=True)
+              st.download_button(
+                  label="📥 Scarica PDF Fattura",
+                  data=res,
+                  file_name=str(file_selezionato).strip(),
+                  mime="application/pdf",
+                  key="dl_supabase_storage",
+                  use_container_width=True
+              )
           except Exception as e:
             st.warning(f"Impossibile scaricare il file dal bucket '{BUCKET_NAME}': {e}")
             st.info("Assicurati che il file sia presente nel bucket su Supabase.")
