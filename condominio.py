@@ -542,7 +542,6 @@ else:
             st.warning("Nessun dato presente nel database.")
           else:
             # 2. Aggiorniamo nel DataFrame di lavoro i valori modificati tramite le righe editate dall'utente
-            # st.data_editor restituisce un dizionario 'edited_rows' strutturato come { indice_riga: { "colonna": nuovo_valore } }
             edited_rows = edit_state.get("edited_rows", {})
             
             for index_riga, modifiche in edited_rows.items():
@@ -556,7 +555,7 @@ else:
               sub_df = df_db[df_db["condominio"] == c].sort_values(by="id", ascending=True)
               
               riporto_precedente = 0.0
-               primo_giro = True
+              primo_giro = True
               
               for index, row in sub_df.iterrows():
                 id_riga = int(row["id"])
