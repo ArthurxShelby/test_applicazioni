@@ -1,4 +1,5 @@
 import io
+import os
 import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
@@ -319,11 +320,28 @@ else:
         tot_iva = df_calcolo["iva"].sum()
         tot_complessivo = df_calcolo["totale"].sum()
 
-      # --- VISUALIZZAZIONE FILE FATTURA DI RIFERIMENTO ---
+      # --- VISUALIZZAZIONE FILE FATTURA DI RIFERIMENTO E VISUALIZZATORE PDF ---
       if selected_option != "-- Tutte le fatture filtrate --" and not df_filtered.empty:
         st.markdown("### 📎 File Fattura Collegato")
         if file_selezionato and str(file_selezionato).strip() != "" and str(file_selezionato).lower() != "nan":
           st.success(f"File allegato registrato: **{file_selezionato}**")
+          
+          # Controllo se il file esiste localmente nella cartella di esecuzione o se è un percorso valido
+          nome_f_str = str(file_selezionato).strip()
+          if os.path.exists(nome_f_str):
+            with open(nome_f_str, "rb") as f_pdf:
+              pdf_data = f_pdf.read()
+            st.download_button(
+                label="📥 Scarica / Apri PDF Collegato",
+                data=pdf_data,
+                file_name=nome_f_str,
+                mime="application/pdf",
+                key="download_pdf_collegato",
+                use_container_width=True
+            )
+          else:
+            # Se il file non è locale ma è registrato come nome, informiamo l'utente
+            st.info("Il file è associato nel database. Se è stato caricato tramite storage remoto o non si trova nella cartella locale, assicurati che sia accessibile o ricaricalo se necessario.")
         else:
           st.info("Nessun file PDF associato a questa fattura.")
 
@@ -572,6 +590,10 @@ else:
         if submit_fat:
           if scelta_file == "Carica nuovo file PDF":
             nome_file = uploaded_file.name if uploaded_file is not None else ""
+            # Salvataggio locale opzionale del file caricato per permetterne l'apertura immediata
+            if uploaded_file is not None:
+              with open(uploaded_file.name, "wb") as f_out:
+                f_out.write(uploaded_file.getbuffer())
           else:
             nome_file = file_esistente_selezionato
 
@@ -642,6 +664,9 @@ else:
             
             if scelta_aggiornamento_pdf == "Carica nuovo file PDF":
               nuovo_nome_file = up_file_agg.name if up_file_agg is not None else ""
+              if up_file_agg is not None:
+                with open(up_file_agg.name, "wb") as f_out:
+                  f_out.write(up_file_agg.getbuffer())
             else:
               nuovo_nome_file = file_scelto_esistente_agg
 
