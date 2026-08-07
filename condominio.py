@@ -256,7 +256,7 @@ else:
     st.session_state.logged_in = False
     st.rerun()
 
-  # Aggiornamento dei dati correnti da Supabase a ogni esecuzione
+  # Aggiornamento dati da Supabase
   st.session_state.fatture = carica_fatture_da_supabase()
   st.session_state.pagamenti = carica_pagamenti_da_supabase()
   st.session_state.mq_appartamenti = carica_mq_da_supabase()
@@ -277,9 +277,12 @@ else:
   if menu == "Dashboard & Riepilogo":
     st.title("📊 Dashboard e Riparto Spese")
 
+    # Debug visivo per capire se legge qualcosa da Supabase
+    st.write(f"🔍 [Debug] Numero fatture lette da Supabase: {len(df_fatture)}")
+
     if df_fatture.empty:
       st.info(
-          "Nessuna fattura presente o errore di lettura tabelle da Supabase. Controlla che la tabella 'fatture' esista."
+          "Nessuna fattura presente o la tabella 'fatture' su Supabase restituisce 0 righe (verifica permessi RLS o nomi tabelle)."
       )
     else:
       df_sorted = df_fatture.copy()
