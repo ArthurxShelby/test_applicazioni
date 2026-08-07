@@ -461,16 +461,17 @@ else:
             mil_condomino = millesimi.get(condomino_selezionato, 0.0)
             quota_dovuta_esatta = (totale_singola_fattura * (mil_condomino / tot_millesimi)) if tot_millesimi > 0 else 0.0
             
+            st.session_state.pagamenti = carica_pagamenti_da_supabase()
+            df_pag_corrente = st.session_state.pagamenti
+            
             accredito_precedente = 0.0
-            df_pag_esistenti = st.session_state.pagamenti
-            if not df_pag_esistenti.empty:
-              df_cond_prec = df_pag_esistenti[df_pag_esistenti["condominio"] == condomino_selezionato]
+            if not df_pag_corrente.empty:
+              df_cond_prec = df_pag_corrente[df_pag_corrente["condominio"] == condomino_selezionato]
               if not df_cond_prec.empty:
                 ultimo_record = df_cond_prec.iloc[-1]
                 accredito_precedente = float(ultimo_record.get("riporto", 0.0))
 
             importo_versato_f = float(importo_versato)
-            
             riporto_generato = round(importo_versato_f - quota_dovuta_esatta + accredito_precedente, 2)
 
             nuovo_pagamento = {
@@ -629,7 +630,6 @@ else:
     if df_fatture.empty:
       st.info("Nessuna fattura registrata nello storico.")
     else:
-      # Ordinamento cronologico per anno e mese
       df_storico = df_fatture.copy()
       df_storico['mese_num'] = df_storico['mese'].map(mese_map)
       df_storico = df_storico.sort_values(by=['anno', 'mese_num'], ascending=[False, False])
