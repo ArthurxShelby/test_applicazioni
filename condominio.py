@@ -611,7 +611,6 @@ else:
       if st.button("Conferma ed Elimina Fattura"):
         id_fat_el = int(fattura_da_eliminare_str.split("|")[0].replace("ID:", "").strip())
         
-        # Recupera il nome del file associato per poterlo rimuovere anche dal bucket se necessario
         row_del = df_fatture[df_fatture["id"] == id_fat_el]
         if not row_del.empty:
           nome_file_as = row_del.iloc[0].get("file", None)
@@ -621,7 +620,6 @@ else:
             except Exception:
               pass
 
-        # Elimina il record dalla tabella fatture
         supabase.table("fatture").delete().eq("id", id_fat_el).execute()
         st.session_state.fatture = carica_fatture_da_supabase()
         st.success(f"Fattura ID {id_fat_el} eliminata con successo!")
