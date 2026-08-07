@@ -407,9 +407,6 @@ else:
 
       st.markdown("---")
    # --- SEZIONE GESTIONE INTROITI E PAGAMENTI ---
-      st.subheader("💳 Gestione Introiti e Pagamenti Utenti")
-      
-     # --- SEZIONE GESTIONE INTROITI E PAGAMENTI ---
 st.subheader("💳 Gestione Introiti e Pagamenti Utenti")
 
 # SELEZIONE GLOBALE: Questa selectbox controlla tutto
@@ -550,6 +547,8 @@ if not df_pag_da_eliminare.empty:
       st.error(f"Errore: {e}")
 else:
   st.info(f"Nessun pagamento trovato per {cond_attivo}.")
+
+    
   # --- 2. INSERISCI FATTURA ---
   elif menu == "Inserisci Fattura":
     st.title("📝 Inserimento Nuova Fattura")
