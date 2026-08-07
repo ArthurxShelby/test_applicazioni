@@ -540,21 +540,15 @@ else:
       )
 
       if st.button("💾 Salva Modifiche Accredito"):
-    # 1. Recupero dati freschi da Supabase
     df_db = carica_pagamenti_da_supabase()
-    
-    # 2. Applichiamo la modifica manuale fatta nell'editor (df_editato)
     for _, riga_mod in df_editato.iterrows():
         mask = df_db["id"] == riga_mod["id"]
         df_db.loc[mask, "accredito"] = riga_mod["accredito"]
     
-    # 3. Ricalcolo a catena per ogni condomino
     condomini = df_db["condominio"].unique()
-    
     for c in condomini:
         subset = df_db[df_db["condominio"] == c].sort_values(by="id")
         riporto_precedente = 0.0
-        
         for idx, row in subset.iterrows():
             if idx == subset.index[0]:
                 accredito_effettivo = float(row["accredito"])
