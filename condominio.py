@@ -14,9 +14,8 @@ st.set_page_config(
 
 # --- CONFIGURAZIONE SUPABASE DA SECRETS ---
 try:
-  # Prova prima il formato piatto (principale)
-  SUPABASE_URL = st.secrets.get("SUPABASE_URL") or st.secrets["supabase"]["SUPABASE_URL"]
-  SUPABASE_KEY = st.secrets.get("SUPABASE_KEY") or st.secrets["supabase"]["SUPABASE_KEY"]
+  SUPABASE_URL = st.secrets["SUPABASE_URL"]
+  SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 except Exception as e:
   st.error(
       "Configurazione Supabase mancante nei Secrets di Streamlit! Controlla"
