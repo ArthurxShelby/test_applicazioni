@@ -290,6 +290,8 @@ else:
       st.markdown("---")
       st.subheader("Selezione Fattura Specifica")
 
+      selected_option = "-- Tutte le fatture filtrate --"
+
       if df_filtered.empty:
         st.warning("Nessuna fattura trovata con i filtri selezionati.")
         tot_imp, tot_iva, tot_complessivo = 0.0, 0.0, 0.0
@@ -494,7 +496,7 @@ else:
           st.success(f"Pagamento registrato per {cond_attivo}!")
           st.rerun()
 
-    # --- TABELLA STORICO PAGAMENTI ---
+    # --- TABELLA STORICO PAGAMENTI (CON ACCREDITO EDITABILE E RICALCOLO A CATENA) ---
     st.markdown("### 📂 Storico Pagamenti Ricevuti")
     df_pag = st.session_state.pagamenti
     df_fatture_all = carica_fatture_da_supabase() 
@@ -512,13 +514,82 @@ else:
       
       if not mostra_tutti:
           df_visual = df_visual[df_visual["condominio"] == cond_attivo]
-          st.write(f"Visualizzazione filtrata per: **{cond_attivo}**")
+          st.write(f"Visualizzazione filtrata per: **{cond_attivo}** (Modifica la cella 'accredito' e clicca salva sotto)")
       else:
-          st.write("Visualizzazione: **Storico Completo**")
+          df_visual = df_visual.copy()
+          st.write("Visualizzazione: **Storico Completo** (Modifica la cella 'accredito' e clicca salva sotto)")
       
       col_ordine = ["id", "condominio", "Riferimento", "data_pagamento", "importo_da_pagare", "importo_pagato", "accredito", "riporto"]
       col_presenti = [c for c in col_ordine if c in df_visual.columns]
-      st.dataframe(df_visual[col_presenti], use_container_width=True)
+      
+      # Salviamo il risultato dell'editor in una chiave dedicata del session_state
+      df_editato = st.data_editor(
+          df_visual[col_presenti],
+          key="editor_pagamenti_tabella",
+          num_rows="fixed",
+          disabled=[c for c in col_presenti if c != "accredito"]
+      )
+
+      if st.button("💾 Salva Modifiche Accredito", key="btn_salva_accredito"):
+        try:
+          # Carichiamo il database attuale da Supabase
+          df_db = carica_pagamenti_da_supabase()
+          
+          if df_db.empty:
+            st.warning("Nessun dato presente nel database.")
+          else:
+            # Aggiorniamo il dataframe di lavoro prendendo i valori direttamente dall'editor interattivo
+            for index, row_edited in df_editato.iterrows():
+              id_riga = int(row_edited["id"])
+              nuovo_accredito = float(row_edited["accredito"])
+              df_db.loc[df_db["id"] == id_riga, "accredito"] = nuovo_accredito
+
+            # Eseguiamo il ricalcolo a catena rigoroso per ciascun condomino ordinato per ID crescente
+            for c in df_db["condominio"].unique():
+              sub_df = df_db[df_db["condominio"] == c].sort_values(by="id", ascending=True)
+              
+              riporto_precedente = 0.0
+              primo_giro = True
+              
+              for index, row in sub_df.iterrows():
+                id_riga = int(row["id"])
+                
+                if primo_giro:
+                  accredito_corrente = float(row["accredito"])
+                  primo_giro = False
+                else:
+                  accredito_corrente = riporto_precedente
+                
+                importo_pagato = float(row["importo_pagato"])
+                importo_da_pagare = float(row["importo_da_pagare"])
+                
+                # Ricalcolo matematico del riporto
+                riporto_corrente = round(importo_pagato - importo_da_pagare + accredito_corrente, 2)
+                
+                # Aggiornamento nel DataFrame locale
+                df_db.loc[df_db["id"] == id_riga, "accredito"] = round(accredito_corrente, 2)
+                df_db.loc[df_db["id"] == id_riga, "riporto"] = riporto_corrente
+                
+                # Salvataggio immediato su Supabase
+                payload_update = {
+                    "accredito": round(accredito_corrente, 2),
+                    "riporto": riporto_corrente
+                }
+                
+                try:
+                  supabase.table("pagamenti").update(payload_update).eq("id", id_riga).execute()
+                except Exception:
+                  supabase.table("pagamneti").update(payload_update).eq("id", id_riga).execute()
+                
+                riporto_precedente = riporto_corrente
+
+            # Aggiorniamo lo state e ricarichiamo la pagina per mostrare i nuovi valori calcolati
+            st.session_state.pagamenti = carica_pagamenti_da_supabase()
+            st.success("Modifiche salvate e catena di calcolo aggiornata con successo!")
+            st.rerun()
+
+        except Exception as e:
+          st.error(f"Errore durante il salvataggio a catena: {e}")
     else:
       st.info("Nessun pagamento registrato finora.")
 
@@ -552,11 +623,9 @@ else:
 
     st.subheader("Nuova Fattura")
     
-    # Gestione dello stato di reset pulito per i campi del form
     if "form_submitted" not in st.session_state:
       st.session_state.form_submitted = False
 
-    # Sezione Inserimento Nuova Fattura con clear_on_submit=True
     with st.form("form_fattura_nuova", clear_on_submit=True):
       col1, col2 = st.columns(2)
       with col1:
@@ -597,9 +666,8 @@ else:
         supabase.table("fatture").insert(nuova_fattura).execute()
         st.session_state.fatture = carica_fatture_da_supabase()
         st.success("Nuova fattura salvata con successo!")
-        st.rerun() # <-- Questo forza l'aggiornamento immediato e aggiorna il menu a discesa
+        st.rerun()
 
-    # Sezione Eliminazione Fattura Esistente
     st.markdown("---")
     st.subheader("🗑️ Elimina Fattura Esistente")
     
