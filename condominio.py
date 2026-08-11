@@ -536,50 +536,45 @@ else:
           if df_db.empty:
             st.warning("Nessun dato presente nel database.")
           else:
-            # 1. Aggiorna nel database generale i valori di accredito basandosi sull'ID univoco
+            # 1. Aggiorniamo nel df_db locale i valori di accredito modificati dall'utente tramite ID
             for _, row_edited in df_editato.iterrows():
               id_riga = int(row_edited["id"])
               val_acc = row_edited["accredito"]
               nuovo_accredito = float(val_acc) if val_acc is not None and str(val_acc).strip() != "" else 0.0
               df_db.loc[df_db["id"] == id_riga, "accredito"] = nuovo_accredito
 
-            # 2. Ricalcolo sequenziale rigoroso ordinato per ID crescente per ogni condomino
+            # 2. Eseguiamo il ricalcolo sequenziale per ciascun condomino ordinando strettamente per ID crescente
             for c in df_db["condominio"].unique():
-              sub_df = df_db[df_db["condominio"] == c].sort_values(by="id", ascending=True)
+              sub_indices = df_db[df_db["condominio"] == c].sort_values(by="id", ascending=True).index
               
               riporto_precedente = 0.0
-              primo_giro = True
-              
-              for _, row in sub_df.iterrows():
-                id_riga = int(row["id"])
+              for i, idx in enumerate(sub_indices):
+                # Se è la prima riga del condominio, l'accredito è quello impostato (o salvato) nella riga stessa.
+                # Per le righe successive, l'accredito DEVE essere uguale al riporto della riga precedente.
+                if i > 0:
+                  df_db.loc[idx, "accredito"] = round(riporto_precedente, 2)
                 
-                if primo_giro:
-                  val_corr = df_db.loc[df_db["id"] == id_riga, "accredito"].values[0]
-                  accredito_corrente = float(val_corr) if val_corr is not None else 0.0
-                  primo_giro = False
-                else:
-                  accredito_corrente = riporto_precedente
+                accredito_corrente = float(df_db.loc[idx, "accredito"])
+                importo_pagato = float(df_db.loc[idx, "importo_pagato"])
+                importo_da_pagare = float(df_db.loc[idx, "importo_da_pagare"])
                 
-                importo_pagato = float(row["importo_pagato"]) if row["importo_pagato"] is not None else 0.0
-                importo_da_pagare = float(row["importo_da_pagare"]) if row["importo_da_pagare"] is not None else 0.0
-                
-                # Formula: riporto = importo_pagato + accredito - importo_da_pagare
+                # Formula esatta: riporto = importo_pagato + accredito - importo_da_pagare
                 riporto_corrente = round(importo_pagato + accredito_corrente - importo_da_pagare, 2)
-                
-                df_db.loc[df_db["id"] == id_riga, "accredito"] = round(accredito_corrente, 2)
-                df_db.loc[df_db["id"] == id_riga, "riporto"] = riporto_corrente
-                
-                payload_update = {
-                    "accredito": round(accredito_corrente, 2),
-                    "riporto": riporto_corrente
-                }
-                
-                try:
-                  supabase.table("pagamenti").update(payload_update).eq("id", id_riga).execute()
-                except Exception:
-                  supabase.table("pagamneti").update(payload_update).eq("id", id_riga).execute()
+                df_db.loc[idx, "riporto"] = riporto_corrente
                 
                 riporto_precedente = riporto_corrente
+
+            # 3. Scriviamo tutti i record aggiornati su Supabase
+            for _, row in df_db.iterrows():
+              id_riga = int(row["id"])
+              payload_update = {
+                  "accredito": float(row["accredito"]),
+                  "riporto": float(row["riporto"])
+              }
+              try:
+                supabase.table("pagamenti").update(payload_update).eq("id", id_riga).execute()
+              except Exception:
+                supabase.table("pagamneti").update(payload_update).eq("id", id_riga).execute()
 
             st.session_state.pagamenti = carica_pagamenti_da_supabase()
             st.success("Modifiche salvate e catena di calcolo aggiornata con successo!")
