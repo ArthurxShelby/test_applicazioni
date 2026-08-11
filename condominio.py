@@ -595,6 +595,17 @@ else:
         except Exception as e:
           st.error(f"Errore durante il salvataggio a catena: {e}")
                 
+                # Il riporto corrente diventa il punto di partenza (accredito) della riga successiva
+                riporto_precedente = riporto_corrente
+
+            # 3. Aggiorniamo lo state e ricarichiamo la pagina
+            st.session_state.pagamenti = carica_pagamenti_da_supabase()
+            st.success("Modifiche salvate e catena di calcolo aggiornata con successo!")
+            st.rerun()
+
+        except Exception as e:
+          st.error(f"Errore durante il salvataggio a catena: {e}")
+                
                 riporto_precedente = riporto_corrente
 
             # Aggiorniamo lo state e ricarichiamo la pagina per mostrare i nuovi valori calcolati
