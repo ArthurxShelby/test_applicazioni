@@ -290,8 +290,6 @@ else:
       st.markdown("---")
       st.subheader("Selezione Fattura Specifica")
 
-      selected_option = "-- Tutte le fatture filtrate --"
-
       if df_filtered.empty:
         st.warning("Nessuna fattura trovata con i filtri selezionati.")
         tot_imp, tot_iva, tot_complessivo = 0.0, 0.0, 0.0
@@ -475,7 +473,8 @@ else:
               accredito_precedente = float(ultimo_record.get("riporto", 0.0))
 
           importo_versato_f = float(importo_versato)
-          riporto_generato = round(importo_versato_f - quota_dovuta_esatta + accredito_precedente, 2)
+          # APPLICAZIONE FORMULA RICHIESTA: riporto = importo_pagato + accredito - importo_da_pagare
+          riporto_generato = round(importo_versato_f + accredito_precedente - quota_dovuta_esatta, 2)
 
           nuovo_pagamento = {
               "condominio": cond_attivo,
@@ -496,7 +495,7 @@ else:
           st.success(f"Pagamento registrato per {cond_attivo}!")
           st.rerun()
 
-    # --- TABELLA STORICO PAGAMENTI (CON ACCREDITO EDITABILE E RICALCOLO A CATENA) ---
+    # --- TABELLA STORICO PAGAMENTI ---
     st.markdown("### 📂 Storico Pagamenti Ricevuti")
     df_pag = st.session_state.pagamenti
     df_fatture_all = carica_fatture_da_supabase() 
@@ -516,23 +515,22 @@ else:
           df_visual = df_visual[df_visual["condominio"] == cond_attivo]
           st.write(f"Visualizzazione filtrata per: **{cond_attivo}** (Modifica la cella 'accredito' e clicca salva sotto)")
       else:
-          df_visual = df_visual.copy()
           st.write("Visualizzazione: **Storico Completo** (Modifica la cella 'accredito' e clicca salva sotto)")
       
       col_ordine = ["id", "condominio", "Riferimento", "data_pagamento", "importo_da_pagare", "importo_pagato", "accredito", "riporto"]
       col_presenti = [c for c in col_ordine if c in df_visual.columns]
       
-      # Salviamo il risultato dell'editor in una chiave dedicata del session_state
+      # Tabella editabile per modificare il campo accredito
       df_editato = st.data_editor(
           df_visual[col_presenti],
           key="editor_pagamenti_tabella",
           num_rows="fixed",
-          disabled=[c for c in col_presenti if c != "accredito"]
+          disabled=[c for c in col_presenti if c != "accredito"],
+          use_container_width=True
       )
 
       if st.button("💾 Salva Modifiche Accredito", key="btn_salva_accredito"):
         try:
-          # Carichiamo il database attuale da Supabase
           df_db = carica_pagamenti_da_supabase()
           
           if df_db.empty:
@@ -594,27 +592,7 @@ else:
 
         except Exception as e:
           st.error(f"Errore durante il salvataggio a catena: {e}")
-                
-                # Il riporto corrente diventa il punto di partenza (accredito) della riga successiva
-                riporto_precedente = riporto_corrente
 
-            # 3. Aggiorniamo lo state e ricarichiamo la pagina
-            st.session_state.pagamenti = carica_pagamenti_da_supabase()
-            st.success("Modifiche salvate e catena di calcolo aggiornata con successo!")
-            st.rerun()
-
-        except Exception as e:
-          st.error(f"Errore durante il salvataggio a catena: {e}")
-                
-                riporto_precedente = riporto_corrente
-
-            # Aggiorniamo lo state e ricarichiamo la pagina per mostrare i nuovi valori calcolati
-            st.session_state.pagamenti = carica_pagamenti_da_supabase()
-            st.success("Modifiche salvate e catena di calcolo aggiornata con successo!")
-            st.rerun()
-
-        except Exception as e:
-          st.error(f"Errore durante il salvataggio a catena: {e}")
     else:
       st.info("Nessun pagamento registrato finora.")
 
