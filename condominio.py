@@ -318,9 +318,12 @@ else:
         else:
           id_estratto = int(selected_option.split("|")[0].replace("ID:", "").strip())
           df_calcolo = df_filtered[df_filtered["id"] == id_estratto]
-          descrizione_contesto = f"Fattura Singola ID {id_estratto}"
           
+          # Estrazione dinamica del mese esatto dalla fattura selezionata per il PDF
           row_selezionata = df_calcolo.iloc[0]
+          mese_selezionato = row_selezionata["mese"]
+          descrizione_contesto = f"Fattura Elettrica {mese_selezionato}"
+          
           file_selezionato = row_selezionata.get("file", None)
 
         tot_imp = df_calcolo["imponibile"].sum()
@@ -401,20 +404,14 @@ else:
 
     col_pdf1, _ = st.columns([1, 2])
     with col_pdf1:
-        # Recupera il mese dalla variabile di sessione attiva o dal selettore che usi nella pagina
-        # (sostituisci 'mese_selezionato' con il nome della variabile del mese presente nel tuo script, es. st.session_state.get('mese'))
-        mese_riferimento = st.session_state.get("mese_fattura", st.session_state.get("mese", "Agosto"))
-        
-        descrizione_contesto = f"Fattura Elettrica del mese di {mese_riferimento}"
-        
-        pdf_bytes = genera_pdf_riparto(df_reparto, descrizione_contesto)
-        st.download_button(
-            label="📥 Scarica / Stampa PDF Riparto",
-            data=pdf_bytes,
-            file_name="riparto_spese_condominio.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
+      pdf_bytes = genera_pdf_riparto(df_reparto, descrizione_contesto)
+      st.download_button(
+          label="📥 Scarica / Stampa PDF Riparto",
+          data=pdf_bytes,
+          file_name="riparto_spese_condominio.pdf",
+          mime="application/pdf",
+          use_container_width=True,
+      )
 
     st.markdown("---")
 
