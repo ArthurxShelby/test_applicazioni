@@ -401,14 +401,18 @@ else:
 
     col_pdf1, _ = st.columns([1, 2])
     with col_pdf1:
-      pdf_bytes = genera_pdf_riparto(df_reparto, descrizione_contesto)
-      st.download_button(
-          label="📥 Scarica / Stampa PDF Riparto",
-          data=pdf_bytes,
-          file_name="riparto_spese_condominio.pdf",
-          mime="application/pdf",
-          use_container_width=True,
-      )
+        # Estraiamo il mese di riferimento (ad esempio dalla prima riga del DataFrame o dal record corrente)
+        riferimento_mese = df_reparto["Riferimento"].iloc[0] if "Riferimento" in df_reparto.columns and not df_reparto.empty else "N/A"
+        descrizione_contesto = f"Fattura Elettrica del mese di {riferimento_mese}"
+        
+        pdf_bytes = genera_pdf_riparto(df_reparto, descrizione_contesto)
+        st.download_button(
+            label="📥 Scarica / Stampa PDF Riparto",
+            data=pdf_bytes,
+            file_name="riparto_spese_condominio.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
 
     st.markdown("---")
 
