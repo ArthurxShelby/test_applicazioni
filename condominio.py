@@ -537,51 +537,43 @@ else:
           if df_db.empty:
             st.warning("Nessun dato presente nel database.")
           else:
-            # 1. Raccogliamo i valori inseriti o modificati dall'utente nell'editor
+            # 1. Mppiamo tutti i valori di accredito così come modificati dall'utente nell'editor
             valori_editati = {}
             for _, row_edited in df_editato.iterrows():
               id_riga = int(row_edited["id"])
               val_acc = row_edited["accredito"]
               valori_editati[id_riga] = float(val_acc) if val_acc is not None and str(val_acc).strip() != "" else 0.0
 
-            # 2. Ricalcolo sequenziale perpetuo ordinato per ID crescente (garantisce la continuità anche con nuove righe)
+            # 2. Ordiniamo rigorosamente per ID crescente per rispettare la sequenza temporale
             sub_indices = df_db[df_db["condominio"] == cond_attivo].sort_values(by="id", ascending=True).index
             
             riporto_precedente = 0.0
             for i, idx in enumerate(sub_indices):
               id_riga = int(df_db.loc[idx, "id"])
               
-              # Valore attualmente salvato nel DB per questa riga
-              accredito_db_precedente = float(df_db.loc[idx, "accredito"])
-              # Valore inserito/modificato dall'utente nell'interfaccia
-              accredito_utente = valori_editati.get(id_riga, accredito_db_precedente)
-
-              if i == 0:
-                # Per la prima riga vale sempre quanto inserito/modificato dall'utente
-                accredito_corrente = accredito_utente
+              # Se l'utente ha modificato esplicitamente questa riga nell'editor, usiamo quel valore come base.
+              # Altrimenti, se siamo alla prima riga prendiamo il valore salvato, se siamo nelle successive ereditiamo il riporto precedente.
+              if id_riga in valori_editati and valori_editati[id_riga] != 0.0 and i > 0:
+                # L'utente ha inserito/forzato un accredito su questa specifica riga intermedia
+                accredito_corrente = valori_editati[id_riga]
+              elif i == 0:
+                accredito_corrente = valori_editati.get(id_riga, float(df_db.loc[idx, "accredito"]))
               else:
-                # Dalla seconda riga in poi: se l'utente ha cambiato esplicitamente il valore di questa riga 
-                # rispetto a quello che c'era prima (o se differisce dal riporto precedente), 
-                # consideriamo questa riga come un nuovo "punto di partenza" manuale.
-                # Altrimenti, eredita automaticamente il riporto della riga precedente.
-                if accredito_utente != accredito_db_precedente and accredito_utente != 0.0:
-                  accredito_corrente = accredito_utente
-                else:
-                  accredito_corrente = riporto_precedente
+                accredito_corrente = riporto_precedente
 
               df_db.loc[idx, "accredito"] = round(accredito_corrente, 2)
 
               importo_pagato = float(df_db.loc[idx, "importo_pagato"])
               importo_da_pagare = float(df_db.loc[idx, "importo_da_pagare"])
               
-              # Formula contabile: riporto = importo_pagato + accredito - importo_da_pagare
+              # Formula contabile esatta: riporto = importo_pagato + accredito - importo_da_pagare
               riporto_corrente = round(importo_pagato + accredito_corrente - importo_da_pagare, 2)
               df_db.loc[idx, "riporto"] = riporto_corrente
               
-              # Il riporto diventa la base per la riga successiva (presente o futura)
+              # Il riporto corrente diventa la base (accredito) per la riga successiva in modo perpetuo
               riporto_precedente = riporto_corrente
 
-            # 3. Salvataggio su Supabase di tutte le righe del condominio aggiornate
+            # 3. Inviamo gli aggiornamenti a Supabase per tutte le righe del condominio
             sub_df_updated = df_db[df_db["condominio"] == cond_attivo]
             for _, row in sub_df_updated.iterrows():
               id_riga = int(row["id"])
@@ -595,7 +587,7 @@ else:
                 supabase.table("pagamneti").update(payload_update).eq("id", id_riga).execute()
 
             st.session_state.pagamenti = carica_pagamenti_da_supabase()
-            st.success(f"Modifiche salvate e calcolo perpetuo aggiornato per {cond_attivo}!")
+            st.success(f"Modifiche salvate e calcolo a cascata aggiornato per {cond_attivo}!")
             st.rerun()
 
         except Exception as e:
