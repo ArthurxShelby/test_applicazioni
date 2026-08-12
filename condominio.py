@@ -401,8 +401,16 @@ else:
 
     col_pdf1, _ = st.columns([1, 2])
     with col_pdf1:
-        # Estraiamo il mese di riferimento (ad esempio dalla prima riga del DataFrame o dal record corrente)
-        riferimento_mese = df_reparto["Riferimento"].iloc[0] if "Riferimento" in df_reparto.columns and not df_reparto.empty else "N/A"
+        # Cerchiamo il mese di riferimento reale controllando prima 'Riferimento' e poi 'data_pagamento'
+        riferimento_mese = "N/A"
+        if not df_reparto.empty:
+            for col in ["Riferimento", "data_pagamento", "mese"]:
+                if col in df_reparto.columns:
+                    valore = str(df_reparto[col].iloc[0]).strip()
+                    if valore and valore != "N/A" and valore != "None":
+                        riferimento_mese = valore
+                        break
+        
         descrizione_contesto = f"Fattura Elettrica del mese di {riferimento_mese}"
         
         pdf_bytes = genera_pdf_riparto(df_reparto, descrizione_contesto)
