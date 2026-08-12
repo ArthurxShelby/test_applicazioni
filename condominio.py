@@ -537,37 +537,26 @@ else:
           if df_db.empty:
             st.warning("Nessun dato presente nel database.")
           else:
-            # 1. Creiamo un dizionario con i nuovi valori di accredito inseriti dall'utente nell'editor
+            # 1. Raccogliamo i valori modificati dall'utente nell'editor tramite l'ID
             valori_editati = {}
             for _, row_edited in df_editato.iterrows():
               id_riga = int(row_edited["id"])
               val_acc = row_edited["accredito"]
               valori_editati[id_riga] = float(val_acc) if val_acc is not None and str(val_acc).strip() != "" else 0.0
 
-            # 2. Ricalcolo sequenziale rigoroso per il condomino attivo ordinato per ID crescente
+            # 2. Ricalcolo sequenziale rigoroso a cascata per il condomino attivo
             sub_indices = df_db[df_db["condominio"] == cond_attivo].sort_values(by="id", ascending=True).index
             
             riporto_precedente = 0.0
             for i, idx in enumerate(sub_indices):
               id_riga = int(df_db.loc[idx, "id"])
               
-              # Se è la prima riga, usiamo il valore inserito (o 0). 
-              # Dalla seconda riga in poi, l'accredito è il riporto della riga precedente, 
-              # A MENO CHE l'utente non abbia scritto un valore manuale specifico nell'editor per quella riga.
+              # Se siamo sulla prima riga, prendiamo l'accredito inserito dall'utente.
+              # Dalla seconda riga in poi, l'accredito è SEMPRE il riporto della riga precedente.
               if i == 0:
                 accredito_corrente = valori_editati.get(id_riga, float(df_db.loc[idx, "accredito"]))
               else:
-                # Se l'utente ha modificato esplicitamente questa riga nell'editor mettendoci un valore diverso da zero, 
-                # diamo priorità a quello, altrimenti ereditiamo il riporto precedente.
-                valore_utente = valori_editati.get(id_riga, 0.0)
-                # Se il valore inserito dall'utente è diverso da zero e diverso dal riporto precedente, lo usiamo come forzatura,
-                # altrimenti applichiamo la catena standard.
-                if valore_utente != 0.0 and valore_utente != riporto_precedente and i > 0:
-                  # Verifichiamo se l'utente ha intenzione di forzare un nuovo punto di partenza
-                  # (Se l'utente ha modificato proprio quella cella nell'editor)
-                  accredito_corrente = valore_utente
-                else:
-                  accredito_corrente = riporto_precedente
+                accredito_corrente = riporto_precedente
 
               df_db.loc[idx, "accredito"] = round(accredito_corrente, 2)
 
@@ -578,9 +567,10 @@ else:
               riporto_corrente = round(importo_pagato + accredito_corrente - importo_da_pagare, 2)
               df_db.loc[idx, "riporto"] = riporto_corrente
               
+              # Il riporto corrente diventa l'accredito della riga successiva
               riporto_precedente = riporto_corrente
 
-            # 3. Salvataggio su Supabase
+            # 3. Salvataggio su Supabase per tutte le righe del condomino
             sub_df_updated = df_db[df_db["condominio"] == cond_attivo]
             for _, row in sub_df_updated.iterrows():
               id_riga = int(row["id"])
@@ -594,7 +584,7 @@ else:
                 supabase.table("pagamneti").update(payload_update).eq("id", id_riga).execute()
 
             st.session_state.pagamenti = carica_pagamenti_da_supabase()
-            st.success(f"Modifiche salvate e ricalcolo completato per {cond_attivo}!")
+            st.success(f"Modifiche salvate e calcolato a catena per {cond_attivo}!")
             st.rerun()
 
         except Exception as e:
