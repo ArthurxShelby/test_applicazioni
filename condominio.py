@@ -537,34 +537,40 @@ else:
           if df_db.empty:
             st.warning("Nessun dato presente nel database.")
           else:
-            # 1. Raccogliamo i valori inseriti o modificati dall'utente nell'editor
+            # 1. Mappiamo i valori inseriti o modificati dall'utente nell'editor
             valori_editati = {}
             for _, row_edited in df_editato.iterrows():
               id_riga = int(row_edited["id"])
               val_acc = row_edited["accredito"]
               valori_editati[id_riga] = float(val_acc) if val_acc is not None and str(val_acc).strip() != "" else 0.0
 
-            # 2. Ordiniamo rigorosamente per ID crescente per mantenere la sequenza temporale/cronologica
+            # 2. Ordiniamo rigorosamente per ID crescente per mantenere la sequenza cronologica
             sub_indices = df_db[df_db["condominio"] == cond_attivo].sort_values(by="id", ascending=True).index
             
+            # Variabile per intercettare se abbiamo incontrato una forzatura manuale dell'utente
+            forzatura_attiva = False
             riporto_precedente = 0.0
+
             for i, idx in enumerate(sub_indices):
               id_riga = int(df_db.loc[idx, "id"])
               
-              # Valore presente nell'editor per questa specifica riga
-              valore_utente = valori_editati.get(id_riga, None)
-              
-              if i == 0:
-                # Per la prima riga, prendiamo il valore inserito dall'utente (o quello di default)
-                accredito_corrente = valore_utente if valore_utente is not None else float(df_db.loc[idx, "accredito"])
+              valore_db_precedente = float(df_db.loc[idx, "accredito"])
+              valore_utente = valori_editati.get(id_riga, valore_db_precedente)
+
+              # Se l'utente ha modificato questa specifica riga nell'editor mettendoci un valore diverso dal passato
+              if valore_utente != valore_db_precedente:
+                accredito_corrente = valore_utente
+                forzatura_attiva = True  # Da questo punto in poi la catena riparte con forza da qui
+              elif i == 0:
+                accredito_corrente = valore_utente
+                forzatura_attiva = False
               else:
-                # Dalla seconda riga in poi: se l'utente ha inserito/forzato esplicitamente un valore in questa riga 
-                # diverso da 0 (o diverso da quello ereditato), lo usiamo come nuovo punto di partenza.
-                # Altrimenti, eredita OBBLIGATORIAMENTE il riporto della riga precedente.
-                if valore_utente is not None and valore_utente != 0.0 and valore_utente != riporto_precedente:
-                  accredito_corrente = valore_utente
-                else:
+                # Se c'è stata una modifica sopra, oppure se siamo nelle righe successive, 
+                # l'accredito eredita matematicamente il riporto della riga precedente.
+                if forzatura_attiva or i > 0:
                   accredito_corrente = riporto_precedente
+                else:
+                  accredito_corrente = valore_utente
 
               df_db.loc[idx, "accredito"] = round(accredito_corrente, 2)
 
@@ -575,10 +581,10 @@ else:
               riporto_corrente = round(importo_pagato + accredito_corrente - importo_da_pagare, 2)
               df_db.loc[idx, "riporto"] = riporto_corrente
               
-              # Il riporto corrente diventa automaticamente l'accredito della riga successiva
+              # Il riporto corrente diventa il riporto precedente (e quindi accredito) per la riga successiva
               riporto_precedente = riporto_corrente
 
-            # 3. Salvataggio su Supabase di tutte le righe del condominio aggiornate
+            # 3. Salvataggio su Supabase di tutte le righe del condominio
             sub_df_updated = df_db[df_db["condominio"] == cond_attivo]
             for _, row in sub_df_updated.iterrows():
               id_riga = int(row["id"])
@@ -592,7 +598,7 @@ else:
                 supabase.table("pagamneti").update(payload_update).eq("id", id_riga).execute()
 
             st.session_state.pagamenti = carica_pagamenti_da_supabase()
-            st.success(f"Modifiche salvate e catena aggiornata con successo per {cond_attivo}!")
+            st.success(f"Modifiche salvate e catena perpetua aggiornata per {cond_attivo}!")
             st.rerun()
 
         except Exception as e:
