@@ -319,10 +319,12 @@ else:
           id_estratto = int(selected_option.split("|")[0].replace("ID:", "").strip())
           df_calcolo = df_filtered[df_filtered["id"] == id_estratto]
           
-          # Estrazione dinamica del mese esatto dalla fattura selezionata per il PDF
+          # Estrazione dinamica del mese e dell'anno esatti dalla fattura selezionata per il PDF
           row_selezionata = df_calcolo.iloc[0]
           mese_selezionato = row_selezionata["mese"]
-          descrizione_contesto = f"Fattura Elettrica {mese_selezionato}"
+          anno_selezionato = row_selezionata["anno"]
+          tipo_selezionato = row_selezionata["tipo"]
+          descrizione_contesto = f"{tipo_selezionato} {mese_selezionato} {anno_selezionato}"
           
           file_selezionato = row_selezionata.get("file", None)
 
@@ -525,7 +527,6 @@ else:
       col_ordine = ["id", "condominio", "Riferimento", "data_pagamento", "importo_da_pagare", "importo_pagato", "accredito", "riporto"]
       col_presenti = [c for c in col_ordine if c in df_visual.columns]
       
-      # Salviamo il risultato dell'editor in una chiave dedicata del session_state
       df_editato = st.data_editor(
           df_visual[col_presenti],
           key="editor_pagamenti_tabella",
@@ -540,17 +541,14 @@ else:
           if df_db.empty:
             st.warning("Nessun dato presente nel database.")
           else:
-            # 1. Mappiamo i valori inseriti o modificati dall'utente nell'editor
             valori_editati = {}
             for _, row_edited in df_editato.iterrows():
               id_riga = int(row_edited["id"])
               val_acc = row_edited["accredito"]
               valori_editati[id_riga] = float(val_acc) if val_acc is not None and str(val_acc).strip() != "" else 0.0
 
-            # 2. Ordiniamo rigorosamente per ID crescente per mantenere la sequenza cronologica
             sub_indices = df_db[df_db["condominio"] == cond_attivo].sort_values(by="id", ascending=True).index
             
-            # Variabile per intercettare se abbiamo incontrato una forzatura manuale dell'utente
             forzatura_attiva = False
             riporto_precedente = 0.0
 
@@ -560,16 +558,13 @@ else:
               valore_db_precedente = float(df_db.loc[idx, "accredito"])
               valore_utente = valori_editati.get(id_riga, valore_db_precedente)
 
-              # Se l'utente ha modificato questa specifica riga nell'editor mettendoci un valore diverso dal passato
               if valore_utente != valore_db_precedente:
                 accredito_corrente = valore_utente
-                forzatura_attiva = True  # Da questo punto in poi la catena riparte con forza da qui
+                forzatura_attiva = True
               elif i == 0:
                 accredito_corrente = valore_utente
                 forzatura_attiva = False
               else:
-                # Se c'è stata una modifica sopra, oppure se siamo nelle righe successive, 
-                # l'accredito eredita matematicamente il riporto della riga precedente.
                 if forzatura_attiva or i > 0:
                   accredito_corrente = riporto_precedente
                 else:
@@ -580,14 +575,11 @@ else:
               importo_pagato = float(df_db.loc[idx, "importo_pagato"])
               importo_da_pagare = float(df_db.loc[idx, "importo_da_pagare"])
               
-              # Formula contabile: riporto = importo_pagato + accredito - importo_da_pagare
               riporto_corrente = round(importo_pagato + accredito_corrente - importo_da_pagare, 2)
               df_db.loc[idx, "riporto"] = riporto_corrente
               
-              # Il riporto corrente diventa il riporto precedente (e quindi accredito) per la riga successiva
               riporto_precedente = riporto_corrente
 
-            # 3. Salvataggio su Supabase di tutte le righe del condominio
             sub_df_updated = df_db[df_db["condominio"] == cond_attivo]
             for _, row in sub_df_updated.iterrows():
               id_riga = int(row["id"])
