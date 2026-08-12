@@ -401,19 +401,19 @@ else:
 
     col_pdf1, _ = st.columns([1, 2])
     with col_pdf1:
-        # Cerca il mese in diverse colonne probabili
-        mese_trovato = "mese corrente" # Valore di fallback
-        for col in ["data_fattura", "data_pagamento", "data", "riferimento_mese"]:
+        # Cerca il mese nelle colonne disponibili
+        mese_trovato = "Corrente"
+        for col in ["data_fattura", "data_pagamento", "data", "riferimento_mese", "Riferimento"]:
             if col in df_reparto.columns:
                 valore = str(df_reparto[col].iloc[0])
                 if valore and valore not in ["N/A", "None", "nan"]:
                     mese_trovato = valore
                     break
         
-        descrizione_contesto = f"Fattura Elettrica del mese di {mese_trovato}"
+        # Scrive direttamente il contesto seguito dal mese (es. "Fattura Elettrica - Agosto")
+        descrizione_contesto = f"Fattura Elettrica {mese_trovato}"
         
         pdf_bytes = genera_pdf_riparto(df_reparto, descrizione_contesto)
-        # ... resto del codice del pulsante ...
         st.download_button(
             label="📥 Scarica / Stampa PDF Riparto",
             data=pdf_bytes,
