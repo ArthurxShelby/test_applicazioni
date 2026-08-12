@@ -401,17 +401,11 @@ else:
 
     col_pdf1, _ = st.columns([1, 2])
     with col_pdf1:
-        # Cerca il mese nelle colonne disponibili
-        mese_trovato = "Corrente"
-        for col in ["data_fattura", "data_pagamento", "data", "riferimento_mese", "Riferimento"]:
-            if col in df_reparto.columns:
-                valore = str(df_reparto[col].iloc[0])
-                if valore and valore not in ["N/A", "None", "nan"]:
-                    mese_trovato = valore
-                    break
+        # Recupera il mese dalla variabile di sessione attiva o dal selettore che usi nella pagina
+        # (sostituisci 'mese_selezionato' con il nome della variabile del mese presente nel tuo script, es. st.session_state.get('mese'))
+        mese_riferimento = st.session_state.get("mese_fattura", st.session_state.get("mese", "Agosto"))
         
-        # Scrive direttamente il contesto seguito dal mese (es. "Fattura Elettrica - Agosto")
-        descrizione_contesto = f"Fattura Elettrica {mese_trovato}"
+        descrizione_contesto = f"Fattura Elettrica del mese di {mese_riferimento}"
         
         pdf_bytes = genera_pdf_riparto(df_reparto, descrizione_contesto)
         st.download_button(
