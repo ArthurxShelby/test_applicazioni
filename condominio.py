@@ -612,7 +612,21 @@ else:
           disabled=[c for c in col_presenti if c != "accredito"]
       )
 
-      if st.button("💾 Salva Modifiche Accredito", key="btn_salva_accredito"):
+                  col_save, col_pdf = st.columns([1,1])
+      with col_save:
+        salva_clicked = st.button("💾 Salva Modifiche Accredito", key="btn_salva_accredito")
+      with col_pdf:
+        if not df_visual.empty:
+          opzioni_ricevuta = [f"ID: {r['id']} | {r['condominio']} | {r['Riferimento']} | € {float(r['importo_pagato']):.2f} del {r['data_pagamento']}" for _, r in df_visual.iterrows()]
+          sel_ricevuta = st.selectbox("Seleziona pagamento per ricevuta PDF", opzioni_ricevuta, key="sel_ricevuta_pdf")
+          id_ricevuta = int(sel_ricevuta.split("|")[0].replace("ID:", "").strip())
+          row_ricevuta = df_visual[df_visual["id"]==id_ricevuta].iloc[0] if not df_visual[df_visual["id"]==id_ricevuta].empty else df_visual.iloc[0]
+          pdf_ricevuta = genera_ricevuta_pagamento(row_ricevuta, df_fatture_all)
+          st.download_button("🖨️ Stampa Ricevuta PDF", data=pdf_ricevuta, file_name=f"ricevuta_{row_ricevuta['condominio']}_{row_ricevuta['id']}.pdf", mime="application/pdf", key="btn_pdf_ricevuta")
+        else:
+          st.info("Nessun pagamento per generare ricevuta")
+
+      if salva_clicked:
         try:
           df_db = carica_pagamenti_da_supabase()
           
