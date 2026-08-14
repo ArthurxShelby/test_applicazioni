@@ -737,4 +737,18 @@ else:
             st.success("Metrature aggiornate con successo!")
             st.rerun()
 
-    
+    with tab2:
+      st.subheader("Modifica Riporti Iniziali (Debiti/Crediti)")
+      with st.form("form_rip"):
+        nuovi_riporti = {}
+        c1, c2 = st.columns(2)
+        for i, app in enumerate(APP_NAMES):
+          val_attuale = st.session_state.riporti.get(app, 0.0)
+          col_target = c1 if i % 2 == 0 else c2
+          nuovi_riporti[app] = col_target.number_input(f"Riporto {app} (€)", value=val_attuale, format="%.2f", key=f"rip_{app}")
+        
+        if st.form_submit_button("Salva Riporti"):
+          if salva_riporti_su_supabase(nuovi_riporti):
+            st.session_state.riporti = nuovi_riporti
+            st.success("Riporti aggiornati con successo!")
+            st.rerun()
