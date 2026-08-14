@@ -70,10 +70,10 @@ def salva_mq_su_supabase(mq_dict):
 
 def carica_riporti_da_supabase():
   try:
-    response = supabase.table("riporti").select("*").execute()
+    response = supabase.table("condominio").select("condominio, riporto").execute()
     data = response.data
     if data and len(data) > 0:
-      return {row["condominio"]: float(row["riporto"]) for row in data}
+      return {row["condominio"]: float(row.get("riporto", 0.0) or 0.0) for row in data}
   except Exception:
     pass
   return {app: 0.0 for app in APP_NAMES}
@@ -82,13 +82,16 @@ def carica_riporti_da_supabase():
 def salva_riporti_su_supabase(riporti_dict):
   try:
     for cond, rip in riporti_dict.items():
-      supabase.table("riporti").upsert(
-          {"condominio": cond, "riporto": rip}, on_conflict="condominio"
-      ).execute()
+      supabase.table("condominio").update(
+          {"riporto": rip}
+      ).eq("condominio", cond).execute()
     return True
   except Exception as e:
     st.error(f"Errore durante il salvataggio dei riporti: {e}")
     return False
+
+
+
 
 
 def carica_fatture_da_supabase():
