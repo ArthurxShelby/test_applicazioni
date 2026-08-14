@@ -716,7 +716,7 @@ else:
       st.dataframe(df_fatture, use_container_width=True)
 
     # --- 4. GESTIONE MILLESIMI (SENZA RIPORTI) ---
-  elif menu == "Gestione Millesimi & Riporti":
+  elif menu == "Gestione Millesimi":
     st.title("⚙️ Gestione Metrature e Millesimi")
 
     st.subheader("Modifica Metrature Appartamenti")
