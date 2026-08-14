@@ -201,6 +201,84 @@ def genera_pdf_riparto(df_reparto, titolo_contesto):
   return buffer.getvalue()
 
 
+def genera_ricevuta_pagamento(row_pag, df_fatture_ref):
+  """Genera PDF attestante versamento"""
+  buffer = io.BytesIO()
+  doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=30, bottomMargin=30)
+  styles = getSampleStyleSheet()
+  title_style = ParagraphStyle('TitleReceipt', parent=styles['Heading1'], fontSize=16, alignment=1, spaceAfter=12, textColor=colors.HexColor('#2c3e50'))
+  normal = ParagraphStyle('NormalReceipt', parent=styles['Normal'], fontSize=11, leading=16)
+  small = ParagraphStyle('SmallReceipt', parent=styles['Normal'], fontSize=9, leading=12, textColor=colors.grey)
+
+  condominio = row_pag.get('condominio','')
+  data_pag = str(row_pag.get('data_pagamento',''))
+  importo_pagato = float(row_pag.get('importo_pagato',0))
+  importo_da_pagare = float(row_pag.get('importo_da_pagare',0))
+  accredito = float(row_pag.get('accredito',0))
+  riporto = float(row_pag.get('riporto',0))
+  rif = row_pag.get('Riferimento','N/A')
+  id_pag = row_pag.get('id','')
+
+  fatt_id = row_pag.get('fattura_id')
+  fornitore = ''
+  tipo = ''
+  tot_fatt = ''
+  if not df_fatture_ref.empty and fatt_id in df_fatture_ref['id'].values:
+    fr = df_fatture_ref[df_fatture_ref['id']==fatt_id].iloc[0]
+    fornitore = str(fr.get('fornitore',''))
+    tipo = str(fr.get('tipo',''))
+    tot_fatt = f"€ {float(fr.get('totale',0)):,.2f}"
+
+  elements = []
+  elements.append(Paragraph("<b>RICEVUTA DI PAGAMENTO CONDOMINIALE</b>", title_style))
+  elements.append(Spacer(1, 8))
+  elements.append(Paragraph(f"Condominio di <b>{condominio}</b> - Ricevuta n. {id_pag}", normal))
+  elements.append(Spacer(1, 12))
+
+  data_table = [
+    ["Data Versamento:", data_pag],
+    ["Condomino:", condominio],
+    ["Riferimento Fattura:", rif],
+    ["Tipo Spesa / Fornitore:", f"{tipo} {('- ' + fornitore) if fornitore else ''}".strip()],
+    ["Totale Fattura Originale:", tot_fatt],
+    ["Quota Dovuta:", f"€ {importo_da_pagare:,.2f}"],
+    ["Accredito Iniziale (riporto prec.):", f"€ {accredito:,.2f}"],
+    ["Importo Versato:", f"€ {importo_pagato:,.2f}"],
+    ["Riporto Generato (credito/debito):", f"€ {riporto:,.2f}"],
+  ]
+  t = Table(data_table, colWidths=[200, 280])
+  t.setStyle(TableStyle([
+      ('BACKGROUND', (0,0),(0,-1), colors.HexColor('#f1f5f9')),
+      ('FONTNAME', (0,0),(0,-1), 'Helvetica-Bold'),
+      ('ALIGN', (0,0),(-1,-1), 'LEFT'),
+      ('FONTSIZE', (0,0),(-1,-1), 10),
+      ('GRID', (0,0),(-1,-1), 0.5, colors.grey),
+      ('TOPPADDING', (0,0),(-1,-1), 8),
+      ('BOTTOMPADDING', (0,0),(-1,-1), 8),
+  ]))
+  elements.append(t)
+  elements.append(Spacer(1, 20))
+
+  if riporto > 0:
+    saldo_text = f"Il pagamento risulta in <b>credito di € {riporto:,.2f}</b> che verrà riportato come accredito sul prossimo riparto."
+  elif riporto < 0:
+    saldo_text = f"Il pagamento risulta in <b>debito residuo di € {abs(riporto):,.2f}</b> da saldare."
+  else:
+    saldo_text = "Il pagamento salda esattamente la quota dovuta."
+
+  elements.append(Paragraph(saldo_text, normal))
+  elements.append(Spacer(1, 24))
+  elements.append(Paragraph("Si attesta che in data indicata è stato ricevuto il versamento sopra descritto per la quota condominiale di riferimento, comprensivo di eventuale riporto precedente.", small))
+  elements.append(Spacer(1, 30))
+  elements.append(Paragraph("Firma Amministratore ______________________", normal))
+  elements.append(Spacer(1, 12))
+  elements.append(Paragraph(f"Documento generato automaticamente il {pd.Timestamp.now().strftime('%d/%m/%Y %H:%M')}", small))
+
+  doc.build(elements)
+  buffer.seek(0)
+  return buffer.getvalue()
+
+
 # --- SISTEMA DI LOGIN ---
 def login_screen():
   st.title("🏢 Accesso Gestione Condominio")
