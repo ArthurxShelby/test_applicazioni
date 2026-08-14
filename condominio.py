@@ -58,14 +58,14 @@ def carica_mq_da_supabase():
 
 def salva_mq_su_supabase(mq_dict):
   try:
-    supabase.table("condominio").delete().gte("id", 0).execute()
-  except Exception:
-    pass
-  for cond, mq in mq_dict.items():
-    supabase.table("condominio").insert(
-        {"condominio": cond, "mq": mq}
-    ).execute()
-  return True
+    for cond, mq in mq_dict.items():
+      supabase.table("condominio").upsert(
+          {"condominio": cond, "mq": mq}, on_conflict="condominio"
+      ).execute()
+    return True
+  except Exception as e:
+    st.error(f"Errore durante il salvataggio delle metrature: {e}")
+    return False
 
 
 def carica_riporti_da_supabase():
@@ -81,14 +81,14 @@ def carica_riporti_da_supabase():
 
 def salva_riporti_su_supabase(riporti_dict):
   try:
-    supabase.table("riporti").delete().gte("id", 0).execute()
-  except Exception:
-    pass
-  for cond, rip in riporti_dict.items():
-    supabase.table("riporti").insert(
-        {"condominio": cond, "riporto": rip}
-    ).execute()
-  return True
+    for cond, rip in riporti_dict.items():
+      supabase.table("riporti").upsert(
+          {"condominio": cond, "riporto": rip}, on_conflict="condominio"
+      ).execute()
+    return True
+  except Exception as e:
+    st.error(f"Errore durante il salvataggio dei riporti: {e}")
+    return False
 
 
 def carica_fatture_da_supabase():
