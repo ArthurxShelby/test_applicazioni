@@ -68,27 +68,7 @@ def salva_mq_su_supabase(mq_dict):
   return True
 
 
-def carica_riporti_da_supabase():
-  try:
-    response = supabase.table("riporti").select("*").execute()
-    data = response.data
-    if data and len(data) > 0:
-      return {row["condominio"]: float(row["riporto"]) for row in data}
-  except Exception:
-    pass
-  return {app: 0.0 for app in APP_NAMES}
 
-
-def salva_riporti_su_supabase(riporti_dict):
-  try:
-    supabase.table("riporti").delete().gte("id", 0).execute()
-  except Exception:
-    pass
-  for cond, rip in riporti_dict.items():
-    supabase.table("riporti").insert(
-        {"condominio": cond, "riporto": rip}
-    ).execute()
-  return True
 
 
 def carica_fatture_da_supabase():
@@ -139,8 +119,7 @@ def carica_pagamenti_da_supabase():
 if "logged_in" not in st.session_state:
   st.session_state.logged_in = False
 
-if "mq_appartamenti" not in st.session_state:
-  st.session_state.mq_appartamenti = carica_mq_da_supabase()
+
 if "riporti" not in st.session_state:
   st.session_state.riporti = carica_riporti_da_supabase()
 if "fatture" not in st.session_state:
@@ -715,27 +694,30 @@ else:
     else:
       st.dataframe(df_fatture, use_container_width=True)
 
-  # --- 4. GESTIONE MILLESIMI & RIPORTI ---
+      # --- 4. GESTIONE MILLESIMI ---
   elif menu == "Gestione Millesimi & Riporti":
-    st.title("⚙️ Gestione Metrature e Riporti")
-    
-    tab1, tab2 = st.tabs(["Metrature (MQ) & Millesimi", "Riporti Iniziali"])
-    
-    with tab1:
-      st.subheader("Modifica Metrature Appartamenti")
-      with st.form("form_mq"):
-        nuovi_mq = {}
-        c1, c2 = st.columns(2)
-        for i, app in enumerate(APP_NAMES):
-          val_attuale = st.session_state.mq_appartamenti.get(app, 70.0)
-          col_target = c1 if i % 2 == 0 else c2
-          nuovi_mq[app] = col_target.number_input(f"MQ {app}", min_value=1.0, value=val_attuale, format="%.1f", key=f"mq_{app}")
-        
-        if st.form_submit_button("Salva Metrature"):
-          if salva_mq_su_supabase(nuovi_mq):
-            st.session_state.mq_appartamenti = nuovi_mq
-            st.success("Metrature aggiornate con successo!")
-            st.rerun()
+    st.title("⚙️ Gestione Metrature e Millesimi")
+
+    st.subheader("Modifica Metrature Appartamenti")
+    with st.form("form_mq"):
+      nuovi_mq = {}
+      c1, c2 = st.columns(2)
+      for i, app in enumerate(APP_NAMES):
+        val_attuale = st.session_state.mq_appartamenti.get(app, 70.0)
+        col_target = c1 if i % 2 == 0 else c2
+        nuovi_mq[app] = col_target.number_input(f"MQ {app}", min_value=1.0, value=val_attuale, format="%.1f", key=f"mq_{app}")
+
+      if st.form_submit_button("Salva Metrature"):
+        if salva_mq_su_supabase(nuovi_mq):
+          st.session_state.mq_appartamenti = nuovi_mq
+          st.success("Metrature aggiornate con successo!")
+          st.rerun()
+
+    st.markdown("---")
+    st.subheader("Millesimi Calcolati")
+    millesimi = calcola_millesimi_da_mq(st.session_state.mq_appartamenti)
+    df_mill = pd.DataFrame([{"Appartamento": k, "MQ": st.session_state.mq_appartamenti[k], "Millesimi": v} for k, v in millesimi.items()])
+    st.dataframe(df_mill, use_container_width=True)
 
     with tab2:
       st.subheader("Modifica Riporti Iniziali (Debiti/Crediti)")
