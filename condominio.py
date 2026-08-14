@@ -58,22 +58,22 @@ def carica_mq_da_supabase():
 
 def salva_mq_su_supabase(mq_dict):
   try:
-    for cond, mq in mq_dict.items():
-      supabase.table("condominio").upsert(
-          {"condominio": cond, "mq": mq}, on_conflict="condominio"
-      ).execute()
-    return True
-  except Exception as e:
-    st.error(f"Errore durante il salvataggio delle metrature: {e}")
-    return False
+    supabase.table("condominio").delete().gte("id", 0).execute()
+  except Exception:
+    pass
+  for cond, mq in mq_dict.items():
+    supabase.table("condominio").insert(
+        {"condominio": cond, "mq": mq}
+    ).execute()
+  return True
 
 
 def carica_riporti_da_supabase():
   try:
-    response = supabase.table("condominio").select("condominio, riporto").execute()
+    response = supabase.table("riporti").select("*").execute()
     data = response.data
     if data and len(data) > 0:
-      return {row["condominio"]: float(row.get("riporto", 0.0) or 0.0) for row in data}
+      return {row["condominio"]: float(row["riporto"]) for row in data}
   except Exception:
     pass
   return {app: 0.0 for app in APP_NAMES}
@@ -81,17 +81,14 @@ def carica_riporti_da_supabase():
 
 def salva_riporti_su_supabase(riporti_dict):
   try:
-    for cond, rip in riporti_dict.items():
-      supabase.table("condominio").update(
-          {"riporto": rip}
-      ).eq("condominio", cond).execute()
-    return True
-  except Exception as e:
-    st.error(f"Errore durante il salvataggio dei riporti: {e}")
-    return False
-
-
-
+    supabase.table("riporti").delete().gte("id", 0).execute()
+  except Exception:
+    pass
+  for cond, rip in riporti_dict.items():
+    supabase.table("riporti").insert(
+        {"condominio": cond, "riporto": rip}
+    ).execute()
+  return True
 
 
 def carica_fatture_da_supabase():
