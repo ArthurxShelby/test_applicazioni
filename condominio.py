@@ -715,26 +715,29 @@ else:
     else:
       st.dataframe(df_fatture, use_container_width=True)
 
-  # --- 4. GESTIONE MILLESIMI & RIPORTI ---
-  elif menu == "Gestione Millesimi":
-    st.title("⚙️ Gestione Metrature e Riporti")
-    
-    tab1 = st.tabs(["Metrature (MQ) & Millesimi"])
-    
-    with tab1:
-      st.subheader("Modifica Metrature Appartamenti")
-      with st.form("form_mq"):
-        nuovi_mq = {}
-        c1, c2 = st.columns(2)
-        for i, app in enumerate(APP_NAMES):
-          val_attuale = st.session_state.mq_appartamenti.get(app, 70.0)
-          col_target = c1 if i % 2 == 0 else c2
-          nuovi_mq[app] = col_target.number_input(f"MQ {app}", min_value=1.0, value=val_attuale, format="%.1f", key=f"mq_{app}")
-        
-        if st.form_submit_button("Salva Metrature"):
-          if salva_mq_su_supabase(nuovi_mq):
-            st.session_state.mq_appartamenti = nuovi_mq
-            st.success("Metrature aggiornate con successo!")
-            st.rerun()
+    # --- 4. GESTIONE MILLESIMI (SENZA RIPORTI) ---
+  elif menu == "Gestione Millesimi & Riporti":
+    st.title("⚙️ Gestione Metrature e Millesimi")
+
+    st.subheader("Modifica Metrature Appartamenti")
+    with st.form("form_mq"):
+      nuovi_mq = {}
+      c1, c2 = st.columns(2)
+      for i, app in enumerate(APP_NAMES):
+        val_attuale = st.session_state.mq_appartamenti.get(app, 70.0)
+        col_target = c1 if i % 2 == 0 else c2
+        nuovi_mq[app] = col_target.number_input(f"MQ {app}", min_value=1.0, value=val_attuale, format="%.1f", key=f"mq_{app}")
+
+      if st.form_submit_button("Salva Metrature"):
+        if salva_mq_su_supabase(nuovi_mq):
+          st.session_state.mq_appartamenti = nuovi_mq
+          st.success("Metrature aggiornate con successo!")
+          st.rerun()
+
+    st.markdown("---")
+    st.subheader("Millesimi Calcolati")
+    millesimi = calcola_millesimi_da_mq(st.session_state.mq_appartamenti)
+    df_mill = pd.DataFrame([{"Appartamento": k, "MQ": st.session_state.mq_appartamenti[k], "Millesimi": v} for k, v in millesimi.items()])
+    st.dataframe(df_mill, use_container_width=True)
 
     
