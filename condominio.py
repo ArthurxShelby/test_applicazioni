@@ -194,7 +194,7 @@ else:
           "Dashboard & Riepilogo",
           "Inserisci Fattura",
           "Storico e Dettaglio",
-          "Gestione Millesimi",
+          "Gestione Millesimi & Riporti",
       ],
   )
 
@@ -404,7 +404,7 @@ else:
       st.dataframe(df_fatture, use_container_width=True)
 
   # --- 4. GESTIONE MILLESIMI (SENZA RIPORTI) ---
-  elif menu == "Gestione Millesimi":
+  elif menu == "Gestione Millesimi & Riporti":
     st.title("⚙️ Gestione Metrature e Millesimi")
 
     st.subheader("Modifica Metrature Appartamenti")
