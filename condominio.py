@@ -194,7 +194,7 @@ else:
           "Dashboard & Riepilogo",
           "Inserisci Fattura",
           "Storico e Dettaglio",
-          "Gestione Millesimi & Riporti",
+          "Gestione Millesimi",
       ],
   )
 
