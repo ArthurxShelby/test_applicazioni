@@ -68,29 +68,6 @@ def salva_mq_su_supabase(mq_dict):
   return True
 
 
-def carica_riporti_da_supabase():
-  try:
-    response = supabase.table("riporti").select("*").execute()
-    data = response.data
-    if data and len(data) > 0:
-      return {row["condominio"]: float(row["riporto"]) for row in data}
-  except Exception:
-    pass
-  return {app: 0.0 for app in APP_NAMES}
-
-
-def salva_riporti_su_supabase(riporti_dict):
-  try:
-    supabase.table("riporti").delete().gte("id", 0).execute()
-  except Exception:
-    pass
-  for cond, rip in riporti_dict.items():
-    supabase.table("riporti").insert(
-        {"condominio": cond, "riporto": rip}
-    ).execute()
-  return True
-
-
 def carica_fatture_da_supabase():
   try:
     response = supabase.table("fatture").select("*").execute()
@@ -141,8 +118,6 @@ if "logged_in" not in st.session_state:
 
 if "mq_appartamenti" not in st.session_state:
   st.session_state.mq_appartamenti = carica_mq_da_supabase()
-if "riporti" not in st.session_state:
-  st.session_state.riporti = carica_riporti_da_supabase()
 if "fatture" not in st.session_state:
   st.session_state.fatture = carica_fatture_da_supabase()
 if "pagamenti" not in st.session_state:
@@ -202,6 +177,89 @@ def genera_pdf_riparto(df_reparto, titolo_contesto):
 
 
 # --- SISTEMA DI LOGIN ---
+
+def genera_ricevuta_pagamento(row_pag, df_fatture_ref):
+  """Genera PDF attestante versamento"""
+  buffer = io.BytesIO()
+  doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=30, bottomMargin=30)
+  styles = getSampleStyleSheet()
+  title_style = ParagraphStyle('TitleReceipt', parent=styles['Heading1'], fontSize=16, alignment=1, spaceAfter=12, textColor=colors.HexColor('#2c3e50'))
+  normal = ParagraphStyle('NormalReceipt', parent=styles['Normal'], fontSize=11, leading=16)
+  small = ParagraphStyle('SmallReceipt', parent=styles['Normal'], fontSize=9, leading=12, textColor=colors.grey)
+
+  # Dati pagamento
+  condominio = row_pag.get('condominio','')
+  data_pag = str(row_pag.get('data_pagamento',''))
+  importo_pagato = float(row_pag.get('importo_pagato',0))
+  importo_da_pagare = float(row_pag.get('importo_da_pagare',0))
+  accredito = float(row_pag.get('accredito',0))
+  riporto = float(row_pag.get('riporto',0))
+  rif = row_pag.get('Riferimento','N/A')
+  id_pag = row_pag.get('id','')
+
+  # Dati fattura se trovata
+  fatt_id = row_pag.get('fattura_id')
+  fornitore = ''
+  tipo = ''
+  tot_fatt = ''
+  if not df_fatture_ref.empty and fatt_id in df_fatture_ref['id'].values:
+    fr = df_fatture_ref[df_fatture_ref['id']==fatt_id].iloc[0]
+    fornitore = str(fr.get('fornitore',''))
+    tipo = str(fr.get('tipo',''))
+    tot_fatt = f"€ {float(fr.get('totale',0)):,.2f}"
+
+  elements = []
+  elements.append(Paragraph("<b>RICEVUTA DI PAGAMENTO CONDOMINIALE</b>", title_style))
+  elements.append(Spacer(1, 8))
+  elements.append(Paragraph(f"Condominio di <b>{condominio}</b> - Ricevuta n. {id_pag}", normal))
+  elements.append(Spacer(1, 12))
+
+  data_table = [
+    ["Data Versamento:", data_pag],
+    ["Condomino:", condominio],
+    ["Riferimento Fattura:", rif],
+    ["Tipo Spesa / Fornitore:", f"{tipo} {('- ' + fornitore) if fornitore else ''}".strip()],
+    ["Totale Fattura Originale:", tot_fatt],
+    ["Quota Dovuta:", f"€ {importo_da_pagare:,.2f}"],
+    ["Accredito Iniziale (riporto prec.):", f"€ {accredito:,.2f}"],
+    ["Importo Versato:", f"€ {importo_pagato:,.2f}"],
+    ["Riporto Generato (credito/debito):", f"€ {riporto:,.2f}"],
+  ]
+  t = Table(data_table, colWidths=[200, 280])
+  t.setStyle(TableStyle([
+      ('BACKGROUND', (0,0),(0,-1), colors.HexColor('#f1f5f9')),
+      ('FONTNAME', (0,0),(0,-1), 'Helvetica-Bold'),
+      ('ALIGN', (0,0),(-1,-1), 'LEFT'),
+      ('FONTSIZE', (0,0),(-1,-1), 10),
+      ('GRID', (0,0),(-1,-1), 0.5, colors.grey),
+      ('TOPPADDING', (0,0),(-1,-1), 8),
+      ('BOTTOMPADDING', (0,0),(-1,-1), 8),
+  ]))
+  elements.append(t)
+  elements.append(Spacer(1, 20))
+
+  saldo_text = ""
+  if riporto > 0:
+    saldo_text = f"Il pagamento risulta in <b>credito di € {riporto:,.2f}</b> che verrà riportato come accredito sul prossimo riparto."
+  elif riporto < 0:
+    saldo_text = f"Il pagamento risulta in <b>debito residuo di € {abs(riporto):,.2f}</b> da saldare."
+  else:
+    saldo_text = "Il pagamento salda esattamente la quota dovuta."
+
+  elements.append(Paragraph(saldo_text, normal))
+  elements.append(Spacer(1, 24))
+  elements.append(Paragraph("Si attesta che in data indicata è stato ricevuto il versamento sopra descritto per la quota condominiale di riferimento, comprensivo di eventuale riporto precedente.", small))
+  elements.append(Spacer(1, 30))
+  elements.append(Paragraph("Firma Amministratore ______________________", normal))
+  elements.append(Spacer(1, 12))
+  elements.append(Paragraph(f"Documento generato automaticamente il {pd.Timestamp.now().strftime('%d/%m/%Y %H:%M')}", small))
+
+  doc.build(elements)
+  buffer.seek(0)
+  return buffer.getvalue()
+
+
+
 def login_screen():
   st.title("🏢 Accesso Gestione Condominio")
   with st.form("login_form"):
@@ -228,7 +286,7 @@ else:
           "Dashboard & Riepilogo",
           "Inserisci Fattura",
           "Storico e Dettaglio",
-          "Gestione Millesimi",
+          "Gestione Millesimi & Riporti",
       ],
   )
 
@@ -240,7 +298,6 @@ else:
   st.session_state.fatture = carica_fatture_da_supabase()
   st.session_state.pagamenti = carica_pagamenti_da_supabase()
   st.session_state.mq_appartamenti = carica_mq_da_supabase()
-  st.session_state.riporti = carica_riporti_da_supabase()
 
   df_fatture = st.session_state.fatture
   millesimi = calcola_millesimi_da_mq(st.session_state.mq_appartamenti)
@@ -534,7 +591,22 @@ else:
           disabled=[c for c in col_presenti if c != "accredito"]
       )
 
-      if st.button("💾 Salva Modifiche Accredito", key="btn_salva_accredito"):
+      col_save, col_pdf = st.columns([1,1])
+      with col_save:
+        salva_clicked = st.button("💾 Salva Modifiche Accredito", key="btn_salva_accredito")
+      with col_pdf:
+        # seleziona riga per stampa
+        if not df_visual.empty:
+          opzioni_ricevuta = [f"ID: {r['id']} | {r['condominio']} | {r['Riferimento']} | € {float(r['importo_pagato']):.2f} del {r['data_pagamento']}" for _, r in df_visual.iterrows()]
+          sel_ricevuta = st.selectbox("Seleziona pagamento per ricevuta PDF", opzioni_ricevuta, key="sel_ricevuta_pdf")
+          id_ricevuta = int(sel_ricevuta.split("|")[0].replace("ID:", "").strip())
+          row_ricevuta = df_visual[df_visual["id"]==id_ricevuta].iloc[0] if not df_visual[df_visual["id"]==id_ricevuta].empty else df_visual.iloc[0]
+          pdf_ricevuta = genera_ricevuta_pagamento(row_ricevuta, df_fatture_all)
+          st.download_button("🖨️ Stampa Ricevuta PDF", data=pdf_ricevuta, file_name=f"ricevuta_{row_ricevuta['condominio']}_{row_ricevuta['id']}.pdf", mime="application/pdf", key="btn_pdf_ricevuta")
+        else:
+          st.info("Nessun pagamento per generare ricevuta")
+
+      if salva_clicked:
         try:
           df_db = carica_pagamenti_da_supabase()
           
@@ -715,19 +787,17 @@ else:
     else:
       st.dataframe(df_fatture, use_container_width=True)
 
-    # --- 4. GESTIONE MILLESIMI (SENZA RIPORTI) ---
-  elif menu == "Gestione Millesimi":
+  # --- 4. GESTIONE MILLESIMI (SENZA RIPORTI) ---
+  elif menu == "Gestione Millesimi & Riporti":
     st.title("⚙️ Gestione Metrature e Millesimi")
 
     st.subheader("Modifica Metrature Appartamenti")
     with st.form("form_mq"):
       nuovi_mq = {}
-      c1, c2 = st.columns(2)
-      for i, app in enumerate(APP_NAMES):
+      for app in APP_NAMES:
         val_attuale = st.session_state.mq_appartamenti.get(app, 70.0)
-        col_target = c1 if i % 2 == 0 else c2
-        nuovi_mq[app] = col_target.number_input(f"MQ {app}", min_value=1.0, value=val_attuale, format="%.1f", key=f"mq_{app}")
-
+        nuovi_mq[app] = st.number_input(f"MQ {app}", min_value=1.0, value=float(val_attuale), format="%.1f", key=f"mq_{app}")
+      
       if st.form_submit_button("Salva Metrature"):
         if salva_mq_su_supabase(nuovi_mq):
           st.session_state.mq_appartamenti = nuovi_mq
@@ -739,5 +809,3 @@ else:
     millesimi = calcola_millesimi_da_mq(st.session_state.mq_appartamenti)
     df_mill = pd.DataFrame([{"Appartamento": k, "MQ": st.session_state.mq_appartamenti[k], "Millesimi": v} for k, v in millesimi.items()])
     st.dataframe(df_mill, use_container_width=True)
-
-    
