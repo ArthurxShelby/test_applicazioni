@@ -502,12 +502,130 @@ else:
     else:
       st.info("Nessun pagamento trovato.")
 
+  # --- 2. INSERISCI E GESTISCI FATTURE ---
   elif menu == "Inserisci Fattura":
-    # ... (restante codice invariato)
-    pass
+    st.title("📝 Inserimento e Gestione Fatture")
+
+    st.subheader("Nuova Fattura")
+    
+    if "form_submitted" not in st.session_state:
+      st.session_state.form_submitted = False
+
+    with st.form("form_fattura_nuova", clear_on_submit=True):
+      col1, col2 = st.columns(2)
+      with col1:
+        anno = st.selectbox("Anno", options=list(range(2022, 2028)), index=4)
+        mese = st.selectbox("Mese", ["Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre"])
+        tipo = st.selectbox("Tipologia Spesa", ["Energia Elettrica", "Gasolio"])
+      with col2:
+        fornitore = st.text_input("Fornitore")
+        imponibile = st.number_input("Imponibile (€)", min_value=0.0, format="%.2f")
+        iva = st.number_input("IVA (€)", min_value=0.0, format="%.2f")
+
+      st.markdown("---")
+      st.markdown("### 📄 Carica File PDF Fattura")
+      uploaded_file = st.file_uploader("Carica File PDF Fattura", type=["pdf"], label_visibility="collapsed")
+
+      submit_fat = st.form_submit_button("Salva Fattura su Supabase")
+      
+      if submit_fat:
+        nome_file = ""
+        if uploaded_file is not None:
+          nome_file = uploaded_file.name
+          try:
+            file_bytes = uploaded_file.getvalue()
+            supabase.storage.from_(BUCKET_NAME).upload(nome_file, file_bytes, file_options={"upsert": "true"})
+          except Exception as e:
+            st.error(f"Errore caricamento file su Supabase Storage: {e}")
+
+        nuova_fattura = {
+            "anno": int(anno), 
+            "mese": mese, 
+            "tipo": tipo, 
+            "fornitore": fornitore, 
+            "imponibile": float(imponibile), 
+            "iva": float(iva), 
+            "totale": float(imponibile + iva),
+            "file": nome_file
+        }
+        supabase.table("fatture").insert(nuova_fattura).execute()
+        st.session_state.fatture = carica_fatture_da_supabase()
+        st.success("Nuova fattura salvata con successo!")
+        st.rerun()
+
+    st.markdown("---")
+    st.subheader("🗑️ Elimina Fattura Esistente")
+    
+    if df_fatture.empty:
+      st.info("Nessuna fattura presente nel database da poter eliminare.")
+    else:
+      opzioni_elimina_fattura = []
+      for _, row in df_fatture.iterrows():
+        opzioni_elimina_fattura.append(
+            f"ID: {row['id']} | {row['anno']} - {row['mese']} | {row['tipo']} | Fornitore: {row['fornitore']} | Tot: € {row['totale']:,.2f}"
+        )
+
+      fattura_da_eliminare_str = st.selectbox("Seleziona la fattura da eliminare", opzioni_elimina_fattura, key="select_elimina_fat")
+
+      if st.button("Conferma ed Elimina Fattura"):
+        id_fat_el = int(fattura_da_eliminare_str.split("|")[0].replace("ID:", "").strip())
+        
+        row_del = df_fatture[df_fatture["id"] == id_fat_el]
+        if not row_del.empty:
+          nome_file_as = row_del.iloc[0].get("file", None)
+          if nome_file_as and str(nome_file_as).strip() != "" and str(nome_file_as).lower() != "nan":
+            try:
+              supabase.storage.from_(BUCKET_NAME).remove([str(nome_file_as).strip()])
+            except Exception:
+              pass
+
+        supabase.table("fatture").delete().eq("id", id_fat_el).execute()
+        st.session_state.fatture = carica_fatture_da_supabase()
+        st.success(f"Fattura ID {id_fat_el} eliminata con successo!")
+        st.rerun()
+
+  # --- 3. STORICO E DETTAGLIO ---
   elif menu == "Storico e Dettaglio":
-    # ... (restante codice invariato)
-    pass
+    st.title("📂 Storico Fatture")
+    if df_fatture.empty:
+      st.info("Nessuna fattura presente nello storico.")
+    else:
+      st.dataframe(df_fatture, use_container_width=True)
+
+  # --- 4. GESTIONE MILLESIMI & RIPORTI ---
   elif menu == "Gestione Millesimi & Riporti":
-    # ... (restante codice invariato)
-    pass
+    st.title("⚙️ Gestione Metrature e Riporti")
+    
+    tab1, tab2 = st.tabs(["Metrature (MQ) & Millesimi", "Riporti Iniziali"])
+    
+    with tab1:
+      st.subheader("Modifica Metrature Appartamenti")
+      with st.form("form_mq"):
+        nuovi_mq = {}
+        c1, c2 = st.columns(2)
+        for i, app in enumerate(APP_NAMES):
+          val_attuale = st.session_state.mq_appartamenti.get(app, 70.0)
+          col_target = c1 if i % 2 == 0 else c2
+          nuovi_mq[app] = col_target.number_input(f"MQ {app}", min_value=1.0, value=val_attuale, format="%.1f", key=f"mq_{app}")
+        
+        if st.form_submit_button("Salva Metrature"):
+          if salva_mq_su_supabase(nuovi_mq):
+            st.session_state.mq_appartamenti = nuovi_mq
+            st.success("Metrature aggiornate con successo!")
+            st.rerun()
+
+    with tab2:
+      st.subheader("Modifica Riporti Iniziali (Debiti/Crediti)")
+      with st.form("form_rip"):
+        nuovi_riporti = {}
+        c1, c2 = st.columns(2)
+        for i, app in enumerate(APP_NAMES):
+          val_attuale = st.session_state.riporti.get(app, 0.0)
+          col_target = c1 if i % 2 == 0 else c2
+          nuovi_riporti[app] = col_target.number_input(f"Riporto {app} (€)", value=val_attuale, format="%.2f", key=f"rip_{app}")
+        
+        if st.form_submit_button("Salva Riporti"):
+          if salva_riporti_su_supabase(nuovi_riporti):
+            st.session_state.riporti = nuovi_riporti
+            st.success("Riporti aggiornati con successo!")
+            st.rerun()
