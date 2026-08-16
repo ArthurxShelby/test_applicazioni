@@ -620,7 +620,7 @@ else:
         nuovi_riporti = {}
         c1, c2 = st.columns(2)
         for i, app in enumerate(APP_NAMES):
-          val_attuale = st.session_state.riporti.get(app, 0.0)
+          val_attuale = st.session_state.get("riporti", {}).get(app, 0.0)
           col_target = c1 if i % 2 == 0 else c2
           nuovi_riporti[app] = col_target.number_input(f"Riporto {app} (€)", value=val_attuale, format="%.2f", key=f"rip_{app}")
         
