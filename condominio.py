@@ -488,27 +488,60 @@ else:
       with col_p1:
         st.write(f"Stai registrando un pagamento per: **{cond_attivo}**")
         
-        opzioni_fatture_pagamento = []
-        if not df_fatture.empty:
-          for _, row in df_fatture.iterrows():
+        # Filtri per Tipologia e Anno
+        anni_disponibili_pag = sorted(df_fatture["anno"].unique(), reverse=True) if not df_fatture.empty and "anno" in df_fatture.columns else []
+        
+        filtro_tipo_pag = st.selectbox(
+            "Filtra per Tipo di Spesa",
+            ["Tutte le tipologie", "Energia Elettrica", "Gasolio"],
+            key="reg_filtro_tipo"
+        )
+        filtro_anno_pag = st.selectbox(
+            "Filtra per Anno Fiscale",
+            ["Tutti gli anni"] + list(anni_disponibili_pag),
+            key="reg_filtro_anno"
+        )
+        
+        df_fatture_form = df_fatture.copy()
+        if filtro_tipo_pag != "Tutte le tipologie":
+            df_fatture_form = df_fatture_form[df_fatture_form["tipo"] == filtro_tipo_pag]
+        if filtro_anno_pag != "Tutti gli anni":
+            df_fatture_form = df_fatture_form[df_fatture_form["anno"] == filtro_anno_pag]
+
+        opzioni_fatture_pagamento = ["-- Seleziona una fattura --"]
+        if not df_fatture_form.empty:
+          for _, row in df_fatture_form.iterrows():
             opzioni_fatture_pagamento.append(
                 f"ID: {row['id']} | {row['anno']} - {row['mese']} |"
                 f" {row['tipo']} | {row['fornitore']} | Totale: €"
                 f" {row['totale']:,.2f}"
             )
 
-        if not opzioni_fatture_pagamento:
-          fattura_scelta_str = None
-          st.info("Nessuna fattura disponibile per collegare il pagamento.")
-        else:
-          fattura_scelta_str = st.selectbox(
-              "Seleziona Fattura di Riferimento", opzioni_fatture_pagamento, key="reg_fattura"
-          )
+        fattura_scelta_str = st.selectbox(
+            "Seleziona Fattura di Riferimento", opzioni_fatture_pagamento, key="reg_fattura"
+        )
 
       with col_p2:
-        importo_versato = st.number_input(
-            "Importo Pagato (€)", min_value=0.0, format="%.2f", key="reg_importo"
+        # Calcolo automatico della quota dovuta in base ai millesimi del condomino e alla fattura scelta
+        quota_dovuta_automatica = 0.0
+        if fattura_scelta_str != "-- Seleziona una fattura --" and not df_fatture.empty:
+          try:
+            id_fat_temp = int(fattura_scelta_str.split("|")[0].replace("ID:", "").strip())
+            row_f_temp = df_fatture[df_fatture["id"] == id_fat_temp].iloc[0]
+            tot_fat_temp = float(row_f_temp["totale"])
+            mil_c = millesimi.get(cond_attivo, 0.0)
+            quota_dovuta_automatica = (tot_fat_temp * (mil_c / tot_millesimi)) if tot_millesimi > 0 else 0.0
+          except Exception:
+            pass
+
+        importo_da_pagare_input = st.number_input(
+            "Importo da Pagare (Quota Condomino) (€)", min_value=0.0, value=round(quota_dovuta_automatica, 2), format="%.2f", key="reg_importo_dovuto"
         )
+        
+        importo_versato = st.number_input(
+            "Importo Pagato (€)", min_value=0.0, value=0.0, format="%.2f", key="reg_importo"
+        )
+        
         data_versamento = st.text_input(
             "Data o Mese di Registrazione Pagamento", value="Agosto 2026", key="reg_data"
         )
@@ -516,15 +549,10 @@ else:
       submit_pagamento = st.form_submit_button("Registra Pagamento su Supabase")
 
       if submit_pagamento:
-        if not fattura_scelta_str:
+        if fattura_scelta_str == "-- Seleziona una fattura --":
           st.warning("Seleziona una fattura valida prima di registrare un pagamento.")
         else:
           id_fattura_collegata = int(fattura_scelta_str.split("|")[0].replace("ID:", "").strip())
-          row_fattura = df_fatture[df_fatture["id"] == id_fattura_collegata].iloc[0]
-          totale_singola_fattura = float(row_fattura["totale"])
-          
-          mil_condomino = millesimi.get(cond_attivo, 0.0)
-          quota_dovuta_esatta = (totale_singola_fattura * (mil_condomino / tot_millesimi)) if tot_millesimi > 0 else 0.0
           
           st.session_state.pagamenti = carica_pagamenti_da_supabase()
           df_pag_corrente = st.session_state.pagamenti
@@ -537,13 +565,15 @@ else:
               accredito_precedente = float(ultimo_record.get("riporto", 0.0))
 
           importo_versato_f = float(importo_versato)
-          riporto_generato = round(importo_versato_f - quota_dovuta_esatta + accredito_precedente, 2)
+          quota_dovuta_f = float(importo_da_pagare_input)
+          
+          riporto_generato = round(importo_versato_f - quota_dovuta_f + accredito_precedente, 2)
 
           nuovo_pagamento = {
               "condominio": cond_attivo,
               "fattura_id": id_fattura_collegata,
               "data_pagamento": data_versamento,
-              "importo_da_pagare": round(quota_dovuta_esatta, 2),
+              "importo_da_pagare": round(quota_dovuta_f, 2),
               "importo_pagato": importo_versato_f,
               "accredito": round(accredito_precedente, 2),
               "riporto": riporto_generato,
