@@ -483,7 +483,6 @@ else:
           key="reg_filtro_anno"
       )
       
-    # Filtraggio rigoroso applicato direttamente al DataFrame delle fatture
     df_fatture_form = df_fatture.copy()
     if not df_fatture_form.empty:
       if filtro_tipo_pag != "Tutte le tipologie" and "tipo" in df_fatture_form.columns:
@@ -504,7 +503,6 @@ else:
         "Seleziona Fattura di Riferimento", opzioni_fatture_pagamento, key="reg_fattura"
     )
 
-    # Calcolo automatico della quota dovuta
     quota_dovuta_automatica = 0.0
     if fattura_scelta_str != "-- Seleziona una fattura --" and not df_fatture_form.empty:
       try:
@@ -516,7 +514,6 @@ else:
       except Exception:
         pass
 
-    # Gestione dello stato per azzerare e aggiornare i campi al cambio utente/fattura
     current_selection_key = f"{cond_attivo}_{fattura_scelta_str}"
     if "last_selection_key" not in st.session_state:
       st.session_state.last_selection_key = current_selection_key
@@ -807,10 +804,37 @@ else:
   # --- 3. STORICO E DETTAGLIO ---
   elif menu == "Storico e Dettaglio":
     st.title("📂 Storico Fatture")
+    
     if df_fatture.empty:
       st.info("Nessuna fattura presente nello storico.")
     else:
-      st.dataframe(df_fatture, use_container_width=True)
+      # Filtri per Anno e Tipologia nella sezione Storico e Dettaglio
+      col_storico1, col_storico2 = st.columns(2)
+      with col_storico1:
+        anni_disp_storico = sorted(df_fatture["anno"].unique(), reverse=True) if "anno" in df_fatture.columns else []
+        filtro_anno_storico = st.selectbox(
+            "Filtra per Anno Fiscale",
+            ["Tutti gli anni"] + list(anni_disp_storico),
+            key="storico_filtro_anno"
+        )
+      with col_storico2:
+        filtro_tipo_storico = st.selectbox(
+            "Filtra per Tipologia Spesa",
+            ["Tutte le tipologie", "Energia Elettrica", "Gasolio"],
+            key="storico_filtro_tipo"
+        )
+
+      df_storico_filtered = df_fatture.copy()
+      if filtro_anno_storico != "Tutti gli anni" and "anno" in df_storico_filtered.columns:
+        df_storico_filtered = df_storico_filtered[df_storico_filtered["anno"] == int(filtro_anno_storico)]
+      if filtro_tipo_storico != "Tutte le tipologie" and "tipo" in df_storico_filtered.columns:
+        df_storico_filtered = df_storico_filtered[df_storico_filtered["tipo"] == filtro_tipo_storico]
+
+      st.markdown("---")
+      if df_storico_filtered.empty:
+        st.warning("Nessuna fattura trovata con i filtri selezionati.")
+      else:
+        st.dataframe(df_storico_filtered, use_container_width=True)
 
   # --- 4. GESTIONE MILLESIMI ---
   elif menu == "Gestione Millesimi & Riporti":
