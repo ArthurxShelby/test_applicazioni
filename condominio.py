@@ -565,7 +565,7 @@ else:
     
     if not df_pag.empty:
       if not df_fatture_all.empty and "anno" in df_fatture_all.columns:
-          df_fatture_all['rif_fattura'] = df_fatture_all['anno'].astype(str) + " - " + df_fatture_all['mese']
+          df_fatture_all['rif_fattura'] = df_fatture_all['anno'].astype(str) + " - " + df_fatture_all['mese'] + " (" + df_fatture_all['tipo'] + ")"
           lookup_fat = df_fatture_all.set_index('id')['rif_fattura']
           df_pag['Riferimento'] = df_pag['fattura_id'].map(lookup_fat).fillna("N/A")
       else:
