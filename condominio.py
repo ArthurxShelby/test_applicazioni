@@ -483,11 +483,12 @@ else:
           key="reg_filtro_anno"
       )
       
+    # Filtraggio rigoroso applicato direttamente al DataFrame delle fatture
     df_fatture_form = df_fatture.copy()
     if not df_fatture_form.empty:
-      if filtro_tipo_pag != "Tutte le tipologie":
+      if filtro_tipo_pag != "Tutte le tipologie" and "tipo" in df_fatture_form.columns:
           df_fatture_form = df_fatture_form[df_fatture_form["tipo"] == filtro_tipo_pag]
-      if filtro_anno_pag != "Tutti gli anni":
+      if filtro_anno_pag != "Tutti gli anni" and "anno" in df_fatture_form.columns:
           df_fatture_form = df_fatture_form[df_fatture_form["anno"] == int(filtro_anno_pag)]
 
     opzioni_fatture_pagamento = ["-- Seleziona una fattura --"]
@@ -515,7 +516,7 @@ else:
       except Exception:
         pass
 
-    # Gestione dello stato per azzerare/aggiornare i campi quando cambia la selezione
+    # Gestione dello stato per azzerare e aggiornare i campi al cambio utente/fattura
     current_selection_key = f"{cond_attivo}_{fattura_scelta_str}"
     if "last_selection_key" not in st.session_state:
       st.session_state.last_selection_key = current_selection_key
@@ -526,7 +527,6 @@ else:
       st.session_state.reg_data = ""
       st.session_state.last_selection_key = current_selection_key
     else:
-      # Aggiorna comunque la quota dovuta se cambia la fattura ma la chiave resta sincronizzata
       st.session_state.reg_importo_dovuto = round(quota_dovuta_automatica, 2)
 
     with st.form("form_registra_pagamento"):
@@ -549,44 +549,44 @@ else:
       submit_pagamento = st.form_submit_button("Registra Pagamento su Supabase")
 
       if submit_pagamento:
-        if fattura_scelta_str == "-- Seleziona una fattura --":
-          st.warning("Seleziona una fattura valida prima di registrare un pagamento.")
-        else:
+        if fattura_scelta_str != "-- Seleziona una fattura --":
           id_fattura_collegata = int(fattura_scelta_str.split("|")[0].replace("ID:", "").strip())
-          
-          st.session_state.pagamenti = carica_pagamenti_da_supabase()
-          df_pag_corrente = st.session_state.pagamenti
-          
-          accredito_precedente = 0.0
-          if not df_pag_corrente.empty:
-            df_cond_prec = df_pag_corrente[df_pag_corrente["condominio"] == cond_attivo]
-            if not df_cond_prec.empty:
-              ultimo_record = df_cond_prec.iloc[-1]
-              accredito_precedente = float(ultimo_record.get("riporto", 0.0))
+        else:
+          id_fattura_collegata = None
 
-          importo_versato_f = float(importo_versato)
-          quota_dovuta_f = float(importo_da_pagare_input)
-          
-          riporto_generato = round(importo_versato_f - quota_dovuta_f + accredito_precedente, 2)
+        st.session_state.pagamenti = carica_pagamenti_da_supabase()
+        df_pag_corrente = st.session_state.pagamenti
+        
+        accredito_precedente = 0.0
+        if not df_pag_corrente.empty:
+          df_cond_prec = df_pag_corrente[df_pag_corrente["condominio"] == cond_attivo]
+          if not df_cond_prec.empty:
+            ultimo_record = df_cond_prec.iloc[-1]
+            accredito_precedente = float(ultimo_record.get("riporto", 0.0))
 
-          nuovo_pagamento = {
-              "condominio": cond_attivo,
-              "fattura_id": id_fattura_collegata,
-              "data_pagamento": data_versamento if data_versamento else "Data non specificata",
-              "importo_da_pagare": round(quota_dovuta_f, 2),
-              "importo_pagato": importo_versato_f,
-              "accredito": round(accredito_precedente, 2),
-              "riporto": riporto_generato,
-          }
+        importo_versato_f = float(importo_versato)
+        quota_dovuta_f = float(importo_da_pagare_input)
+        
+        riporto_generato = round(importo_versato_f - quota_dovuta_f + accredito_precedente, 2)
 
-          try:
-            supabase.table("pagamenti").insert(nuovo_pagamento).execute()
-          except Exception:
-            supabase.table("pagamneti").insert(nuovo_pagamento).execute()
+        nuovo_pagamento = {
+            "condominio": cond_attivo,
+            "fattura_id": id_fattura_collegata,
+            "data_pagamento": data_versamento if data_versamento else "Data non specificata",
+            "importo_da_pagare": round(quota_dovuta_f, 2),
+            "importo_pagato": importo_versato_f,
+            "accredito": round(accredito_precedente, 2),
+            "riporto": riporto_generato,
+        }
 
-          st.session_state.pagamenti = carica_pagamenti_da_supabase()
-          st.success(f"Pagamento registrato per {cond_attivo}!")
-          st.rerun()
+        try:
+          supabase.table("pagamenti").insert(nuovo_pagamento).execute()
+        except Exception:
+          supabase.table("pagamneti").insert(nuovo_pagamento).execute()
+
+        st.session_state.pagamenti = carica_pagamenti_da_supabase()
+        st.success(f"Pagamento registrato per {cond_attivo}!")
+        st.rerun()
 
     # --- TABELLA STORICO PAGAMENTI ---
     st.markdown("### 📂 Storico Pagamenti Ricevuti")
