@@ -483,7 +483,6 @@ else:
           key="reg_filtro_anno"
       )
       
-    # Filtraggio reattivo fuori dal form
     df_fatture_form = df_fatture.copy()
     if not df_fatture_form.empty:
       if filtro_tipo_pag != "Tutte le tipologie":
@@ -504,7 +503,7 @@ else:
         "Seleziona Fattura di Riferimento", opzioni_fatture_pagamento, key="reg_fattura"
     )
 
-    # Calcolo automatico della quota dovuta in base alla fattura selezionata
+    # Calcolo automatico della quota dovuta
     quota_dovuta_automatica = 0.0
     if fattura_scelta_str != "-- Seleziona una fattura --" and not df_fatture_form.empty:
       try:
@@ -516,21 +515,35 @@ else:
       except Exception:
         pass
 
-    with st.form("form_registra_pagamento", clear_on_submit=True):
+    # Gestione dello stato per azzerare/aggiornare i campi quando cambia la selezione
+    current_selection_key = f"{cond_attivo}_{fattura_scelta_str}"
+    if "last_selection_key" not in st.session_state:
+      st.session_state.last_selection_key = current_selection_key
+
+    if st.session_state.last_selection_key != current_selection_key:
+      st.session_state.reg_importo_dovuto = round(quota_dovuta_automatica, 2)
+      st.session_state.reg_importo = 0.0
+      st.session_state.reg_data = ""
+      st.session_state.last_selection_key = current_selection_key
+    else:
+      # Aggiorna comunque la quota dovuta se cambia la fattura ma la chiave resta sincronizzata
+      st.session_state.reg_importo_dovuto = round(quota_dovuta_automatica, 2)
+
+    with st.form("form_registra_pagamento"):
       st.write(f"Stai registrando un pagamento per: **{cond_attivo}** (Fattura selezionata: *{fattura_scelta_str}*)")
       
       col_form1, col_form2 = st.columns(2)
       with col_form1:
         importo_da_pagare_input = st.number_input(
-            "Importo da Pagare (Quota Condomino) (€)", min_value=0.0, value=round(quota_dovuta_automatica, 2), format="%.2f", key="reg_importo_dovuto"
+            "Importo da Pagare (Quota Condomino) (€)", min_value=0.0, format="%.2f", key="reg_importo_dovuto"
         )
       with col_form2:
         importo_versato = st.number_input(
-            "Importo Pagato (€)", min_value=0.0, value=0.0, format="%.2f", key="reg_importo"
+            "Importo Pagato (€)", min_value=0.0, format="%.2f", key="reg_importo"
         )
       
       data_versamento = st.text_input(
-          "Data o Mese di Registrazione Pagamento", value="Agosto 2026", key="reg_data"
+          "Data o Mese di Registrazione Pagamento", key="reg_data"
       )
 
       submit_pagamento = st.form_submit_button("Registra Pagamento su Supabase")
@@ -559,7 +572,7 @@ else:
           nuovo_pagamento = {
               "condominio": cond_attivo,
               "fattura_id": id_fattura_collegata,
-              "data_pagamento": data_versamento,
+              "data_pagamento": data_versamento if data_versamento else "Data non specificata",
               "importo_da_pagare": round(quota_dovuta_f, 2),
               "importo_pagato": importo_versato_f,
               "accredito": round(accredito_precedente, 2),
