@@ -176,8 +176,6 @@ def genera_pdf_riparto(df_reparto, titolo_contesto):
   return buffer.getvalue()
 
 
-# --- SISTEMA DI LOGIN ---
-
 def genera_ricevuta_pagamento(row_pag, df_fatture_ref):
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=30, bottomMargin=30)
@@ -256,7 +254,6 @@ def genera_ricevuta_pagamento(row_pag, df_fatture_ref):
   return buffer.getvalue()
 
 
-
 def login_screen():
   st.title("🏢 Accesso Gestione Condominio")
   with st.form("login_form"):
@@ -310,8 +307,6 @@ else:
 
     if df_fatture.empty:
       st.info("La tabella 'fatture' su Supabase è attualmente vuota. Inserisci una fattura dalla sezione 'Inserisci Fattura' per popolare i calcoli.")
-      df_filtered = pd.DataFrame(columns=["id", "anno", "mese", "tipo", "fornitore", "imponibile", "iva", "totale", "file"])
-      selected_option = "-- Tutte le fatture filtrate --"
       tot_imp, tot_iva, tot_complessivo = 0.0, 0.0, 0.0
       descrizione_contesto = "Nessuna fattura"
     else:
@@ -341,8 +336,6 @@ else:
 
       st.markdown("---")
       st.subheader("Selezione Fattura Specifica")
-
-      selected_option = "-- Tutte le fatture filtrate --"
 
       if df_filtered.empty:
         st.warning("Nessuna fattura trovata con i filtri selezionati.")
@@ -383,11 +376,10 @@ else:
         tot_iva = df_calcolo["iva"].sum()
         tot_complessivo = df_calcolo["totale"].sum()
 
-      if selected_option != "-- Tutte le fatture filtrate --" and not df_filtered.empty:
+      if not df_filtered.empty and 'selected_option' in locals() and selected_option != "-- Tutte le fatture filtrate --":
         st.markdown("### 📎 File Fattura Collegato")
         if file_selezionato and str(file_selezionato).strip() != "" and str(file_selezionato).lower() != "nan":
           st.success(f"File allegato registrato: **{file_selezionato}**")
-          
           try:
             res = supabase.storage.from_(BUCKET_NAME).download(str(file_selezionato).strip())
             if res:
@@ -401,7 +393,6 @@ else:
               )
           except Exception as e:
             st.warning(f"Impossibile scaricare il file dal bucket '{BUCKET_NAME}': {e}")
-            st.info("Assicurati che il file sia presente nel bucket su Supabase.")
         else:
           st.info("Nessun file PDF associato a questa fattura.")
 
@@ -476,68 +467,71 @@ else:
         key="reg_condomino"
     )
 
+    st.markdown("#### Filtra Fatture per il Pagamento")
+    col_p1, col_p2 = st.columns(2)
+    with col_p1:
+      anni_disponibili_pag = sorted(df_fatture["anno"].unique(), reverse=True) if not df_fatture.empty and "anno" in df_fatture.columns else []
+      filtro_tipo_pag = st.selectbox(
+          "Filtra per Tipo di Spesa",
+          ["Tutte le tipologie", "Energia Elettrica", "Gasolio"],
+          key="reg_filtro_tipo"
+      )
+    with col_p2:
+      filtro_anno_pag = st.selectbox(
+          "Filtra per Anno Fiscale",
+          ["Tutti gli anni"] + list(anni_disponibili_pag),
+          key="reg_filtro_anno"
+      )
+      
+    # Filtraggio reattivo fuori dal form
+    df_fatture_form = df_fatture.copy()
+    if not df_fatture_form.empty:
+      if filtro_tipo_pag != "Tutte le tipologie":
+          df_fatture_form = df_fatture_form[df_fatture_form["tipo"] == filtro_tipo_pag]
+      if filtro_anno_pag != "Tutti gli anni":
+          df_fatture_form = df_fatture_form[df_fatture_form["anno"] == int(filtro_anno_pag)]
+
+    opzioni_fatture_pagamento = ["-- Seleziona una fattura --"]
+    if not df_fatture_form.empty:
+      for _, row in df_fatture_form.iterrows():
+        opzioni_fatture_pagamento.append(
+            f"ID: {row['id']} | {row['anno']} - {row['mese']} |"
+            f" {row['tipo']} | {row['fornitore']} | Totale: €"
+            f" {row['totale']:,.2f}"
+        )
+
+    fattura_scelta_str = st.selectbox(
+        "Seleziona Fattura di Riferimento", opzioni_fatture_pagamento, key="reg_fattura"
+    )
+
+    # Calcolo automatico della quota dovuta in base alla fattura selezionata
+    quota_dovuta_automatica = 0.0
+    if fattura_scelta_str != "-- Seleziona una fattura --" and not df_fatture_form.empty:
+      try:
+        id_fat_temp = int(fattura_scelta_str.split("|")[0].replace("ID:", "").strip())
+        row_f_temp = df_fatture_form[df_fatture_form["id"] == id_fat_temp].iloc[0]
+        tot_fat_temp = float(row_f_temp["totale"])
+        mil_c = millesimi.get(cond_attivo, 0.0)
+        quota_dovuta_automatica = (tot_fat_temp * (mil_c / tot_millesimi)) if tot_millesimi > 0 else 0.0
+      except Exception:
+        pass
+
     with st.form("form_registra_pagamento", clear_on_submit=True):
-      col_p1, col_p2 = st.columns(2)
-      with col_p1:
-        st.write(f"Stai registrando un pagamento per: **{cond_attivo}**")
-        
-        anni_disponibili_pag = sorted(df_fatture["anno"].unique(), reverse=True) if not df_fatture.empty and "anno" in df_fatture.columns else []
-        
-        filtro_tipo_pag = st.selectbox(
-            "Filtra per Tipo di Spesa",
-            ["Tutte le tipologie", "Energia Elettrica", "Gasolio"],
-            key="reg_filtro_tipo"
-        )
-        filtro_anno_pag = st.selectbox(
-            "Filtra per Anno Fiscale",
-            ["Tutti gli anni"] + list(anni_disponibili_pag),
-            key="reg_filtro_anno"
-        )
-        
-        # Filtriamo correttamente il dataframe per la tendina
-        df_fatture_form = df_fatture.copy()
-        if not df_fatture_form.empty:
-          if filtro_tipo_pag != "Tutte le tipologie":
-              df_fatture_form = df_fatture_form[df_fatture_form["tipo"] == filtro_tipo_pag]
-          if filtro_anno_pag != "Tutti gli anni":
-              df_fatture_form = df_fatture_form[df_fatture_form["anno"] == int(filtro_anno_pag)]
-
-        opzioni_fatture_pagamento = ["-- Seleziona una fattura --"]
-        if not df_fatture_form.empty:
-          for _, row in df_fatture_form.iterrows():
-            opzioni_fatture_pagamento.append(
-                f"ID: {row['id']} | {row['anno']} - {row['mese']} |"
-                f" {row['tipo']} | {row['fornitore']} | Totale: €"
-                f" {row['totale']:,.2f}"
-            )
-
-        fattura_scelta_str = st.selectbox(
-            "Seleziona Fattura di Riferimento", opzioni_fatture_pagamento, key="reg_fattura"
-        )
-
-      with col_p2:
-        quota_dovuta_automatica = 0.0
-        if fattura_scelta_str != "-- Seleziona una fattura --" and not df_fatture_form.empty:
-          try:
-            id_fat_temp = int(fattura_scelta_str.split("|")[0].replace("ID:", "").strip())
-            row_f_temp = df_fatture_form[df_fatture_form["id"] == id_fat_temp].iloc[0]
-            tot_fat_temp = float(row_f_temp["totale"])
-            mil_c = millesimi.get(cond_attivo, 0.0)
-            quota_dovuta_automatica = (tot_fat_temp * (mil_c / tot_millesimi)) if tot_millesimi > 0 else 0.0
-          except Exception:
-            pass
-
+      st.write(f"Stai registrando un pagamento per: **{cond_attivo}** (Fattura selezionata: *{fattura_scelta_str}*)")
+      
+      col_form1, col_form2 = st.columns(2)
+      with col_form1:
         importo_da_pagare_input = st.number_input(
             "Importo da Pagare (Quota Condomino) (€)", min_value=0.0, value=round(quota_dovuta_automatica, 2), format="%.2f", key="reg_importo_dovuto"
         )
-        
+      with col_form2:
         importo_versato = st.number_input(
             "Importo Pagato (€)", min_value=0.0, value=0.0, format="%.2f", key="reg_importo"
         )
-        
-        data_versamento = st.text_input(
-            "Data o Mese di Registrazione Pagamento", value="Agosto 2026", key="reg_data"
-        )
+      
+      data_versamento = st.text_input(
+          "Data o Mese di Registrazione Pagamento", value="Agosto 2026", key="reg_data"
+      )
 
       submit_pagamento = st.form_submit_button("Registra Pagamento su Supabase")
 
@@ -724,10 +718,6 @@ else:
     st.title("📝 Inserimento e Gestione Fatture")
 
     st.subheader("Nuova Fattura")
-    
-    if "form_submitted" not in st.session_state:
-      st.session_state.form_submitted = False
-
     with st.form("form_fattura_nuova", clear_on_submit=True):
       col1, col2 = st.columns(2)
       with col1:
