@@ -179,7 +179,6 @@ def genera_pdf_riparto(df_reparto, titolo_contesto):
 # --- SISTEMA DI LOGIN ---
 
 def genera_ricevuta_pagamento(row_pag, df_fatture_ref):
-  """Genera PDF attestante versamento"""
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=30, bottomMargin=30)
   styles = getSampleStyleSheet()
@@ -187,7 +186,6 @@ def genera_ricevuta_pagamento(row_pag, df_fatture_ref):
   normal = ParagraphStyle('NormalReceipt', parent=styles['Normal'], fontSize=11, leading=16)
   small = ParagraphStyle('SmallReceipt', parent=styles['Normal'], fontSize=9, leading=12, textColor=colors.grey)
 
-  # Dati pagamento
   condominio = row_pag.get('condominio','')
   data_pag = str(row_pag.get('data_pagamento',''))
   importo_pagato = float(row_pag.get('importo_pagato',0))
@@ -197,7 +195,6 @@ def genera_ricevuta_pagamento(row_pag, df_fatture_ref):
   rif = row_pag.get('Riferimento','N/A')
   id_pag = row_pag.get('id','')
 
-  # Dati fattura se trovata
   fatt_id = row_pag.get('fattura_id')
   fornitore = ''
   tipo = ''
@@ -278,7 +275,6 @@ def login_screen():
 if not st.session_state.logged_in:
   login_screen()
 else:
-  # --- BARRA LATERALE E NAVIGAZIONE ---
   st.sidebar.title("Menu Principale")
   menu = st.sidebar.selectbox(
       "Seleziona Sezione",
@@ -294,7 +290,6 @@ else:
     st.session_state.logged_in = False
     st.rerun()
 
-  # Aggiornamento dati da Supabase
   st.session_state.fatture = carica_fatture_da_supabase()
   st.session_state.pagamenti = carica_pagamenti_da_supabase()
   st.session_state.mq_appartamenti = carica_mq_da_supabase()
@@ -376,7 +371,6 @@ else:
           id_estratto = int(selected_option.split("|")[0].replace("ID:", "").strip())
           df_calcolo = df_filtered[df_filtered["id"] == id_estratto]
           
-          # Estrazione dinamica del mese e dell'anno esatti dalla fattura selezionata per il PDF
           row_selezionata = df_calcolo.iloc[0]
           mese_selezionato = row_selezionata["mese"]
           anno_selezionato = row_selezionata["anno"]
@@ -389,7 +383,6 @@ else:
         tot_iva = df_calcolo["iva"].sum()
         tot_complessivo = df_calcolo["totale"].sum()
 
-      # --- GESTIONE DOWNLOAD FILE PDF DA SUPABASE STORAGE ---
       if selected_option != "-- Tutte le fatture filtrate --" and not df_filtered.empty:
         st.markdown("### 📎 File Fattura Collegato")
         if file_selezionato and str(file_selezionato).strip() != "" and str(file_selezionato).lower() != "nan":
@@ -483,12 +476,11 @@ else:
         key="reg_condomino"
     )
 
-    with st.form("form_registra_pagamento"):
+    with st.form("form_registra_pagamento", clear_on_submit=True):
       col_p1, col_p2 = st.columns(2)
       with col_p1:
         st.write(f"Stai registrando un pagamento per: **{cond_attivo}**")
         
-        # Filtri per Tipologia e Anno
         anni_disponibili_pag = sorted(df_fatture["anno"].unique(), reverse=True) if not df_fatture.empty and "anno" in df_fatture.columns else []
         
         filtro_tipo_pag = st.selectbox(
@@ -502,11 +494,13 @@ else:
             key="reg_filtro_anno"
         )
         
+        # Filtriamo correttamente il dataframe per la tendina
         df_fatture_form = df_fatture.copy()
-        if filtro_tipo_pag != "Tutte le tipologie":
-            df_fatture_form = df_fatture_form[df_fatture_form["tipo"] == filtro_tipo_pag]
-        if filtro_anno_pag != "Tutti gli anni":
-            df_fatture_form = df_fatture_form[df_fatture_form["anno"] == filtro_anno_pag]
+        if not df_fatture_form.empty:
+          if filtro_tipo_pag != "Tutte le tipologie":
+              df_fatture_form = df_fatture_form[df_fatture_form["tipo"] == filtro_tipo_pag]
+          if filtro_anno_pag != "Tutti gli anni":
+              df_fatture_form = df_fatture_form[df_fatture_form["anno"] == int(filtro_anno_pag)]
 
         opzioni_fatture_pagamento = ["-- Seleziona una fattura --"]
         if not df_fatture_form.empty:
@@ -522,12 +516,11 @@ else:
         )
 
       with col_p2:
-        # Calcolo automatico della quota dovuta in base ai millesimi del condomino e alla fattura scelta
         quota_dovuta_automatica = 0.0
-        if fattura_scelta_str != "-- Seleziona una fattura --" and not df_fatture.empty:
+        if fattura_scelta_str != "-- Seleziona una fattura --" and not df_fatture_form.empty:
           try:
             id_fat_temp = int(fattura_scelta_str.split("|")[0].replace("ID:", "").strip())
-            row_f_temp = df_fatture[df_fatture["id"] == id_fat_temp].iloc[0]
+            row_f_temp = df_fatture_form[df_fatture_form["id"] == id_fat_temp].iloc[0]
             tot_fat_temp = float(row_f_temp["totale"])
             mil_c = millesimi.get(cond_attivo, 0.0)
             quota_dovuta_automatica = (tot_fat_temp * (mil_c / tot_millesimi)) if tot_millesimi > 0 else 0.0
@@ -588,7 +581,7 @@ else:
           st.success(f"Pagamento registrato per {cond_attivo}!")
           st.rerun()
 
-    # --- TABELLA STORICO PAGAMENTI (CON ACCREDITO EDITABILE E RICALCOLO A CATENA) ---
+    # --- TABELLA STORICO PAGAMENTI ---
     st.markdown("### 📂 Storico Pagamenti Ricevuti")
     df_pag = st.session_state.pagamenti
     df_fatture_all = carica_fatture_da_supabase() 
@@ -625,7 +618,6 @@ else:
       with col_save:
         salva_clicked = st.button("💾 Salva Modifiche Accredito", key="btn_salva_accredito")
       with col_pdf:
-        # seleziona riga per stampa
         if not df_visual.empty:
           opzioni_ricevuta = [f"ID: {r['id']} | {r['condominio']} | {r['Riferimento']} | € {float(r['importo_pagato']):.2f} del {r['data_pagamento']}" for _, r in df_visual.iterrows()]
           sel_ricevuta = st.selectbox("Seleziona pagamento per ricevuta PDF", opzioni_ricevuta, key="sel_ricevuta_pdf")
@@ -817,7 +809,7 @@ else:
     else:
       st.dataframe(df_fatture, use_container_width=True)
 
-  # --- 4. GESTIONE MILLESIMI (SENZA RIPORTI) ---
+  # --- 4. GESTIONE MILLESIMI ---
   elif menu == "Gestione Millesimi & Riporti":
     st.title("⚙️ Gestione Metrature e Millesimi")
 
