@@ -957,8 +957,16 @@ else:
       nuovi_mq = {}
       for app in APP_NAMES:
         val_attuale = st.session_state.mq_appartamenti.get(app, 70.0)
-        nuovi_mq[app] = st.number_input(f"MQ {app}", min_value=1.0, value=float(val_attuale), format="%.1f", key=f"mq_{app}")
-      
+        # MODIFICA QUI: aggiunto step=0.01 e modificato il formato a "%.2f"
+        nuovi_mq[app] = st.number_input(
+            f"MQ {app}",
+            min_value=1.0,
+            value=float(val_attuale),
+            step=0.01,
+            format="%.2f",
+            key=f"mq_{app}",
+        )
+
       if st.form_submit_button("Salva Metrature"):
         if salva_mq_su_supabase(nuovi_mq):
           st.session_state.mq_appartamenti = nuovi_mq
@@ -968,5 +976,12 @@ else:
     st.markdown("---")
     st.subheader("Millesimi Calcolati")
     millesimi = calcola_millesimi_da_mq(st.session_state.mq_appartamenti)
-    df_mill = pd.DataFrame([{"Appartamento": k, "MQ": st.session_state.mq_appartamenti[k], "Millesimi": v} for k, v in millesimi.items()])
+    df_mill = pd.DataFrame([
+        {
+            "Appartamento": k,
+            "MQ": st.session_state.mq_appartamenti[k],
+            "Millesimi": v,
+        }
+        for k, v in millesimi.items()
+    ])
     st.dataframe(df_mill, use_container_width=True)
