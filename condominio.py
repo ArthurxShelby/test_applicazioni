@@ -1,3 +1,4 @@
+from decimal import Decimal, ROUND_HALF_UP
 import io
 import os
 import pandas as pd
@@ -286,7 +287,9 @@ else:
   st.session_state.mq_appartamenti = carica_mq_da_supabase()
 
   df_fatture = st.session_state.fatture
-  tot_mq_reali = sum(st.session_state.mq_appartamenti.values())
+
+  # Utilizzo di Decimal per il totale dei mq reali con precisione estesa
+  tot_mq_reali_dec = sum(Decimal(str(v)) for v in st.session_state.mq_appartamenti.values())
 
   mese_map = {
       "Gennaio": 1, "Febbraio": 2, "Marzo": 3, "Aprile": 4, 
@@ -397,23 +400,33 @@ else:
     col3.metric("Totale Generale", f"€ {tot_complessivo:,.2f}")
 
     st.markdown("---")
-    st.subheader("Tabella di Riparto per Condomino (Basata su Metri Quadri Reali)")
+    st.subheader("Tabella di Riparto per Condomino (Basata su Metri Quadri Reali con Precisione 11+ Decimali)")
+
+    # Conversione in Decimal per calcoli millimetrici
+    tot_complessivo_dec = Decimal(str(tot_complessivo))
+    tot_imp_dec = Decimal(str(tot_imp))
+    tot_iva_dec = Decimal(str(tot_iva))
 
     reparto_data = []
-    sum_mq = 0.0
-    sum_imp = 0.0
-    sum_iva = 0.0
-    sum_tot = 0.0
+    sum_mq = Decimal('0.0')
+    sum_imp = Decimal('0.0')
+    sum_iva = Decimal('0.0')
+    sum_tot = Decimal('0.0')
 
     for app, mq in st.session_state.mq_appartamenti.items():
-      # Rapporto esatto basato sui mq reali con precisione estesa
-      rapporto_reale = (mq / tot_mq_reali) if tot_mq_reali > 0 else 0
+      mq_dec = Decimal(str(mq))
+      
+      # Rapporto calcolato con precisione elevata estesa a 11+ decimali
+      if tot_mq_reali_dec > 0:
+        rapporto_reale = mq_dec / tot_mq_reali_dec
+      else:
+        rapporto_reale = Decimal('0.0')
 
-      quota_imp = round(tot_imp * rapporto_reale, 2)
-      quota_iva = round(tot_iva * rapporto_reale, 2)
-      quota_tot = round(tot_complessivo * rapporto_reale, 2)
+      quota_imp = (tot_imp_dec * rapporto_reale).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+      quota_iva = (tot_iva_dec * rapporto_reale).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+      quota_tot = (tot_complessivo_dec * rapporto_reale).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-      sum_mq += mq
+      sum_mq += mq_dec
       sum_imp += quota_imp
       sum_iva += quota_iva
       sum_tot += quota_tot
@@ -421,22 +434,22 @@ else:
       reparto_data.append(
           {
               "Condomino": app,
-              "Metri Quadri (MQ)": mq,
-              "Rapporto (%)": f"{rapporto_reale * 100:.4f}%",
-              "Quota Imponibile (€)": quota_imp,
-              "Quota IVA (€)": quota_iva,
-              "Quota Totale (€)": quota_tot,
+              "Metri Quadri (MQ)": float(mq_dec),
+              "Rapporto (%)": f"{(rapporto_reale * Decimal('100')):.11f}%",
+              "Quota Imponibile (€)": float(quota_imp),
+              "Quota IVA (€)": float(quota_iva),
+              "Quota Totale (€)": float(quota_tot),
           }
       )
 
     reparto_data.append(
         {
             "Condomino": "TOTALE",
-            "Metri Quadri (MQ)": round(sum_mq, 2),
-            "Rapporto (%)": "100.00%",
-            "Quota Imponibile (€)": round(sum_imp, 2),
-            "Quota IVA (€)": round(sum_iva, 2),
-            "Quota Totale (€)": round(sum_tot, 2),
+            "Metri Quadri (MQ)": float(sum_mq),
+            "Rapporto (%)": "100.00000000000%",
+            "Quota Imponibile (€)": float(sum_imp),
+            "Quota IVA (€)": float(sum_iva),
+            "Quota Totale (€)": float(sum_tot),
         }
     )
 
@@ -506,11 +519,12 @@ else:
       try:
         id_fat_temp = int(fattura_scelta_str.split("|")[0].replace("ID:", "").strip())
         row_f_temp = df_fatture_form[df_fatture_form["id"] == id_fat_temp].iloc[0]
-        tot_fat_temp = float(row_f_temp["totale"])
-        mq_c = st.session_state.mq_appartamenti.get(cond_attivo, 0.0)
+        tot_fat_temp_dec = Decimal(str(row_f_temp["totale"]))
+        mq_c_dec = Decimal(str(st.session_state.mq_appartamenti.get(cond_attivo, 0.0)))
         
-        rapporto_temp = (mq_c / tot_mq_reali) if tot_mq_reali > 0 else 0.0
-        quota_dovuta_automatica = round(tot_fat_temp * rapporto_temp, 2)
+        if tot_mq_reali_dec > 0:
+          rapporto_temp_dec = mq_c_dec / tot_mq_reali_dec
+          quota_dovuta_automatica = float((tot_fat_temp_dec * rapporto_temp_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
       except Exception:
         pass
 
@@ -727,7 +741,7 @@ else:
   # --- 4. GESTIONE METRATURE ---
   elif menu == "Gestione Millesimi & Riporti":
     st.title("⚙️ Gestione Metrature Appartamenti")
-    st.info("💡 Assicurati che i metri quadri di **MARANGI** siano impostati correttamente affinché la sua quota risulti 16,34 € in base al totale della fattura.")
+    st.info("💡 Utilizzando il motore a precisione estesa Decimal, i calcoli terranno conto di tutti i decimali necessari per centrare le quote esatte.")
     
     with st.form("form_mq"):
       nuovi_mq = {}
@@ -743,9 +757,9 @@ else:
           st.success("Metrature aggiornate su Supabase!")
           st.rerun()
 
-    tot_mq_aggiornato = sum(st.session_state.mq_appartamenti.values())
+    tot_mq_aggiornato = sum(Decimal(str(v)) for v in st.session_state.mq_appartamenti.values())
     df_mill = pd.DataFrame([
-        {"Appartamento": k, "MQ": v, "Incidenza (%)": f"{(v / tot_mq_aggiornato)*100:.4f}%" if tot_mq_aggiornato > 0 else "0%"} 
+        {"Appartamento": k, "MQ": v, "Incidenza (%)": f"{((Decimal(str(v)) / tot_mq_aggiornato) * Decimal('100')):.11f}%" if tot_mq_aggiornato > 0 else "0%"} 
         for k, v in st.session_state.mq_appartamenti.items()
     ])
     st.dataframe(df_mill, use_container_width=True)
