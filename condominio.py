@@ -405,7 +405,7 @@ else:
     st.markdown("---")
     st.subheader("Tabella di Riparto per Condomino")
 
-    # --- APPLICAZIONE DELLA FORMULA DIRETTA: (mq / mq_totali) * quota ---
+    # --- APPLICAZIONE DELLA FORMULA RIGOROSA A 11 CIFRE: (mq / mq_totali) * quota ---
     tot_mq_reali = sum(st.session_state.mq_appartamenti.values())
 
     reparto_data = []
@@ -418,16 +418,17 @@ else:
       mq_condomino = st.session_state.mq_appartamenti.get(app, 0.0)
 
       if tot_mq_reali > 0:
+        # Calcolo del rapporto esatto a 11 cifre decimali
         rapporto_11 = mq_condomino / tot_mq_reali
         rapporto_str = f"{rapporto_11:.11f}"
       else:
         rapporto_11 = 0.0
         rapporto_str = "0.00000000000"
 
-      # FORMULA RICHIESTA: mq / mq_totali * quota
-      quota_imp = (mq_condomino / tot_mq_reali) * tot_imp if tot_mq_reali > 0 else 0.0
-      quota_iva = (mq_condomino / tot_mq_reali) * tot_iva if tot_mq_reali > 0 else 0.0
-      quota_tot = (mq_condomino / tot_mq_reali) * tot_complessivo if tot_mq_reali > 0 else 0.0
+      # FORMULA APPLICATA: (mq / mq_totali) * quota
+      quota_imp = rapporto_11 * tot_imp
+      quota_iva = rapporto_11 * tot_iva
+      quota_tot = rapporto_11 * tot_complessivo
 
       sum_millesimi += mil
       sum_imp += quota_imp
@@ -525,8 +526,9 @@ else:
         tot_fat_temp = float(row_f_temp["totale"])
         
         mq_c = st.session_state.mq_appartamenti.get(cond_attivo, 0.0)
-        # FORMULA DIRETTA: (mq / mq_totali) * totale fattura
-        quota_dovuta_automatica = (mq_c / tot_mq_reali) * tot_fat_temp if tot_mq_reali > 0 else 0.0
+        # FORMULA RIGOROSA CON RAPPORTO A 11 CIFRE: (mq / mq_totali) * totale fattura
+        rapporto_11_temp = mq_c / tot_mq_reali if tot_mq_reali > 0 else 0.0
+        quota_dovuta_automatica = rapporto_11_temp * tot_fat_temp
       except Exception:
         pass
 
@@ -875,7 +877,8 @@ else:
         
         for app, mil in millesimi.items():
           mq_c = st.session_state.mq_appartamenti.get(app, 0.0)
-          quota_dovuta = (mq_c / tot_mq_reali) * f_totale if tot_mq_reali > 0 else 0.0
+          rapporto_11_scad = mq_c / tot_mq_reali if tot_mq_reali > 0 else 0.0
+          quota_dovuta = rapporto_11_scad * f_totale
           
           is_pagato = (app, f_id) in pagate_set
           
@@ -983,7 +986,7 @@ else:
 
       if st.form_submit_button("Salva Metrature"):
         if salva_mq_su_supabase(nuovi_mq):
-          st.session_state.mq_appartamenti = nuevos_mq if 'nuevos_mq' in locals() else nuovi_mq
+          st.session_state.mq_appartamenti = nuovi_mq
           st.success("Metrature aggiornate con successo!")
           st.rerun()
 
