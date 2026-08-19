@@ -47,7 +47,7 @@ def carica_mq_da_supabase():
     pass
   return {
       "ESPOSITO": 70.0,
-      "MARANGI": 75.0,
+      "MARANGI": 88.61,
       "LINCESSO": 80.0,
       "FUSO": 85.0,
       "PUCA": 90.0,
@@ -406,7 +406,7 @@ else:
     st.markdown("---")
     st.subheader("Tabella di Riparto per Condomino")
 
-    # --- APPLICAZIONE DELLA FORMULA CON 11 CIFRE DECIMALI SUL RAPPORTO MQ ---
+    # --- APPLICAZIONE DELLA FORMULA DIRETTAMENTE SUI MQ REALI CON 11 CIFRE DECIMALI ---
     tot_mq_reali = sum(st.session_state.mq_appartamenti.values())
 
     reparto_data = []
@@ -418,7 +418,7 @@ else:
     for app, mil in millesimi.items():
       mq_condomino = st.session_state.mq_appartamenti.get(app, 0.0)
 
-      # Calcolo del rapporto esatto con 11 cifre decimali
+      # Calcolo del rapporto esatto con 11 cifre decimali basato direttamente sui mq
       if tot_mq_reali > 0:
         rapporto_11 = mq_condomino / tot_mq_reali
         rapporto_str = f"{rapporto_11:.11f}"
@@ -426,7 +426,7 @@ else:
         rapporto_11 = 0.0
         rapporto_str = "0.00000000000"
 
-      # Calcolo delle quote basato sulla formula richiesta: (mq_condomino / mq_totali) * quota totale
+      # Calcolo delle quote basato sui mq reali: (mq_condomino / mq_totali) * quota totale
       quota_imp = tot_imp * rapporto_11
       quota_iva = tot_iva * rapporto_11
       quota_tot = tot_complessivo * rapporto_11
@@ -526,7 +526,6 @@ else:
         row_f_temp = df_fatture_form[df_fatture_form["id"] == id_fat_temp].iloc[0]
         tot_fat_temp = float(row_f_temp["totale"])
         
-        # Allineato con la stessa logica a 11 decimali anche nel calcolo della quota di pagamento automatica
         mq_c = st.session_state.mq_appartamenti.get(cond_attivo, 0.0)
         rapporto_c = (mq_c / tot_mq_reali) if tot_mq_reali > 0 else 0.0
         quota_dovuta_automatica = tot_fat_temp * rapporto_c
