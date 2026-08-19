@@ -413,10 +413,10 @@ else:
     sum_tot = 0.0
 
     for app, mil in millesimi.items():
-      # Calcolo del rapporto millesimale a 11 cifre decimali
+      # Calcolo del rapporto millesimale bloccato a 11 cifre decimali
       rapporto_millesimale = round(mil / tot_millesimi, 11) if tot_millesimi > 0 else 0
 
-      # Applicazione del rapporto e arrotondamento al centesimo (2 decimali)
+      # Applicazione del rapporto e arrotondamento finale al centesimo
       quota_imp = round(tot_imp * rapporto_millesimale, 2)
       quota_iva = round(tot_iva * rapporto_millesimale, 2)
       quota_tot = round(tot_complessivo * rapporto_millesimale, 2)
@@ -514,6 +514,8 @@ else:
         row_f_temp = df_fatture_form[df_fatture_form["id"] == id_fat_temp].iloc[0]
         tot_fat_temp = float(row_f_temp["totale"])
         mil_c = millesimi.get(cond_attivo, 0.0)
+        
+        # APPLICATO LO STESSO METODO: 11 cifre e arrotondamento al centesimo
         rapporto_temp = round(mil_c / tot_millesimi, 11) if tot_millesimi > 0 else 0.0
         quota_dovuta_automatica = round(tot_fat_temp * rapporto_temp, 2)
       except Exception:
@@ -813,7 +815,6 @@ else:
     if df_fatture.empty:
       st.info("Nessuna fattura presente nello storico.")
     else:
-      # Filtri per Anno e Tipologia nella sezione Storico e Dettaglio
       col_storico1, col_storico2 = st.columns(2)
       with col_storico1:
         anni_disp_storico = sorted(df_fatture["anno"].unique(), reverse=True) if "anno" in df_fatture.columns else []
@@ -864,6 +865,7 @@ else:
         f_totale = float(f_row["totale"])
         
         for app, mil in millesimi.items():
+          # APPLICATO LO STESSO METODO: 11 cifre e arrotondamento al centesimo
           rapporto_temp = round(mil / tot_millesimi, 11) if tot_millesimi > 0 else 0.0
           quota_dovuta = round(f_totale * rapporto_temp, 2)
           is_pagato = (app, f_id) in pagate_set
@@ -903,7 +905,6 @@ else:
 
         st.dataframe(df_scad_filtered, use_container_width=True)
 
-        # --- FUNZIONE PER GENERARE IL PDF DELLO SCADUTO ---
         def genera_pdf_scaduti(df_res, filtro_c, filtro_t, totale_res):
           buf = io.BytesIO()
           doc = SimpleDocTemplate(buf, pagesize=letter)
@@ -941,7 +942,6 @@ else:
           buf.seek(0)
           return buf.getvalue()
 
-        # Pulsante di stampa / download PDF dello scaduto
         col_p_btn1, _ = st.columns([1, 2])
         with col_p_btn1:
           pdf_scadenze_bytes = genera_pdf_scaduti(df_scad_filtered, filtro_scad_cond, filtro_scad_tipo, tot_insoluto)
@@ -963,7 +963,6 @@ else:
       nuovi_mq = {}
       for app in APP_NAMES:
         val_attuale = st.session_state.mq_appartamenti.get(app, 70.0)
-        # Inserimento MQ modificato per accettare i centesimi (step=0.01, format="%.2f")
         nuovi_mq[app] = st.number_input(
             f"MQ {app}",
             min_value=1.0,
