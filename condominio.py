@@ -413,9 +413,13 @@ else:
     sum_tot = 0.0
 
     for app, mil in millesimi.items():
-      quota_imp = tot_imp * (mil / tot_millesimi) if tot_millesimi > 0 else 0
-      quota_iva = tot_iva * (mil / tot_millesimi) if tot_millesimi > 0 else 0
-      quota_tot = tot_complessivo * (mil / tot_millesimi) if tot_millesimi > 0 else 0
+      # Calcolo del rapporto millesimale a 11 cifre decimali
+      rapporto_millesimale = round(mil / tot_millesimi, 11) if tot_millesimi > 0 else 0
+
+      # Applicazione del rapporto e arrotondamento al centesimo (2 decimali)
+      quota_imp = round(tot_imp * rapporto_millesimale, 2)
+      quota_iva = round(tot_iva * rapporto_millesimale, 2)
+      quota_tot = round(tot_complessivo * rapporto_millesimale, 2)
 
       sum_millesimi += mil
       sum_imp += quota_imp
@@ -426,9 +430,9 @@ else:
           {
               "Condomino": app,
               "Millesimi": mil,
-              "Quota Imponibile (€)": round(quota_imp, 2),
-              "Quota IVA (€)": round(quota_iva, 2),
-              "Quota Totale (€)": round(quota_tot, 2),
+              "Quota Imponibile (€)": quota_imp,
+              "Quota IVA (€)": quota_iva,
+              "Quota Totale (€)": quota_tot,
           }
       )
 
@@ -510,7 +514,8 @@ else:
         row_f_temp = df_fatture_form[df_fatture_form["id"] == id_fat_temp].iloc[0]
         tot_fat_temp = float(row_f_temp["totale"])
         mil_c = millesimi.get(cond_attivo, 0.0)
-        quota_dovuta_automatica = (tot_fat_temp * (mil_c / tot_millesimi)) if tot_millesimi > 0 else 0.0
+        rapporto_temp = round(mil_c / tot_millesimi, 11) if tot_millesimi > 0 else 0.0
+        quota_dovuta_automatica = round(tot_fat_temp * rapporto_temp, 2)
       except Exception:
         pass
 
@@ -859,7 +864,8 @@ else:
         f_totale = float(f_row["totale"])
         
         for app, mil in millesimi.items():
-          quota_dovuta = (f_totale * (mil / tot_millesimi)) if tot_millesimi > 0 else 0.0
+          rapporto_temp = round(mil / tot_millesimi, 11) if tot_millesimi > 0 else 0.0
+          quota_dovuta = round(f_totale * rapporto_temp, 2)
           is_pagato = (app, f_id) in pagate_set
           
           if not is_pagato:
@@ -957,16 +963,16 @@ else:
       nuovi_mq = {}
       for app in APP_NAMES:
         val_attuale = st.session_state.mq_appartamenti.get(app, 70.0)
-        # MODIFICA QUI: aggiunto step=0.01 e modificato il formato a "%.2f"
+        # Inserimento MQ modificato per accettare i centesimi (step=0.01, format="%.2f")
         nuovi_mq[app] = st.number_input(
             f"MQ {app}",
             min_value=1.0,
             value=float(val_attuale),
             step=0.01,
             format="%.2f",
-            key=f"mq_{app}",
+            key=f"mq_{app}"
         )
-
+      
       if st.form_submit_button("Salva Metrature"):
         if salva_mq_su_supabase(nuovi_mq):
           st.session_state.mq_appartamenti = nuovi_mq
@@ -976,12 +982,5 @@ else:
     st.markdown("---")
     st.subheader("Millesimi Calcolati")
     millesimi = calcola_millesimi_da_mq(st.session_state.mq_appartamenti)
-    df_mill = pd.DataFrame([
-        {
-            "Appartamento": k,
-            "MQ": st.session_state.mq_appartamenti[k],
-            "Millesimi": v,
-        }
-        for k, v in millesimi.items()
-    ])
+    df_mill = pd.DataFrame([{"Appartamento": k, "MQ": st.session_state.mq_appartamenti[k], "Millesimi": v} for k, v in millesimi.items()])
     st.dataframe(df_mill, use_container_width=True)
