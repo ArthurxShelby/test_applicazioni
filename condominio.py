@@ -127,8 +127,8 @@ if "pagamenti" not in st.session_state:
 def calcola_millesimi_da_mq(mq_dict):
   tot_mq = sum(mq_dict.values())
   if tot_mq <= 0:
-    return {k: 0 for k in mq_dict}
-  return {app: round((mq / tot_mq) * 1000, 2) for app, mq in mq_dict.items()}
+    return {k: 0.0 for k in mq_dict}
+  return {app: round((mq / tot_mq) * 1000, 4) for app, mq in mq_dict.items()}
 
 
 # --- FUNZIONE PER GENERARE IL PDF ---
@@ -293,7 +293,6 @@ else:
 
   df_fatture = st.session_state.fatture
   millesimi = calcola_millesimi_da_mq(st.session_state.mq_appartamenti)
-  tot_millesimi = sum(millesimi.values())
 
   mese_map = {
       "Gennaio": 1, "Febbraio": 2, "Marzo": 3, "Aprile": 4, 
@@ -406,7 +405,7 @@ else:
     st.markdown("---")
     st.subheader("Tabella di Riparto per Condomino")
 
-    # --- APPLICAZIONE DELLA FORMULA DIRETTAMENTE SUI MQ REALI CON 11 CIFRE DECIMALI ---
+    # --- APPLICAZIONE DELLA FORMULA DIRETTA: (mq / mq_totali) * quota ---
     tot_mq_reali = sum(st.session_state.mq_appartamenti.values())
 
     reparto_data = []
@@ -418,7 +417,6 @@ else:
     for app, mil in millesimi.items():
       mq_condomino = st.session_state.mq_appartamenti.get(app, 0.0)
 
-      # Calcolo del rapporto esatto con 11 cifre decimali basato direttamente sui mq
       if tot_mq_reali > 0:
         rapporto_11 = mq_condomino / tot_mq_reali
         rapporto_str = f"{rapporto_11:.11f}"
@@ -426,10 +424,10 @@ else:
         rapporto_11 = 0.0
         rapporto_str = "0.00000000000"
 
-      # Calcolo delle quote basato sui mq reali: (mq_condomino / mq_totali) * quota totale
-      quota_imp = tot_imp * rapporto_11
-      quota_iva = tot_iva * rapporto_11
-      quota_tot = tot_complessivo * rapporto_11
+      # FORMULA RICHIESTA: mq / mq_totali * quota
+      quota_imp = (mq_condomino / tot_mq_reali) * tot_imp if tot_mq_reali > 0 else 0.0
+      quota_iva = (mq_condomino / tot_mq_reali) * tot_iva if tot_mq_reali > 0 else 0.0
+      quota_tot = (mq_condomino / tot_mq_reali) * tot_complessivo if tot_mq_reali > 0 else 0.0
 
       sum_millesimi += mil
       sum_imp += quota_imp
@@ -439,7 +437,7 @@ else:
       reparto_data.append(
           {
               "Condomino": app,
-              "Millesimi": mil,
+              "Millesimi": round(mil, 2),
               "Rapporto (%)": f"{float(rapporto_str) * 100:.9f}%",
               "Quota Imponibile (€)": round(quota_imp, 2),
               "Quota IVA (€)": round(quota_iva, 2),
@@ -527,8 +525,8 @@ else:
         tot_fat_temp = float(row_f_temp["totale"])
         
         mq_c = st.session_state.mq_appartamenti.get(cond_attivo, 0.0)
-        rapporto_c = (mq_c / tot_mq_reali) if tot_mq_reali > 0 else 0.0
-        quota_dovuta_automatica = tot_fat_temp * rapporto_c
+        # FORMULA DIRETTA: (mq / mq_totali) * totale fattura
+        quota_dovuta_automatica = (mq_c / tot_mq_reali) * tot_fat_temp if tot_mq_reali > 0 else 0.0
       except Exception:
         pass
 
@@ -877,8 +875,7 @@ else:
         
         for app, mil in millesimi.items():
           mq_c = st.session_state.mq_appartamenti.get(app, 0.0)
-          rapporto_c = (mq_c / tot_mq_reali) if tot_mq_reali > 0 else 0.0
-          quota_dovuta = f_totale * rapporto_c
+          quota_dovuta = (mq_c / tot_mq_reali) * f_totale if tot_mq_reali > 0 else 0.0
           
           is_pagato = (app, f_id) in pagate_set
           
@@ -986,7 +983,7 @@ else:
 
       if st.form_submit_button("Salva Metrature"):
         if salva_mq_su_supabase(nuovi_mq):
-          st.session_state.mq_appartamenti = nuovi_mq
+          st.session_state.mq_appartamenti = nuevos_mq if 'nuevos_mq' in locals() else nuovi_mq
           st.success("Metrature aggiornate con successo!")
           st.rerun()
 
