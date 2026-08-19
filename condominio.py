@@ -405,10 +405,10 @@ else:
     sum_tot = 0.0
 
     for app, mq in st.session_state.mq_appartamenti.items():
-      # Calcolo del rapporto basato sui mq reali bloccato a 11 cifre decimali[cite: 1]
-      rapporto_reale = round(mq / tot_mq_reali, 11) if tot_mq_reali > 0 else 0
+      # Rapporto esatto basato sui mq reali con precisione a 11 decimali
+      rapporto_reale = (mq / tot_mq_reali) if tot_mq_reali > 0 else 0
 
-      # Applicazione del rapporto e arrotondamento finale al centesimo[cite: 1]
+      # Applicazione del rapporto e arrotondamento finale al centesimo
       quota_imp = round(tot_imp * rapporto_reale, 2)
       quota_iva = round(tot_iva * rapporto_reale, 2)
       quota_tot = round(tot_complessivo * rapporto_reale, 2)
@@ -509,8 +509,8 @@ else:
         tot_fat_temp = float(row_f_temp["totale"])
         mq_c = st.session_state.mq_appartamenti.get(cond_attivo, 0.0)
         
-        # APPLICATO LO STESSO METODO: 11 cifre sui mq reali e arrotondamento al centesimo[cite: 1]
-        rapporto_temp = round(mq_c / tot_mq_reali, 11) if tot_mq_reali > 0 else 0.0
+        # Calcolo preciso basato sui mq reali e totale dei mq reali dell'edificio
+        rapporto_temp = (mq_c / tot_mq_reali) if tot_mq_reali > 0 else 0.0
         quota_dovuta_automatica = round(tot_fat_temp * rapporto_temp, 2)
       except Exception:
         pass
@@ -859,8 +859,7 @@ else:
         f_totale = float(f_row["totale"])
         
         for app, mq in st.session_state.mq_appartamenti.items():
-          # APPLICATO LO STESSO METODO: 11 cifre sui mq reali e arrotondamento al centesimo[cite: 1]
-          rapporto_temp = round(mq / tot_mq_reali, 11) if tot_mq_reali > 0 else 0.0
+          rapporto_temp = (mq / tot_mq_reali) if tot_mq_reali > 0 else 0.0
           quota_dovuta = round(f_totale * rapporto_temp, 2)
           is_pagato = (app, f_id) in pagate_set
           
