@@ -870,7 +870,7 @@ else:
                 "Tipo Spesa": f_tipo,
                 "Fornitore": f_fornitore,
                 "Quota Dovuta (€)": round(quota_dovuta, 2),
-                "Stato": "⚠️ Scaduto / Non Pagato"
+                "Stato": "Scaduto / Non Pagato"
             })
 
       df_scaduti = pd.DataFrame(report_scaduti)
@@ -896,6 +896,57 @@ else:
         st.metric("Totale Residuo da Incassare", f"€ {tot_insoluto:,.2f}")
 
         st.dataframe(df_scad_filtered, use_container_width=True)
+
+        # --- FUNZIONE PER GENERARE IL PDF DELLO SCADUTO ---
+        def genera_pdf_scaduti(df_res, filtro_c, filtro_t, totale_res):
+          buf = io.BytesIO()
+          doc = SimpleDocTemplate(buf, pagesize=letter)
+          elems = []
+          styles = getSampleStyleSheet()
+          
+          t_style = ParagraphStyle('TStyle', parent=styles['Heading1'], fontSize=14, alignment=1, spaceAfter=8)
+          sub_style = ParagraphStyle('SubStyle', parent=styles['Normal'], fontSize=9, alignment=1, spaceAfter=12)
+          
+          elems.append(Paragraph("<b>REPORT QUOTE NON PAGATE / SCADENZE</b>", t_style))
+          elems.append(Paragraph(f"Filtro Condomino: {filtro_c} | Filtro Tipo: {filtro_t}", sub_style))
+          elems.append(Spacer(1, 8))
+          
+          table_data = [list(df_res.columns)] + df_res.values.tolist()
+          t = Table(table_data, colWidths=[80, 60, 90, 90, 80, 80])
+          t.setStyle(TableStyle([
+              ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#c0392b')),
+              ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+              ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+              ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+              ('FONTSIZE', (0,0), (-1,0), 8),
+              ('BACKGROUND', (0,1), (-1,-1), colors.HexColor('#f8f9fa')),
+              ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+              ('FONTSIZE', (0,1), (-1,-1), 8),
+              ('TOPPADDING', (0,1), (-1,-1), 4),
+              ('BOTTOMPADDING', (0,1), (-1,-1), 4),
+          ]))
+          elems.append(t)
+          elems.append(Spacer(1, 15))
+          
+          tot_style = ParagraphStyle('TotStyle', parent=styles['Normal'], fontSize=11, fontName='Helvetica-Bold', alignment=2)
+          elems.append(Paragraph(f"Totale Residuo da Incassare: € {totale_res:,.2f}", tot_style))
+          
+          doc.build(elems)
+          buf.seek(0)
+          return buf.getvalue()
+
+        # Pulsante di stampa / download PDF dello scaduto
+        col_p_btn1, _ = st.columns([1, 2])
+        with col_p_btn1:
+          pdf_scadenze_bytes = genera_pdf_scaduti(df_scad_filtered, filtro_scad_cond, filtro_scad_tipo, tot_insoluto)
+          st.download_button(
+              label="📥 Stampa / Scarica PDF Scadenze",
+              data=pdf_scadenze_bytes,
+              file_name="report_quote_scadute.pdf",
+              mime="application/pdf",
+              use_container_width=True,
+              key="btn_print_scadenze"
+          )
 
   # --- 4. GESTIONE MILLESIMI ---
   elif menu == "Gestione Millesimi & Riporti":
