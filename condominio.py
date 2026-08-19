@@ -803,7 +803,7 @@ else:
 
   # --- 3. STORICO E DETTAGLIO ---
   elif menu == "Storico e Dettaglio":
-    st.title("📂 Storico Fatture")
+    st.title("📂 Storico Fatture e Scadenze")
     
     if df_fatture.empty:
       st.info("Nessuna fattura presente nello storico.")
@@ -835,6 +835,67 @@ else:
         st.warning("Nessuna fattura trovata con i filtri selezionati.")
       else:
         st.dataframe(df_storico_filtered, use_container_width=True)
+
+      # --- MONITORAGGIO SCADENZE E QUOTE NON PAGATE ---
+      st.markdown("---")
+      st.subheader("🚨 Monitoraggio Scadenze e Quote Non Pagate")
+
+      df_pagamenti_check = carica_pagamenti_da_supabase()
+      
+      pagate_set = set()
+      if not df_pagamenti_check.empty and "fattura_id" in df_pagamenti_check.columns:
+        for _, prow in df_pagamenti_check.iterrows():
+          if pd.notna(prow["fattura_id"]) and pd.notna(prow["condominio"]):
+            pagate_set.add((str(prow["condominio"]), int(prow["fattura_id"])))
+
+      report_scaduti = []
+      
+      for _, f_row in df_fatture.iterrows():
+        f_id = int(f_row["id"])
+        f_anno = f_row["anno"]
+        f_mese = f_row["mese"]
+        f_tipo = f_row["tipo"]
+        f_fornitore = f_row["fornitore"]
+        f_totale = float(f_row["totale"])
+        
+        for app, mil in millesimi.items():
+          quota_dovuta = (f_totale * (mil / tot_millesimi)) if tot_millesimi > 0 else 0.0
+          is_pagato = (app, f_id) in pagate_set
+          
+          if not is_pagato:
+            report_scaduti.append({
+                "Condomino": app,
+                "Fattura ID": f_id,
+                "Periodo": f"{f_anno} - {f_mese}",
+                "Tipo Spesa": f_tipo,
+                "Fornitore": f_fornitore,
+                "Quota Dovuta (€)": round(quota_dovuta, 2),
+                "Stato": "⚠️ Scaduto / Non Pagato"
+            })
+
+      df_scaduti = pd.DataFrame(report_scaduti)
+
+      if df_scaduti.empty:
+        st.success("Ottimo! Non ci sono quote scoperte: tutte le fatture risultano pagate dai condomini.")
+      else:
+        col_sc1, col_sc2 = st.columns(2)
+        with col_sc1:
+          conds_selezionabili = ["Tutti i condomini"] + APP_NAMES
+          filtro_scad_cond = st.selectbox("Filtra per Condomino Inadempiente", conds_selezionabili, key="scad_cond")
+        with col_sc2:
+          tipi_scad = ["Tutte le tipologie", "Energia Elettrica", "Gasolio"]
+          filtro_scad_tipo = st.selectbox("Filtra per Tipo Spesa Scaduta", tipi_scad, key="scad_tipo")
+
+        df_scad_filtered = df_scaduti.copy()
+        if filtro_scad_cond != "Tutti i condomini":
+          df_scad_filtered = df_scad_filtered[df_scad_filtered["Condomino"] == filtro_scad_cond]
+        if filtro_scad_tipo != "Tutte le tipologie":
+          df_scad_filtered = df_scad_filtered[df_scad_filtered["Tipo Spesa"] == filtro_scad_tipo]
+
+        tot_insoluto = df_scad_filtered["Quota Dovuta (€)"].sum()
+        st.metric("Totale Residuo da Incassare", f"€ {tot_insoluto:,.2f}")
+
+        st.dataframe(df_scad_filtered, use_container_width=True)
 
   # --- 4. GESTIONE MILLESIMI ---
   elif menu == "Gestione Millesimi & Riporti":
