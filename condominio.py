@@ -124,13 +124,6 @@ if "pagamenti" not in st.session_state:
   st.session_state.pagamenti = carica_pagamenti_da_supabase()
 
 
-def calcola_millesimi_da_mq(mq_dict):
-  tot_mq = sum(mq_dict.values())
-  if tot_mq <= 0:
-    return {k: 0 for k in mq_dict}
-  return {app: round((mq / tot_mq) * 1000, 2) for app, mq in mq_dict.items()}
-
-
 # --- FUNZIONE PER GENERARE IL PDF ---
 def genera_pdf_riparto(df_reparto, titolo_contesto):
   buffer = io.BytesIO()
@@ -145,26 +138,26 @@ def genera_pdf_riparto(df_reparto, titolo_contesto):
       'SubtitleStyle', parent=styles['Normal'], fontSize=9, alignment=1, spaceAfter=15
   )
 
-  elements.append(Paragraph("<b>RIEPILOGO RIPARTO SPESE CONDOMINIALI</b>", title_style))
+  elements.append(Paragraph("<b>RIEPILOGO RIPARTO SPESE CONDOMINIALI (su MQ)</b>", title_style))
   elements.append(Paragraph(f"Contesto: {titolo_contesto}", subtitle_style))
   elements.append(Spacer(1, 10))
 
   data = [list(df_reparto.columns)] + df_reparto.values.tolist()
 
-  table = Table(data, colWidths=[110, 80, 110, 110, 110])
+  table = Table(data, colWidths=[100, 70, 70, 95, 95, 95])
   table.setStyle(
       TableStyle([
           ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c3e50')),
           ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
           ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
           ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-          ('FONTSIZE', (0, 0), (-1, 0), 9),
+          ('FONTSIZE', (0, 0), (-1, 0), 8),
           ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
           ('BACKGROUND', (0, 1), (-1, -2), colors.HexColor('#f8f9fa')),
           ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e2e8f0')),
           ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
           ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-          ('FONTSIZE', (0, 1), (-1, -1), 9),
+          ('FONTSIZE', (0, 1), (-1, -1), 8),
           ('TOPPADDING', (0, 1), (-1, -1), 5),
           ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
       ])
@@ -292,8 +285,7 @@ else:
   st.session_state.mq_appartamenti = carica_mq_da_supabase()
 
   df_fatture = st.session_state.fatture
-  millesimi = calcola_millesimi_da_mq(st.session_state.mq_appartamenti)
-  tot_millesimi = sum(millesimi.values())
+  tot_mq_reali = sum(st.session_state.mq_appartamenti.values())
 
   mese_map = {
       "Gennaio": 1, "Febbraio": 2, "Marzo": 3, "Aprile": 4, 
@@ -303,7 +295,7 @@ else:
 
   # --- 1. DASHBOARD & RIEPILOGO ---
   if menu == "Dashboard & Riepilogo":
-    st.title("📊 Dashboard e Riparto Spese")
+    st.title("📊 Dashboard e Riparto Spese (su MQ)")
 
     if df_fatture.empty:
       st.info("La tabella 'fatture' su Supabase è attualmente vuota. Inserisci una fattura dalla sezione 'Inserisci Fattura' per popolare i calcoli.")
@@ -404,24 +396,24 @@ else:
     col3.metric("Totale Generale", f"€ {tot_complessivo:,.2f}")
 
     st.markdown("---")
-    st.subheader("Tabella di Riparto per Condomino")
+    st.subheader("Tabella di Riparto per Condomino (Basata su Metri Quadri Reali)")
 
     reparto_data = []
-    sum_millesimi = 0.0
+    sum_mq = 0.0
     sum_imp = 0.0
     sum_iva = 0.0
     sum_tot = 0.0
 
-    for app, mil in millesimi.items():
-      # Calcolo del rapporto millesimale bloccato a 11 cifre decimali
-      rapporto_millesimale = round(mil / tot_millesimi, 11) if tot_millesimi > 0 else 0
+    for app, mq in st.session_state.mq_appartamenti.items():
+      # Calcolo del rapporto basato sui mq reali bloccato a 11 cifre decimali[cite: 1]
+      rapporto_reale = round(mq / tot_mq_reali, 11) if tot_mq_reali > 0 else 0
 
-      # Applicazione del rapporto e arrotondamento finale al centesimo
-      quota_imp = round(tot_imp * rapporto_millesimale, 2)
-      quota_iva = round(tot_iva * rapporto_millesimale, 2)
-      quota_tot = round(tot_complessivo * rapporto_millesimale, 2)
+      # Applicazione del rapporto e arrotondamento finale al centesimo[cite: 1]
+      quota_imp = round(tot_imp * rapporto_reale, 2)
+      quota_iva = round(tot_iva * rapporto_reale, 2)
+      quota_tot = round(tot_complessivo * rapporto_reale, 2)
 
-      sum_millesimi += mil
+      sum_mq += mq
       sum_imp += quota_imp
       sum_iva += quota_iva
       sum_tot += quota_tot
@@ -429,7 +421,8 @@ else:
       reparto_data.append(
           {
               "Condomino": app,
-              "Millesimi": mil,
+              "Metri Quadri (MQ)": mq,
+              "Rapporto (%)": f"{rapporto_reale * 100:.4f}%",
               "Quota Imponibile (€)": quota_imp,
               "Quota IVA (€)": quota_iva,
               "Quota Totale (€)": quota_tot,
@@ -439,7 +432,8 @@ else:
     reparto_data.append(
         {
             "Condomino": "TOTALE",
-            "Millesimi": round(sum_millesimi, 2),
+            "Metri Quadri (MQ)": round(sum_mq, 2),
+            "Rapporto (%)": "100.00%",
             "Quota Imponibile (€)": round(sum_imp, 2),
             "Quota IVA (€)": round(sum_iva, 2),
             "Quota Totale (€)": round(sum_tot, 2),
@@ -455,7 +449,7 @@ else:
       st.download_button(
           label="📥 Scarica / Stampa PDF Riparto",
           data=pdf_bytes,
-          file_name="riparto_spese_condominio.pdf",
+          file_name="riparto_spese_condominio_mq.pdf",
           mime="application/pdf",
           use_container_width=True,
       )
@@ -513,10 +507,10 @@ else:
         id_fat_temp = int(fattura_scelta_str.split("|")[0].replace("ID:", "").strip())
         row_f_temp = df_fatture_form[df_fatture_form["id"] == id_fat_temp].iloc[0]
         tot_fat_temp = float(row_f_temp["totale"])
-        mil_c = millesimi.get(cond_attivo, 0.0)
+        mq_c = st.session_state.mq_appartamenti.get(cond_attivo, 0.0)
         
-        # APPLICATO LO STESSO METODO: 11 cifre e arrotondamento al centesimo
-        rapporto_temp = round(mil_c / tot_millesimi, 11) if tot_millesimi > 0 else 0.0
+        # APPLICATO LO STESSO METODO: 11 cifre sui mq reali e arrotondamento al centesimo[cite: 1]
+        rapporto_temp = round(mq_c / tot_mq_reali, 11) if tot_mq_reali > 0 else 0.0
         quota_dovuta_automatica = round(tot_fat_temp * rapporto_temp, 2)
       except Exception:
         pass
@@ -844,7 +838,7 @@ else:
 
       # --- MONITORAGGIO SCADENZE E QUOTE NON PAGATE ---
       st.markdown("---")
-      st.subheader("🚨 Monitoraggio Scadenze e Quote Non Pagate")
+      st.subheader("🚨 Monitoraggio Scadenze e Quote Non Pagate (su MQ)")
 
       df_pagamenti_check = carica_pagamenti_da_supabase()
       
@@ -864,9 +858,9 @@ else:
         f_fornitore = f_row["fornitore"]
         f_totale = float(f_row["totale"])
         
-        for app, mil in millesimi.items():
-          # APPLICATO LO STESSO METODO: 11 cifre e arrotondamento al centesimo
-          rapporto_temp = round(mil / tot_millesimi, 11) if tot_millesimi > 0 else 0.0
+        for app, mq in st.session_state.mq_appartamenti.items():
+          # APPLICATO LO STESSO METODO: 11 cifre sui mq reali e arrotondamento al centesimo[cite: 1]
+          rapporto_temp = round(mq / tot_mq_reali, 11) if tot_mq_reali > 0 else 0.0
           quota_dovuta = round(f_totale * rapporto_temp, 2)
           is_pagato = (app, f_id) in pagate_set
           
@@ -954,9 +948,9 @@ else:
               key="btn_print_scadenze"
           )
 
-  # --- 4. GESTIONE MILLESIMI ---
+  # --- 4. GESTIONE METRATURE ---
   elif menu == "Gestione Millesimi & Riporti":
-    st.title("⚙️ Gestione Metrature e Millesimi")
+    st.title("⚙️ Gestione Metrature Appartamenti")
 
     st.subheader("Modifica Metrature Appartamenti")
     with st.form("form_mq"):
@@ -974,12 +968,19 @@ else:
       
       if st.form_submit_button("Salva Metrature"):
         if salva_mq_su_supabase(nuovi_mq):
-          st.session_state.mq_appartamenti = nuovi_mq
+          st.session_state.mq_appartamenti = novos = nuovi_mq
           st.success("Metrature aggiornate con successo!")
           st.rerun()
 
     st.markdown("---")
-    st.subheader("Millesimi Calcolati")
-    millesimi = calcola_millesimi_da_mq(st.session_state.mq_appartamenti)
-    df_mill = pd.DataFrame([{"Appartamento": k, "MQ": st.session_state.mq_appartamenti[k], "Millesimi": v} for k, v in millesimi.items()])
+    st.subheader("Rapporto Metrature ed Edificio")
+    tot_mq_aggiornato = sum(st.session_state.mq_appartamenti.values())
+    df_mill = pd.DataFrame([
+        {
+            "Appartamento": k, 
+            "MQ": v, 
+            "Incidenza (%)": f"{(v / tot_mq_aggiornato)*100:.4f}%" if tot_mq_aggiornato > 0 else "0%"
+        } 
+        for k, v in st.session_state.mq_appartamenti.items()
+    ])
     st.dataframe(df_mill, use_container_width=True)
