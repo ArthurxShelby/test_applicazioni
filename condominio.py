@@ -1,5 +1,6 @@
 import io
 import os
+from decimal import Decimal, ROUND_HALF_UP
 import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
