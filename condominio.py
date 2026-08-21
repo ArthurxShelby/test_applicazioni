@@ -406,7 +406,7 @@ else:
     st.markdown("---")
     st.subheader("Tabella di Riparto per Condomino")
 
-    # --- LOGICA DI CALCOLO PULITA E UNICA ---
+    # --- LOGICA DI CALCOLO DEFINITIVA E TRASPARENTE ---
     reparto_data = []
     
     sum_millesimi = Decimal('0.00')
@@ -417,19 +417,19 @@ else:
     if "mq_appartamenti" not in st.session_state:
         st.session_state.mq_appartamenti = {}
 
+    # Calcoliamo la somma reale dei mq di tutti gli appartamenti
     tot_mq_reali = sum(st.session_state.mq_appartamenti.values()) if st.session_state.mq_appartamenti else 1.0
     tot_mq_dec = Decimal(str(tot_mq_reali))
     
     imp_dec = Decimal(str(tot_imp))
     iva_dec = Decimal(str(tot_iva))
 
-    # 1. Ciclo sui singoli condomini
     for app, mil in millesimi.items():
         mq_condomino = st.session_state.mq_appartamenti.get(app, 0.0)
         mq_cond_dec = Decimal(str(mq_condomino))
         mil_dec = Decimal(str(mil))
 
-        # Rapporto basato sui mq reali del condomino / mq totali
+        # Rapporto esatto basato sui mq (es. 88.61 / 711.04)
         if tot_mq_dec > 0:
             rapporto_11 = (mq_cond_dec / tot_mq_dec).quantize(Decimal('0.00000000001'), rounding=ROUND_HALF_UP)
         else:
@@ -444,11 +444,12 @@ else:
         sum_iva_dec += quota_iva_parziale
         sum_tot_dec += quota_tot_parziale
 
-        # Conversione in percentuale (es. 88.61 / 711.04 * 100)
+        # Percentuale esatta derivata dai mq (es. 12.46%)
         perc_valore = float(rapporto_11) * 100
 
         reparto_data.append({
             "Condomino": app,
+            "MQ": float(mq_cond_dec),  # Aggiungiamo i MQ in una colonna per controllo visivo
             "Millesimi": float(mil_dec),
             "Rapporto (%)": f"{perc_valore:.2f}%",
             "Quota Imponibile (€)": float(quota_imp_parziale),
@@ -456,21 +457,16 @@ else:
             "Quota Totale (€)": float(quota_tot_parziale),
         })
 
-    # 2. UNICA riga di riepilogo finale (senza duplicati)
+    # UNICA riga di riepilogo finale
     reparto_data.append({
         "Condomino": "TOTALE",
+        "MQ": float(tot_mq_dec),
         "Millesimi": float(sum_millesimi),
         "Rapporto (%)": "100.00%",
         "Quota Imponibile (€)": float(sum_imp_dec),
         "Quota IVA (€)": float(sum_iva_dec),
         "Quota Totale (€)": float(sum_tot_dec),
     })
-
-    sum_imp = float(sum_imp_dec)
-    sum_iva = float(sum_iva_dec)
-    sum_tot = float(sum_tot_dec)
-
-    st.error("TEST: QUESTO E' IL FILE AGGIORNATO AL 2026")
 
     df_reparto = pd.DataFrame(reparto_data)
     st.dataframe(df_reparto, use_container_width=True)
