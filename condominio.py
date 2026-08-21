@@ -862,6 +862,7 @@ else:
     if df_fatture.empty:
       st.info("Nessuna fattura presente nello storico.")
     else:
+      # Filtri per Anno e Tipologia nella sezione Storico e Dettaglio
       col_storico1, col_storico2 = st.columns(2)
       with col_storico1:
         anni_disp_storico = sorted(df_fatture["anno"].unique(), reverse=True) if "anno" in df_fatture.columns else []
@@ -909,20 +910,10 @@ else:
         f_mese = f_row["mese"]
         f_tipo = f_row["tipo"]
         f_fornitore = f_row["fornitore"]
-        f_tot = Decimal(str(f_row["totale"]))
+        f_totale = float(f_row["totale"])
         
         for app, mil in millesimi.items():
-          mq_c = st.session_state.mq_appartamenti.get(app, 0.0)
-          mq_c_dec = Decimal(str(mq_c))
-          
-          if tot_mq_dec > 0:
-            r_11_scad = (mq_c_dec / tot_mq_dec).quantize(Decimal('0.00000000001'), rounding=ROUND_HALF_UP)
-          else:
-            r_11_scad = Decimal('0')
-            
-          quota_dovuta_dec = r_11_scad * f_tot
-          quota_dovuta = float(quota_dovuta_dec.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
-          
+          quota_dovuta = (f_totale * (mil / tot_millesimi)) if tot_millesimi > 0 else 0.0
           is_pagato = (app, f_id) in pagate_set
           
           if not is_pagato:
@@ -960,6 +951,7 @@ else:
 
         st.dataframe(df_scad_filtered, use_container_width=True)
 
+        # --- FUNZIONE PER GENERARE IL PDF DELLO SCADUTO ---
         def genera_pdf_scaduti(df_res, filtro_c, filtro_t, totale_res):
           buf = io.BytesIO()
           doc = SimpleDocTemplate(buf, pagesize=letter)
@@ -997,6 +989,7 @@ else:
           buf.seek(0)
           return buf.getvalue()
 
+        # Pulsante di stampa / download PDF dello scaduto
         col_p_btn1, _ = st.columns([1, 2])
         with col_p_btn1:
           pdf_scadenze_bytes = genera_pdf_scaduti(df_scad_filtered, filtro_scad_cond, filtro_scad_tipo, tot_insoluto)
