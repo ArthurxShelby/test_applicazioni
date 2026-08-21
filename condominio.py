@@ -413,46 +413,40 @@ else:
     sum_iva = 0.0
     sum_tot = 0.0
 
-    # Inizializziamo correttamente i totali in Decimal
-    tot_mq_reali = sum(st.session_state.mq_appartamenti.values())
-    tot_mq_dec = Decimal(str(tot_mq_reali))
-    
-    imp_dec = Decimal(str(tot_imp))
-    iva_dec = Decimal(str(tot_iva))
+    # Inizializziamo i totali come Decimal, non come float
+    sum_millesimi = Decimal('0.00')
+    sum_imp_dec = Decimal('0.00')
+    sum_iva_dec = Decimal('0.00')
+    sum_tot_dec = Decimal('0.00')
 
     for app, mil in millesimi.items():
         mq_condomino = st.session_state.mq_appartamenti.get(app, 0.0)
         mq_cond_dec = Decimal(str(mq_condomino))
+        mil_dec = Decimal(str(mil))
 
         if tot_mq_dec > 0:
-            # Rapporto a 11 cifre decimali
             rapporto_11 = (mq_cond_dec / tot_mq_dec).quantize(Decimal('0.00000000001'), rounding=ROUND_HALF_UP)
         else:
             rapporto_11 = Decimal('0')
 
-        # Calcolo: moltiplichiamo separatamente i parziali
-        quota_imp_parziale = rapporto_11 * imp_dec
-        quota_iva_parziale = rapporto_11 * iva_dec
-        
-        # Somma dei parziali e arrotondamento finale a 2 cifre
-        quota_tot_dec = (quota_imp_parziale + quota_iva_parziale).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        
-        quota_imp = float(quota_imp_parziale)
-        quota_iva = float(quota_iva_parziale)
-        quota_tot = float(quota_tot_dec)
+        # Calcolo quote parziali come Decimal
+        quota_imp_parziale = (rapporto_11 * imp_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        quota_iva_parziale = (rapporto_11 * iva_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        quota_tot_parziale = quota_imp_parziale + quota_iva_parziale
 
-        sum_millesimi += mil
-        sum_imp += quota_imp
-        sum_iva += quota_iva
-        sum_tot += quota_tot
+        # Aggiorniamo le somme (rimaniamo in Decimal)
+        sum_millesimi += mil_dec
+        sum_imp_dec += quota_imp_parziale
+        sum_iva_dec += quota_iva_parziale
+        sum_tot_dec += quota_tot_parziale
 
         reparto_data.append({
             "Condomino": app,
-            "Millesimi": round(mil, 2),
+            "Millesimi": float(mil_dec),
             "Rapporto (%)": f"{float(rapporto_11) * 100:.9f}%",
-            "Quota Imponibile (€)": quota_imp,
-            "Quota IVA (€)": quota_iva,
-            "Quota Totale (€)": quota_tot,
+            "Quota Imponibile (€)": float(quota_imp_parziale),
+            "Quota IVA (€)": float(quota_iva_parziale),
+            "Quota Totale (€)": float(quota_tot_parziale),
         })
 
     reparto_data.append(
