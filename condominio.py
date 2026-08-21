@@ -407,97 +407,94 @@ else:
     st.subheader("Tabella di Riparto per Condomino")
 
     # --- LOGICA DI CALCOLO SICURA E COMPLETA ---
-    reparto_data = []
-    
-    sum_millesimi = Decimal('0.0000')
-    sum_mq_dec = Decimal('0.00')
-    sum_imp_dec = Decimal('0.00')
-    sum_iva_dec = Decimal('0.00')
-    sum_tot_dec = Decimal('0.00')
+reparto_data = []
 
-    if "mq_appartamenti" not in st.session_state:
-        st.session_state.mq_appartamenti = {}
+sum_millesimi = Decimal('0.0000')
+sum_mq_dec = Decimal('0.00')
+sum_imp_dec = Decimal('0.00')
+sum_iva_dec = Decimal('0.00')
+sum_tot_dec = Decimal('0.00')
 
-    tot_mq_reali = sum(st.session_state.mq_appartamenti.values()) if st.session_state.mq_appartamenti else 0.0
+if "mq_appartamenti" not in st.session_state:
+    st.session_state.mq_appartamenti = {}
+
+tot_mq_reali = sum(st.session_state.mq_appartamenti.values()) if st.session_state.mq_appartamenti else 0.0
+
+if tot_mq_reali <= 0:
+    tot_mq_dec = Decimal('1000.0')
+else:
+    tot_mq_dec = Decimal(str(tot_mq_reali))
+
+imp_dec = Decimal(str(tot_imp))
+iva_dec = Decimal(str(tot_iva))
+
+for app, mil in millesimi.items():
+    app_key = str(app).strip().upper()
+    mq_condomino = 0.0
+    for k, v in st.session_state.mq_appartamenti.items():
+        if str(k).strip().upper() == app_key:
+            mq_condomino = float(v)
+            break
     
-    if tot_mq_reali <= 0:
-        tot_mq_dec = Decimal('1000.0')
+    mq_cond_dec = Decimal(str(mq_condomino))
+    mil_dec = Decimal(str(mil))
+
+    if tot_mq_dec > 0:
+        rapporto_11 = (mq_cond_dec / tot_mq_dec).quantize(Decimal('0.00000000011'), rounding=ROUND_HALF_UP)
     else:
-        tot_mq_dec = Decimal(str(tot_mq_reali))
-    
-    imp_dec = Decimal(str(tot_imp))
-    iva_dec = Decimal(str(tot_iva))
+        rapporto_11 = Decimal('0')
 
-    for app, mil in millesimi.items():
-        app_key = str(app).strip().upper()
-        mq_condomino = 0.0
-        for k, v in st.session_state.mq_appartamenti.items():
-            if str(k).strip().upper() == app_key:
-                mq_condomino = float(v)
-                break
-        
-        mq_cond_dec = Decimal(str(mq_condomino))
-        mil_dec = Decimal(str(mil))
+    quota_imp_parziale = (rapporto_11 * imp_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    quota_iva_parziale = (rapporto_11 * iva_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    quota_tot_parziale = quota_imp_parziale + quota_iva_parziale
 
-        # 1. Divisione MQ utente / MQ totali con precisione a 11 cifre decimali
-        if tot_mq_dec > 0:
-            rapporto_11 = (mq_cond_dec / tot_mq_dec).quantize(Decimal('0.00000000011'), rounding=ROUND_HALF_UP)
-        else:
-            rapporto_11 = Decimal('0')
+    sum_millesimi += mil_dec
+    sum_mq_dec += mq_cond_dec
+    sum_imp_dec += quota_imp_parziale
+    sum_iva_dec += quota_iva_parziale
+    sum_tot_dec += quota_tot_parziale
 
-        # 2. Moltiplicazione per Imponibile e IVA, con arrotondamento immediato a 2 cifre
-        quota_imp_parziale = (rapporto_11 * imp_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        quota_iva_parziale = (rapporto_11 * iva_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        quota_tot_parziale = quota_imp_parziale + quota_iva_parziale
+    perc_valore = float(rapporto_11) * 100
 
-        sum_millesimi += mil_dec
-        sum_mq_dec += mq_cond_dec
-        sum_imp_dec += quota_imp_parziale
-        sum_iva_dec += quota_iva_parziale
-        sum_tot_dec += quota_tot_parziale
-
-        perc_valore = float(rapporto_11) * 100
-
-        reparto_data.append({
-            "Condomino": app,
-            "MQ": float(mq_cond_dec),
-            "Millesimi": float(mil_dec),
-            "Rapporto (%)": f"{perc_valore:.2f}%",
-            "Quota Imponibile (€)": float(quota_imp_parziale),
-            "Quota IVA (€)": float(quota_iva_parziale),
-            "Quota Totale (€)": float(quota_tot_parziale),
-        })
-
-    # Riga totale finale con la somma precisa dei millesimi
     reparto_data.append({
-        "Condomino": "TOTALE",
-        "MQ": float(sum_mq_dec),
-        "Millesimi": float(sum_millesimi.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)),
-        "Rapporto (%)": "100.00%",
-        "Quota Imponibile (€)": float(sum_imp_dec),
-        "Quota IVA (€)": float(sum_iva_dec),
-        "Quota Totale (€)": float(sum_tot_dec),
+        "Condomino": app,
+        "MQ": float(mq_cond_dec),
+        "Millesimi": float(mil_dec),
+        "Rapporto (%)": f"{perc_valore:.2f}%",
+        "Quota Imponibile (€)": float(quota_imp_parziale),
+        "Quota IVA (€)": float(quota_iva_parziale),
+        "Quota Totale (€)": float(quota_tot_parziale),
     })
 
-    sum_imp = float(sum_imp_dec)
-    sum_iva = float(sum_iva_dec)
-    sum_tot = float(sum_tot_dec)
+reparto_data.append({
+    "Condomino": "TOTALE",
+    "MQ": float(sum_mq_dec),
+    "Millesimi": float(sum_millesimi.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)),
+    "Rapporto (%)": "100.00%",
+    "Quota Imponibile (€)": float(sum_imp_dec),
+    "Quota IVA (€)": float(sum_iva_dec),
+    "Quota Totale (€)": float(sum_tot_dec),
+})
 
-    df_reparto = pd.DataFrame(reparto_data)
-    st.dataframe(df_reparto, use_container_width=True)
+sum_imp = float(sum_imp_dec)
+sum_iva = float(sum_iva_dec)
+sum_tot = float(sum_tot_dec)
 
-    col_pdf1, _ = st.columns([1, 2])
-    with col_pdf1:
-        pdf_bytes = genera_pdf_riparto(df_reparto, descrizione_contesto)
-        st.download_button(
-            label="📥 Scarica / Stampa PDF Riparto",
-            data=pdf_bytes,
-            file_name="riparto_spese_condominio.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
+df_reparto = pd.DataFrame(reparto_data)
+st.dataframe(df_reparto, use_container_width=True)
 
-    st.markdown("---")
+col_pdf1, _ = st.columns([1, 2])
+with col_pdf1:
+    pdf_bytes = genera_pdf_riparto(df_reparto, descrizione_contesto)
+    st.download_button(
+        label="📥 Scarica / Stampa PDF Riparto",
+        data=pdf_bytes,
+        file_name="riparto_spese_condominio.pdf",
+        mime="application/pdf",
+        use_container_width=True,
+    )
+
+st.markdown("---")
 
     # --- SEZIONE GESTIONE INTROITI E PAGAMENTI ---
     st.subheader("💳 Gestione Introiti e Pagamenti Utenti")
