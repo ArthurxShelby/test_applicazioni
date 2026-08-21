@@ -406,16 +406,14 @@ else:
     st.markdown("---")
     st.subheader("Tabella di Riparto per Condomino")
 
-    # --- LOGICA DI CALCOLO UNIFICATA E CORRETTA ---
+    # --- LOGICA DI CALCOLO DEFINITIVA ---
     reparto_data = []
     
-    # Inizializzazione sicura delle variabili di riepilogo
     sum_millesimi = Decimal('0.00')
     sum_imp_dec = Decimal('0.00')
     sum_iva_dec = Decimal('0.00')
     sum_tot_dec = Decimal('0.00')
 
-    # Assicuriamoci che st.session_state.mq_appartamenti esista
     if "mq_appartamenti" not in st.session_state:
         st.session_state.mq_appartamenti = {}
 
@@ -425,43 +423,40 @@ else:
     imp_dec = Decimal(str(tot_imp))
     iva_dec = Decimal(str(tot_iva))
 
-    # Ciclo per ogni singolo condomino
     for app, mil in millesimi.items():
+        # Prendiamo i mq reali del condomino (es. 88.61 per Marangi)
         mq_condomino = st.session_state.mq_appartamenti.get(app, 0.0)
         mq_cond_dec = Decimal(str(mq_condomino))
         mil_dec = Decimal(str(mil))
 
+        # Rapporto basato sui mq: (mq_condomino / mq_totali)
         if tot_mq_dec > 0:
-            # Rapporto a 11 cifre decimali
             rapporto_11 = (mq_cond_dec / tot_mq_dec).quantize(Decimal('0.00000000001'), rounding=ROUND_HALF_UP)
         else:
             rapporto_11 = Decimal('0')
 
-        # Calcolo quote parziali come Decimal separate
         quota_imp_parziale = (rapporto_11 * imp_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         quota_iva_parziale = (rapporto_11 * iva_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        
-        # Somma finale arrotondata a 2 cifre
         quota_tot_parziale = quota_imp_parziale + quota_iva_parziale
 
-        # Aggiorniamo i totali decimali progressivi
         sum_millesimi += mil_dec
         sum_imp_dec += quota_imp_parziale
         sum_iva_dec += quota_iva_parziale
         sum_tot_dec += quota_tot_parziale
 
-        # Aggiungiamo i dati del singolo condomino alla tabella
+        # Moltiplichiamo per 100 per avere la percentuale corretta (es. 12.46%)
+        perc_valore = float(rapporto_11) * 100
+
         reparto_data.append({
             "Condomino": app,
             "Millesimi": float(mil_dec),
-            "Rapporto (%)": f"{float(rapporto_11) * 100:.9f}%",
+            "Rapporto (%)": f"{perc_valore:.4f}%",  # Mostra 4 decimali puliti (es. 12.4620%)
             "Quota Imponibile (€)": float(quota_imp_parziale),
             "Quota IVA (€)": float(quota_iva_parziale),
             "Quota Totale (€)": float(quota_tot_parziale),
         })
 
-    # --- RIEPILOGO FINALE (FUORI DAL CICLO FOR) ---
-    # Questa riga viene eseguita UNA SOLA VOLTA alla fine
+    # --- UNICA RIGA DI TOTALE FINALE ---
     reparto_data.append({
         "Condomino": "TOTALE",
         "Millesimi": float(sum_millesimi),
@@ -471,7 +466,6 @@ else:
         "Quota Totale (€)": float(sum_tot_dec),
     })
 
-    # Variabili di compatibilità per eventuali sezioni successive del codice
     sum_imp = float(sum_imp_dec)
     sum_iva = float(sum_iva_dec)
     sum_tot = float(sum_tot_dec)
