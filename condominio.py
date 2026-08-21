@@ -408,16 +408,17 @@ else:
 
     # --- LOGICA DI CALCOLO CORRETTA ---
     reparto_data = []
-    sum_millesimi = 0.0
-    sum_imp = 0.0
-    sum_iva = 0.0
-    sum_tot = 0.0
-
-    # Inizializziamo i totali come Decimal, non come float
     sum_millesimi = Decimal('0.00')
     sum_imp_dec = Decimal('0.00')
     sum_iva_dec = Decimal('0.00')
     sum_tot_dec = Decimal('0.00')
+
+    # Inizializziamo i totali in Decimal prima del ciclo
+    tot_mq_reali = sum(st.session_state.mq_appartamenti.values())
+    tot_mq_dec = Decimal(str(tot_mq_reali))
+    
+    imp_dec = Decimal(str(tot_imp))
+    iva_dec = Decimal(str(tot_iva))
 
     for app, mil in millesimi.items():
         mq_condomino = st.session_state.mq_appartamenti.get(app, 0.0)
@@ -434,7 +435,7 @@ else:
         quota_iva_parziale = (rapporto_11 * iva_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         quota_tot_parziale = quota_imp_parziale + quota_iva_parziale
 
-        # Aggiorniamo le somme (rimaniamo in Decimal)
+        # Aggiorniamo le somme
         sum_millesimi += mil_dec
         sum_imp_dec += quota_imp_parziale
         sum_iva_dec += quota_iva_parziale
