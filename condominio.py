@@ -925,6 +925,16 @@ else:
             
         quota_dovuta = float((rapporto_11 * f_tot_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
         is_pagato = (app, f_id) in pagate_set
+
+    if not is_pagato:
+        
+        if tot_mil_dec > 0:
+            rapporto_11 = (mil_dec / tot_mil_dec).quantize(Decimal('0.00000000011'), rounding=ROUND_HALF_UP)
+        else:
+            rapporto_11 = Decimal('0')
+            
+        quota_dovuta = float((rapporto_11 * f_tot_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+        is_pagato = (app, f_id) in pagate_set
         
         if tot_mil_dec > 0:
             rapporto_11 = (mil_dec / tot_mil_dec).quantize(Decimal('0.00000000011'), rounding=ROUND_HALF_UP)
