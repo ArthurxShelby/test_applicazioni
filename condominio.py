@@ -450,13 +450,13 @@ else:
         sum_tot_dec += quota_tot_parziale
 
         reparto_data.append({
-            "Condomino": app,
-            "Millesimi": float(mil_dec),
-            "Rapporto (%)": f"{float(rapporto_11) * 100:.9f}%",
-            "Quota Imponibile (€)": float(quota_imp_parziale),
-            "Quota IVA (€)": float(quota_iva_parziale),
-            "Quota Totale (€)": float(quota_tot_parziale),
-        })
+        "Condomino": "TOTALE",
+        "Millesimi": float(sum_millesimi),
+        "Rapporto (%)": "100.00%",
+        "Quota Imponibile (€)": float(sum_imp_dec),
+        "Quota IVA (€)": float(sum_iva_dec),
+        "Quota Totale (€)": float(sum_tot_dec),
+    })
 
     # Compatibilità con le vecchie variabili usate alle righe successive
     sum_imp = float(sum_imp_dec)
