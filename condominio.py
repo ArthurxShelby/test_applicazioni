@@ -939,9 +939,9 @@ else:
 
     df_scaduti = pd.DataFrame(report_scaduti)
 
-      if df_scaduti.empty:
+    if df_scaduti.empty:
         st.success("Ottimo! Non ci sono quote scoperte: tutte le fatture risultano pagate dai condomini.")
-      else:
+    else:
         col_sc1, col_sc2 = st.columns(2)
         with col_sc1:
           conds_selezionabili = ["Tutti i condomini"] + APP_NAMES
