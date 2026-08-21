@@ -912,9 +912,19 @@ else:
         f_fornitore = f_row["fornitore"]
         f_totale = float(f_row["totale"])
         
-        for app, mil in millesimi.items():
-          quota_dovuta = (f_totale * (mil / tot_millesimi)) if tot_millesimi > 0 else 0.0
-          is_pagato = (app, f_id) in pagate_set
+        tot_millesimi = sum(millesimi.values()) if millesimi else 1000.0
+    for app, mil in millesimi.items():
+        tot_mil_dec = Decimal(str(tot_millesimi))
+        mil_dec = Decimal(str(mil))
+        f_tot_dec = Decimal(str(f_totale))
+        
+        if tot_mil_dec > 0:
+            rapporto_11 = (mil_dec / tot_mil_dec).quantize(Decimal('0.00000000011'), rounding=ROUND_HALF_UP)
+        else:
+            rapporto_11 = Decimal('0')
+            
+        quota_dovuta = float((rapporto_11 * f_tot_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+        is_pagato = (app, f_id) in pagate_set
           
           if not is_pagato:
             report_scaduti.append({
