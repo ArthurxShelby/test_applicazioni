@@ -406,15 +406,20 @@ else:
     st.markdown("---")
     st.subheader("Tabella di Riparto per Condomino")
 
-    # --- LOGICA DI CALCOLO CORRETTA ---
+    # --- LOGICA DI CALCOLO UNIFICATA E CORRETTA ---
     reparto_data = []
+    
+    # Inizializzazione sicura delle variabili di riepilogo in Decimal
     sum_millesimi = Decimal('0.00')
     sum_imp_dec = Decimal('0.00')
     sum_iva_dec = Decimal('0.00')
     sum_tot_dec = Decimal('0.00')
 
-    # Inizializziamo i totali in Decimal prima del ciclo
-    tot_mq_reali = sum(st.session_state.mq_appartamenti.values())
+    # Assicuriamoci che st.session_state.mq_appartamenti esista
+    if "mq_appartamenti" not in st.session_state:
+        st.session_state.mq_appartamenti = {}
+
+    tot_mq_reali = sum(st.session_state.mq_appartamenti.values()) if st.session_state.mq_appartamenti else 1.0
     tot_mq_dec = Decimal(str(tot_mq_reali))
     
     imp_dec = Decimal(str(tot_imp))
@@ -426,16 +431,19 @@ else:
         mil_dec = Decimal(str(mil))
 
         if tot_mq_dec > 0:
+            # Rapporto a 11 cifre decimali
             rapporto_11 = (mq_cond_dec / tot_mq_dec).quantize(Decimal('0.00000000001'), rounding=ROUND_HALF_UP)
         else:
             rapporto_11 = Decimal('0')
 
-        # Calcolo quote parziali come Decimal
+        # Calcolo quote parziali come Decimal separate
         quota_imp_parziale = (rapporto_11 * imp_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         quota_iva_parziale = (rapporto_11 * iva_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        
+        # Somma finale arrotondata a 2 cifre
         quota_tot_parziale = quota_imp_parziale + quota_iva_parziale
 
-        # Aggiorniamo le somme
+        # Aggiorniamo i totali decimali
         sum_millesimi += mil_dec
         sum_imp_dec += quota_imp_parziale
         sum_iva_dec += quota_iva_parziale
