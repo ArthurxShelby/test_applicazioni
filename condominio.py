@@ -409,7 +409,7 @@ else:
     # --- LOGICA DI CALCOLO UNIFICATA E CORRETTA ---
     reparto_data = []
     
-    # Inizializzazione sicura delle variabili di riepilogo in Decimal
+    # Inizializzazione sicura delle variabili
     sum_millesimi = Decimal('0.00')
     sum_imp_dec = Decimal('0.00')
     sum_iva_dec = Decimal('0.00')
@@ -457,6 +457,11 @@ else:
             "Quota IVA (€)": float(quota_iva_parziale),
             "Quota Totale (€)": float(quota_tot_parziale),
         })
+
+    # Compatibilità con le vecchie variabili usate alle righe successive
+    sum_imp = float(sum_imp_dec)
+    sum_iva = float(sum_iva_dec)
+    sum_tot = float(sum_tot_dec)
 
     reparto_data.append(
         {
