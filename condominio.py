@@ -406,7 +406,7 @@ else:
     st.markdown("---")
     st.subheader("Tabella di Riparto per Condomino")
 
-    # --- LOGICA DI CALCOLO E FORMATTAZIONE CORRETTA ---
+    # --- LOGICA DI CALCOLO BASATA SU MQ (11 CIFRE -> MOLTIPLICAZIONE -> ARROTONDAMENTO A 2 CIFRE) ---
     reparto_data = []
     
     sum_millesimi = Decimal('0.00')
@@ -428,13 +428,13 @@ else:
         mq_cond_dec = Decimal(str(mq_condomino))
         mil_dec = Decimal(str(mil))
 
-        # 1. Rapporto con 11 cifre decimali esatte (MQ / MQ Totali)
+        # 1. Divisione MQ utente / MQ totali con precisione a 11 cifre decimali
         if tot_mq_dec > 0:
-            rapporto_11 = (mq_cond_dec / tot_mq_dec).quantize(Decimal('0.00000000001'), rounding=ROUND_HALF_UP)
+            rapporto_11 = (mq_cond_dec / tot_mq_dec).quantize(Decimal('0.00000000011'), rounding=ROUND_HALF_UP)
         else:
             rapporto_11 = Decimal('0')
 
-        # 2. Calcolo quote con arrotondamento immediato a 2 cifre
+        # 2. Moltiplicazione per Imponibile e IVA, con arrotondamento immediato a 2 cifre
         quota_imp_parziale = (rapporto_11 * imp_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         quota_iva_parziale = (rapporto_11 * iva_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         quota_tot_parziale = quota_imp_parziale + quota_iva_parziale
@@ -444,13 +444,13 @@ else:
         sum_iva_dec += quota_iva_parziale
         sum_tot_dec += quota_tot_parziale
 
-        # 3. Percentuale precisa (es. 12.4620%) derivata dal rapporto * 100
+        # Percentuale derivata dal rapporto esatto sui mq (es. 88.61 / 711.04 * 100)
         perc_valore = float(rapporto_11) * 100
 
         reparto_data.append({
             "Condomino": app,
             "Millesimi": float(mil_dec),
-            "Rapporto (%)": f"{perc_valore:.4f}%",  # Mostra 4 decimali per la massima precisione visiva
+            "Rapporto (%)": f"{perc_valore:.2f}%",  # Mostra la percentuale corretta basata sui mq
             "Quota Imponibile (€)": float(quota_imp_parziale),
             "Quota IVA (€)": float(quota_iva_parziale),
             "Quota Totale (€)": float(quota_tot_parziale),
@@ -483,6 +483,8 @@ else:
             mime="application/pdf",
             use_container_width=True,
         )
+
+    st.markdown("---")
 
     st.markdown("---")
 
