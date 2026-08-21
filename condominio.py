@@ -406,7 +406,7 @@ else:
     st.markdown("---")
     st.subheader("Tabella di Riparto per Condomino")
 
-    # --- LOGICA DI CALCOLO DEFINITIVA ---
+    # --- LOGICA DI CALCOLO PULITA E UNICA ---
     reparto_data = []
     
     sum_millesimi = Decimal('0.00')
@@ -423,13 +423,13 @@ else:
     imp_dec = Decimal(str(tot_imp))
     iva_dec = Decimal(str(tot_iva))
 
+    # 1. Ciclo sui singoli condomini
     for app, mil in millesimi.items():
-        # Prendiamo i mq reali del condomino (es. 88.61 per Marangi)
         mq_condomino = st.session_state.mq_appartamenti.get(app, 0.0)
         mq_cond_dec = Decimal(str(mq_condomino))
         mil_dec = Decimal(str(mil))
 
-        # Rapporto basato sui mq: (mq_condomino / mq_totali)
+        # Rapporto basato sui mq reali del condomino / mq totali
         if tot_mq_dec > 0:
             rapporto_11 = (mq_cond_dec / tot_mq_dec).quantize(Decimal('0.00000000001'), rounding=ROUND_HALF_UP)
         else:
@@ -444,19 +444,19 @@ else:
         sum_iva_dec += quota_iva_parziale
         sum_tot_dec += quota_tot_parziale
 
-        # Moltiplichiamo per 100 per avere la percentuale corretta (es. 12.46%)
+        # Conversione in percentuale (es. 88.61 / 711.04 * 100)
         perc_valore = float(rapporto_11) * 100
 
         reparto_data.append({
             "Condomino": app,
             "Millesimi": float(mil_dec),
-            "Rapporto (%)": f"{perc_valore:.4f}%",  # Mostra 4 decimali puliti (es. 12.4620%)
+            "Rapporto (%)": f"{perc_valore:.2f}%",  # Formato percentuale pulito a 2 decimali (es. 12.46%)
             "Quota Imponibile (€)": float(quota_imp_parziale),
             "Quota IVA (€)": float(quota_iva_parziale),
             "Quota Totale (€)": float(quota_tot_parziale),
         })
 
-    # --- UNICA RIGA DI TOTALE FINALE ---
+    # 2. UNICA riga di riepilogo finale (inserita una sola volta alla fine)
     reparto_data.append({
         "Condomino": "TOTALE",
         "Millesimi": float(sum_millesimi),
