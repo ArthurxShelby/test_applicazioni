@@ -450,13 +450,13 @@ else:
         reparto_data.append({
             "Condomino": app,
             "Millesimi": float(mil_dec),
-            "Rapporto (%)": f"{perc_valore:.2f}%",  # Formato percentuale pulito a 2 decimali (es. 12.46%)
+            "Rapporto (%)": f"{perc_valore:.2f}%",
             "Quota Imponibile (€)": float(quota_imp_parziale),
             "Quota IVA (€)": float(quota_iva_parziale),
             "Quota Totale (€)": float(quota_tot_parziale),
         })
 
-    # 2. UNICA riga di riepilogo finale (inserita una sola volta alla fine)
+    # 2. UNICA riga di riepilogo finale (senza duplicati)
     reparto_data.append({
         "Condomino": "TOTALE",
         "Millesimi": float(sum_millesimi),
@@ -470,30 +470,19 @@ else:
     sum_iva = float(sum_iva_dec)
     sum_tot = float(sum_tot_dec)
 
-    reparto_data.append(
-        {
-            "Condomino": "TOTALE",
-            "Millesimi": round(sum_millesimi, 2),
-            "Rapporto (%)": "100.00%",
-            "Quota Imponibile (€)": round(sum_imp, 2),
-            "Quota IVA (€)": round(sum_iva, 2),
-            "Quota Totale (€)": round(sum_tot, 2),
-        }
-    )
-
     df_reparto = pd.DataFrame(reparto_data)
     st.dataframe(df_reparto, use_container_width=True)
 
     col_pdf1, _ = st.columns([1, 2])
     with col_pdf1:
-      pdf_bytes = genera_pdf_riparto(df_reparto, descrizione_contesto)
-      st.download_button(
-          label="📥 Scarica / Stampa PDF Riparto",
-          data=pdf_bytes,
-          file_name="riparto_spese_condominio.pdf",
-          mime="application/pdf",
-          use_container_width=True,
-      )
+        pdf_bytes = genera_pdf_riparto(df_reparto, descrizione_contesto)
+        st.download_button(
+            label="📥 Scarica / Stampa PDF Riparto",
+            data=pdf_bytes,
+            file_name="riparto_spese_condominio.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
 
     st.markdown("---")
 
