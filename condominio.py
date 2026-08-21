@@ -905,43 +905,43 @@ else:
       report_scaduti = []
       
       for _, f_row in df_fatture.iterrows():
-        f_id = int(f_row["id"])
-        f_anno = f_row["anno"]
-        f_mese = f_row["mese"]
-        f_tipo = f_row["tipo"]
-        f_fornitore = f_row["fornitore"]
-        f_totale = float(f_row["totale"])
-        
-        tot_millesimi = sum(millesimi.values()) if millesimi else 1000.0
-    for app, mil in millesimi.items():
-        tot_mil_dec = Decimal(str(tot_millesimi))
-        mil_dec = Decimal(str(mil))
-        f_tot_dec = Decimal(str(f_totale))
-        
-        if tot_mil_dec > 0:
-            rapporto_11 = (mil_dec / tot_mil_dec).quantize(Decimal('0.00000000011'), rounding=ROUND_HALF_UP)
-        else:
-            rapporto_11 = Decimal('0')
-            
-        quota_dovuta = float((rapporto_11 * f_tot_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
-        is_pagato = (app, f_id) in pagate_set
+          f_id = int(f_row["id"])
+          f_anno = f_row["anno"]
+          f_mese = f_row["mese"]
+          f_tipo = f_row["tipo"]
+          f_fornitore = f_row["fornitore"]
+          f_totale = float(f_row["totale"])
+          
+          tot_millesimi = sum(millesimi.values()) if millesimi else 1000.0
+          for app, mil in millesimi.items():
+              tot_mil_dec = Decimal(str(tot_millesimi))
+              mil_dec = Decimal(str(mil))
+              f_tot_dec = Decimal(str(f_totale))
+              
+              if tot_mil_dec > 0:
+                  rapporto_11 = (mil_dec / tot_mil_dec).quantize(Decimal('0.00000000011'), rounding=ROUND_HALF_UP)
+              else:
+                  rapporto_11 = Decimal('0')
+                  
+              quota_dovuta = float((rapporto_11 * f_tot_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+              is_pagato = (app, f_id) in pagate_set
 
-        if not is_pagato:
-            report_scaduti.append({
-                "Condomino": app,
-                "Fattura ID": f_id,
-                "Periodo": f"{f_anno} - {f_mese}",
-                "Tipo Spesa": f_tipo,
-                "Fornitore": f_fornitore,
-                "Quota Dovuta (€)": round(quota_dovuta, 2),
-                "Stato": "Scaduto / Non Pagato"
-            })
+              if not is_pagato:
+                  report_scaduti.append({
+                      "Condomino": app,
+                      "Fattura ID": f_id,
+                      "Periodo": f"{f_anno} - {f_mese}",
+                      "Tipo Spesa": f_tipo,
+                      "Fornitore": f_fornitore,
+                      "Quota Dovuta (€)": round(quota_dovuta, 2),
+                      "Stato": "Scaduto / Non Pagato"
+                  })
 
-    df_scaduti = pd.DataFrame(report_scaduti)
+      df_scaduti = pd.DataFrame(report_scaduti)
 
-    if df_scaduti.empty:
-        st.success("Ottimo! Non ci sono quote scoperte: tutte le fatture risultano pagate dai condomini.")
-    else:
+      if df_scaduti.empty:
+          st.success("Ottimo! Non ci sono quote scoperte: tutte le fatture risultano pagate dai condomini.")
+      else:
         col_sc1, col_sc2 = st.columns(2)
         with col_sc1:
           conds_selezionabili = ["Tutti i condomini"] + APP_NAMES
