@@ -406,7 +406,7 @@ else:
     st.markdown("---")
     st.subheader("Tabella di Riparto per Condomino")
 
-    # --- LOGICA DI CALCOLO DEFINITIVA E TRASPARENTE ---
+    # --- LOGICA DI CALCOLO CON PRECISIONE A 11 CIFRE E SOMMA FINALE ---
     reparto_data = []
     
     sum_millesimi = Decimal('0.00')
@@ -417,56 +417,64 @@ else:
     if "mq_appartamenti" not in st.session_state:
         st.session_state.mq_appartamenti = {}
 
-    # Calcoliamo la somma reale dei mq di tutti gli appartamenti
     tot_mq_reali = sum(st.session_state.mq_appartamenti.values()) if st.session_state.mq_appartamenti else 1.0
     tot_mq_dec = Decimal(str(tot_mq_reali))
     
     imp_dec = Decimal(str(tot_imp))
     iva_dec = Decimal(str(tot_iva))
 
+    # Liste d'appoggio per sommare i valori a 11 cifre prima dell'arrotondamento a video
+    righe_temporanee = []
+
     for app, mil in millesimi.items():
         mq_condomino = st.session_state.mq_appartamenti.get(app, 0.0)
         mq_cond_dec = Decimal(str(mq_condomino))
         mil_dec = Decimal(str(mil))
 
-        # Rapporto esatto basato sui mq (es. 88.61 / 711.04)
+        # 1. Rapporto con 11 cifre decimali esatte
         if tot_mq_dec > 0:
             rapporto_11 = (mq_cond_dec / tot_mq_dec).quantize(Decimal('0.00000000001'), rounding=ROUND_HALF_UP)
         else:
             rapporto_11 = Decimal('0')
 
-        quota_imp_parziale = (rapporto_11 * imp_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        quota_iva_parziale = (rapporto_11 * iva_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        quota_tot_parziale = quota_imp_parziale + quota_iva_parziale
+        # 2. Moltiplicazione mantenendo la precisione alta (senza troncare a 2 cifre prima della somma)
+        quota_imp_alta = rapporto_11 * imp_dec
+        quota_iva_alta = rapporto_11 * iva_dec
+        quota_tot_alta = quota_imp_alta + quota_iva_alta
 
         sum_millesimi += mil_dec
-        sum_imp_dec += quota_imp_parziale
-        sum_iva_dec += quota_iva_parziale
-        sum_tot_dec += quota_tot_parziale
+        sum_imp_dec += quota_imp_alta
+        sum_iva_dec += quota_iva_alta
+        sum_tot_dec += quota_tot_alta
 
-        # Percentuale esatta derivata dai mq (es. 12.46%)
         perc_valore = float(rapporto_11) * 100
 
-        reparto_data.append({
+        righe_temporanee.append({
             "Condomino": app,
-            "MQ": float(mq_cond_dec),  # Aggiungiamo i MQ in una colonna per controllo visivo
             "Millesimi": float(mil_dec),
             "Rapporto (%)": f"{perc_valore:.2f}%",
-            "Quota Imponibile (€)": float(quota_imp_parziale),
-            "Quota IVA (€)": float(quota_iva_parziale),
-            "Quota Totale (€)": float(quota_tot_parziale),
+            # A video mostriamo arrotondato a 2 cifre, ma i valori interni restano precisi per la somma
+            "Quota Imponibile (€)": float(quota_imp_alta.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
+            "Quota IVA (€)": float(quota_iva_alta.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
+            "Quota Totale (€)": float(quota_tot_alta.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
         })
 
-    # UNICA riga di riepilogo finale
+    # Aggiungiamo le righe alla tabella finale
+    reparto_data.extend(righe_temporanee)
+
+    # 3. Riga di totale basata sulla somma di tutte le 11 cifre (arrotondata alla fine a 2 cifre)
     reparto_data.append({
         "Condomino": "TOTALE",
-        "MQ": float(tot_mq_dec),
         "Millesimi": float(sum_millesimi),
         "Rapporto (%)": "100.00%",
-        "Quota Imponibile (€)": float(sum_imp_dec),
-        "Quota IVA (€)": float(sum_iva_dec),
-        "Quota Totale (€)": float(sum_tot_dec),
+        "Quota Imponibile (€)": float(sum_imp_dec.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
+        "Quota IVA (€)": float(sum_iva_dec.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
+        "Quota Totale (€)": float(sum_tot_dec.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)),
     })
+
+    sum_imp = float(sum_imp_dec.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+    sum_iva = float(sum_iva_dec.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+    sum_tot = float(sum_tot_dec.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
 
     df_reparto = pd.DataFrame(reparto_data)
     st.dataframe(df_reparto, use_container_width=True)
