@@ -1,6 +1,5 @@
 import io
 import os
-from decimal import Decimal, ROUND_HALF_UP
 import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
@@ -48,7 +47,7 @@ def carica_mq_da_supabase():
     pass
   return {
       "ESPOSITO": 70.0,
-      "MARANGI": 88.61,
+      "MARANGI": 75.0,
       "LINCESSO": 80.0,
       "FUSO": 85.0,
       "PUCA": 90.0,
@@ -128,8 +127,8 @@ if "pagamenti" not in st.session_state:
 def calcola_millesimi_da_mq(mq_dict):
   tot_mq = sum(mq_dict.values())
   if tot_mq <= 0:
-    return {k: 0.0 for k in mq_dict}
-  return {app: round((mq / tot_mq) * 1000, 4) for app, mq in mq_dict.items()}
+    return {k: 0 for k in mq_dict}
+  return {app: round((mq / tot_mq) * 1000, 2) for app, mq in mq_dict.items()}
 
 
 # --- FUNZIONE PER GENERARE IL PDF ---
@@ -294,6 +293,7 @@ else:
 
   df_fatture = st.session_state.fatture
   millesimi = calcola_millesimi_da_mq(st.session_state.mq_appartamenti)
+  tot_millesimi = sum(millesimi.values())
 
   mese_map = {
       "Gennaio": 1, "Febbraio": 2, "Marzo": 3, "Aprile": 4, 
@@ -406,100 +406,55 @@ else:
     st.markdown("---")
     st.subheader("Tabella di Riparto per Condomino")
 
-    # --- LOGICA DI CALCOLO RIGOROSA CON MQ REALI ---
     reparto_data = []
-    
-    sum_millesimi = Decimal('0.00')
-    sum_mq_dec = Decimal('0.00')
-    sum_imp_dec = Decimal('0.00')
-    sum_iva_dec = Decimal('0.00')
-    sum_tot_dec = Decimal('0.00')
-
-    if "mq_appartamenti" not in st.session_state:
-        st.session_state.mq_appartamenti = {}
-
-    # Calcoliamo i mq totali in modo sicuro
-    tot_mq_reali = sum(st.session_state.mq_appartamenti.values()) if st.session_state.mq_appartamenti else 0.0
-    
-    # Se per caso i mq in sessione sono zero, usiamo i millesimi come fallback temporaneo per evitare divisioni per zero
-    if tot_mq_reali <= 0:
-        tot_mq_dec = Decimal('1000.0')
-    else:
-        tot_mq_dec = Decimal(str(tot_mq_reali))
-    
-    imp_dec = Decimal(str(tot_imp))
-    iva_dec = Decimal(str(tot_iva))
+    sum_millesimi = 0.0
+    sum_imp = 0.0
+    sum_iva = 0.0
+    sum_tot = 0.0
 
     for app, mil in millesimi.items():
-        # Cerchiamo i mq dell'utente (normalizzando la chiave in maiuscolo per sicurezza)
-        app_key = str(app).strip().upper()
-        mq_condomino = 0.0
-        for k, v in st.session_state.mq_appartamenti.items():
-            if str(k).strip().upper() == app_key:
-                mq_condomino = float(v)
-                break
-        
-        mq_cond_dec = Decimal(str(mq_condomino))
-        mil_dec = Decimal(str(mil))
+      quota_imp = tot_imp * (mil / tot_millesimi) if tot_millesimi > 0 else 0
+      quota_iva = tot_iva * (mil / tot_millesimi) if tot_millesimi > 0 else 0
+      quota_tot = tot_complessivo * (mil / tot_millesimi) if tot_millesimi > 0 else 0
 
-        # 1. Divisione MQ utente / MQ totali con precisione a 11 cifre decimali
-        if tot_mq_dec > 0:
-            rapporto_11 = (mq_cond_dec / tot_mq_dec).quantize(Decimal('0.00000000001'), rounding=ROUND_HALF_UP)
-        else:
-            rapporto_11 = Decimal('0')
+      sum_millesimi += mil
+      sum_imp += quota_imp
+      sum_iva += quota_iva
+      sum_tot += quota_tot
 
-        # 2. Moltiplicazione per Imponibile e IVA, con arrotondamento immediato a 2 cifre
-        quota_imp_parziale = (rapporto_11 * imp_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        quota_iva_parziale = (rapporto_11 * iva_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        quota_tot_parziale = quota_imp_parziale + quota_iva_parziale
+      reparto_data.append(
+          {
+              "Condomino": app,
+              "Millesimi": mil,
+              "Quota Imponibile (€)": round(quota_imp, 2),
+              "Quota IVA (€)": round(quota_iva, 2),
+              "Quota Totale (€)": round(quota_tot, 2),
+          }
+      )
 
-        sum_millesimi += mil_dec
-        sum_mq_dec += mq_cond_dec
-        sum_imp_dec += quota_imp_parziale
-        sum_iva_dec += quota_iva_parziale
-        sum_tot_dec += quota_tot_parziale
-
-        # Percentuale derivata dal rapporto esatto sui mq (es. 88.61 / 711.04 * 100)
-        perc_valore = float(rapporto_11) * 100
-
-        reparto_data.append({
-            "Condomino": app,
-            "MQ": float(mq_cond_dec),
-            "Millesimi": float(mil_dec),
-            "Rapporto (%)": f"{perc_valore:.2f}%",
-            "Quota Imponibile (€)": float(quota_imp_parziale),
-            "Quota IVA (€)": float(quota_iva_parziale),
-            "Quota Totale (€)": float(quota_tot_parziale),
-        })
-
-    # Riga totale finale
-    reparto_data.append({
-        "Condomino": "TOTALE",
-        "MQ": float(sum_mq_dec),
-        "Millesimi": float(sum_millesimi),
-        "Rapporto (%)": "100.00%",
-        "Quota Imponibile (€)": float(sum_imp_dec),
-        "Quota IVA (€)": float(sum_iva_dec),
-        "Quota Totale (€)": float(sum_tot_dec),
-    })
-
-    sum_imp = float(sum_imp_dec)
-    sum_iva = float(sum_iva_dec)
-    sum_tot = float(sum_tot_dec)
+    reparto_data.append(
+        {
+            "Condomino": "TOTALE",
+            "Millesimi": round(sum_millesimi, 2),
+            "Quota Imponibile (€)": round(sum_imp, 2),
+            "Quota IVA (€)": round(sum_iva, 2),
+            "Quota Totale (€)": round(sum_tot, 2),
+        }
+    )
 
     df_reparto = pd.DataFrame(reparto_data)
     st.dataframe(df_reparto, use_container_width=True)
 
     col_pdf1, _ = st.columns([1, 2])
     with col_pdf1:
-        pdf_bytes = genera_pdf_riparto(df_reparto, descrizione_contesto)
-        st.download_button(
-            label="📥 Scarica / Stampa PDF Riparto",
-            data=pdf_bytes,
-            file_name="riparto_spese_condominio.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
+      pdf_bytes = genera_pdf_riparto(df_reparto, descrizione_contesto)
+      st.download_button(
+          label="📥 Scarica / Stampa PDF Riparto",
+          data=pdf_bytes,
+          file_name="riparto_spese_condominio.pdf",
+          mime="application/pdf",
+          use_container_width=True,
+      )
 
     st.markdown("---")
 
@@ -554,17 +509,8 @@ else:
         id_fat_temp = int(fattura_scelta_str.split("|")[0].replace("ID:", "").strip())
         row_f_temp = df_fatture_form[df_fatture_form["id"] == id_fat_temp].iloc[0]
         tot_fat_temp = float(row_f_temp["totale"])
-        
-        mq_c = st.session_state.mq_appartamenti.get(cond_attivo, 0.0)
-        mq_c_dec = Decimal(str(mq_c))
-        
-        if tot_mq_dec > 0:
-          r_11_t = (mq_c_dec / tot_mq_dec).quantize(Decimal('0.00000000001'), rounding=ROUND_HALF_UP)
-        else:
-          r_11_t = Decimal('0')
-          
-        q_tot_t = r_11_t * Decimal(str(tot_fat_temp))
-        quota_dovuta_automatica = float(q_tot_t.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+        mil_c = millesimi.get(cond_attivo, 0.0)
+        quota_dovuta_automatica = (tot_fat_temp * (mil_c / tot_millesimi)) if tot_millesimi > 0 else 0.0
       except Exception:
         pass
 
@@ -862,6 +808,7 @@ else:
     if df_fatture.empty:
       st.info("Nessuna fattura presente nello storico.")
     else:
+      # Filtri per Anno e Tipologia nella sezione Storico e Dettaglio
       col_storico1, col_storico2 = st.columns(2)
       with col_storico1:
         anni_disp_storico = sorted(df_fatture["anno"].unique(), reverse=True) if "anno" in df_fatture.columns else []
@@ -909,20 +856,10 @@ else:
         f_mese = f_row["mese"]
         f_tipo = f_row["tipo"]
         f_fornitore = f_row["fornitore"]
-        f_tot = Decimal(str(f_row["totale"]))
+        f_totale = float(f_row["totale"])
         
         for app, mil in millesimi.items():
-          mq_c = st.session_state.mq_appartamenti.get(app, 0.0)
-          mq_c_dec = Decimal(str(mq_c))
-          
-          if tot_mq_dec > 0:
-            r_11_scad = (mq_c_dec / tot_mq_dec).quantize(Decimal('0.00000000001'), rounding=ROUND_HALF_UP)
-          else:
-            r_11_scad = Decimal('0')
-            
-          quota_dovuta_dec = r_11_scad * f_tot
-          quota_dovuta = float(quota_dovuta_dec.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
-          
+          quota_dovuta = (f_totale * (mil / tot_millesimi)) if tot_millesimi > 0 else 0.0
           is_pagato = (app, f_id) in pagate_set
           
           if not is_pagato:
@@ -960,6 +897,7 @@ else:
 
         st.dataframe(df_scad_filtered, use_container_width=True)
 
+        # --- FUNZIONE PER GENERARE IL PDF DELLO SCADUTO ---
         def genera_pdf_scaduti(df_res, filtro_c, filtro_t, totale_res):
           buf = io.BytesIO()
           doc = SimpleDocTemplate(buf, pagesize=letter)
@@ -997,6 +935,7 @@ else:
           buf.seek(0)
           return buf.getvalue()
 
+        # Pulsante di stampa / download PDF dello scaduto
         col_p_btn1, _ = st.columns([1, 2])
         with col_p_btn1:
           pdf_scadenze_bytes = genera_pdf_scaduti(df_scad_filtered, filtro_scad_cond, filtro_scad_tipo, tot_insoluto)
@@ -1018,6 +957,7 @@ else:
       nuovi_mq = {}
       for app in APP_NAMES:
         val_attuale = st.session_state.mq_appartamenti.get(app, 70.0)
+        # MODIFICA QUI: aggiunto step=0.01 e modificato il formato a "%.2f"
         nuovi_mq[app] = st.number_input(
             f"MQ {app}",
             min_value=1.0,
