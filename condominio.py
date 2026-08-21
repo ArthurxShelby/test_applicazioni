@@ -406,16 +406,17 @@ else:
     st.markdown("---")
     st.subheader("Tabella di Riparto per Condomino")
 
-    # --- LOGICA DI CALCOLO RIGOROSA ---
+    # --- LOGICA DI CALCOLO E FORMATTAZIONE CORRETTA ---
     reparto_data = []
     
-    # Inizializzazione somme totali per la riga finale
     sum_millesimi = Decimal('0.00')
     sum_imp_dec = Decimal('0.00')
     sum_iva_dec = Decimal('0.00')
     sum_tot_dec = Decimal('0.00')
 
-    # Totale MQ per la divisione
+    if "mq_appartamenti" not in st.session_state:
+        st.session_state.mq_appartamenti = {}
+
     tot_mq_reali = sum(st.session_state.mq_appartamenti.values()) if st.session_state.mq_appartamenti else 1.0
     tot_mq_dec = Decimal(str(tot_mq_reali))
     
@@ -427,28 +428,29 @@ else:
         mq_cond_dec = Decimal(str(mq_condomino))
         mil_dec = Decimal(str(mil))
 
-        # 1. Rapporto: divisione MQ / Totale MQ con precisione 11 cifre
+        # 1. Rapporto con 11 cifre decimali esatte (MQ / MQ Totali)
         if tot_mq_dec > 0:
             rapporto_11 = (mq_cond_dec / tot_mq_dec).quantize(Decimal('0.00000000001'), rounding=ROUND_HALF_UP)
         else:
             rapporto_11 = Decimal('0')
 
-        # 2. Moltiplicazione per Imponibile e IVA
-        # Arrotondiamo a 2 cifre dopo ogni moltiplicazione come richiesto
+        # 2. Calcolo quote con arrotondamento immediato a 2 cifre
         quota_imp_parziale = (rapporto_11 * imp_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         quota_iva_parziale = (rapporto_11 * iva_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         quota_tot_parziale = quota_imp_parziale + quota_iva_parziale
 
-        # Aggiornamento somme per il totale finale
         sum_millesimi += mil_dec
         sum_imp_dec += quota_imp_parziale
         sum_iva_dec += quota_iva_parziale
         sum_tot_dec += quota_tot_parziale
 
+        # 3. Percentuale precisa (es. 12.4620%) derivata dal rapporto * 100
+        perc_valore = float(rapporto_11) * 100
+
         reparto_data.append({
             "Condomino": app,
             "Millesimi": float(mil_dec),
-            "Rapporto (%)": f"{float(rapporto_11) * 100:.2f}%",
+            "Rapporto (%)": f"{perc_valore:.4f}%",  # Mostra 4 decimali per la massima precisione visiva
             "Quota Imponibile (€)": float(quota_imp_parziale),
             "Quota IVA (€)": float(quota_iva_parziale),
             "Quota Totale (€)": float(quota_tot_parziale),
@@ -464,12 +466,10 @@ else:
         "Quota Totale (€)": float(sum_tot_dec),
     })
 
-    # Aggiornamento variabili globali per il resto dello script
     sum_imp = float(sum_imp_dec)
     sum_iva = float(sum_iva_dec)
     sum_tot = float(sum_tot_dec)
 
-    # Visualizzazione
     df_reparto = pd.DataFrame(reparto_data)
     st.dataframe(df_reparto, use_container_width=True)
 
