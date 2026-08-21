@@ -406,13 +406,7 @@ else:
     st.markdown("---")
     st.subheader("Tabella di Riparto per Condomino")
 
-    # --- APPLICAZIONE DELLA LOGICA CORRETTA (Calcolo sul Totale della fattura) ---
-    tot_mq_reali = sum(st.session_state.mq_appartamenti.values())
-    tot_mq_dec = Decimal(str(tot_mq_reali))
-    imp_dec = Decimal(str(tot_imp))
-    iva_dec = Decimal(str(tot_iva))
-    tot_fattura_dec = Decimal(str(tot_complessivo))
-
+    # --- LOGICA DI CALCOLO CORRETTA ---
     reparto_data = []
     sum_millesimi = 0.0
     sum_imp = 0.0
@@ -420,45 +414,42 @@ else:
     sum_tot = 0.0
 
     for app, mil in millesimi.items():
-      mq_condomino = st.session_state.mq_appartamenti.get(app, 0.0)
-      mq_cond_dec = Decimal(str(mq_condomino))
+        mq_condomino = st.session_state.mq_appartamenti.get(app, 0.0)
+        mq_cond_dec = Decimal(str(mq_condomino))
 
-      if tot_mq_dec > 0:
-        # 1. Divisione e mantenimento rigoroso a 11 cifre decimali
-        rapporto_11 = (mq_cond_dec / tot_mq_dec).quantize(Decimal('0.00000000001'), rounding=ROUND_HALF_UP)
-      else:
-        rapporto_11 = Decimal('0')
+        if tot_mq_dec > 0:
+            rapporto_11 = (mq_cond_dec / tot_mq_dec).quantize(Decimal('0.00000000001'), rounding=ROUND_HALF_UP)
+        else:
+            rapporto_11 = Decimal('0')
 
-      # 2. Calcolo diretto sul TOTALE della fattura e arrotondamento finale a 2 cifre
-      quota_tot_dec = (rapporto_11 * tot_fattura_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-      
-      # 3. Scorporo proporzionale per imponibile e IVA
-      if tot_complessivo > 0:
-        quota_imp_dec = (quota_tot_dec * (imp_dec / tot_fattura_dec)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-        quota_iva_dec = quota_tot_dec - quota_imp_dec
-      else:
-        quota_imp_dec = Decimal('0')
-        quota_iva_dec = Decimal('0')
+        # 1. Calcoli parziali ad alta precisione (SENZA ARROTONDARE)
+        quota_imp_parziale = rapporto_11 * imp_dec
+        quota_iva_parziale = rapporto_11 * iva_dec
+        
+        # 2. Somma finale e arrotondamento UNICO a 2 cifre
+        quota_tot_dec = (quota_imp_parziale + quota_iva_parziale).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        
+        # 3. Aggiorniamo le variabili di visualizzazione/somma
+        quota_tot = float(quota_tot_dec)
+        
+        # NOTA: Per coerenza contabile, imponibile e iva si calcolano per differenza o proporzione,
+        # ma se vuoi visualizzarli, usa i valori non arrotondati o coerenti con il totale
+        quota_imp = float(quota_imp_parziale) 
+        quota_iva = float(quota_iva_parziale)
 
-      quota_imp = float(quota_imp_dec)
-      quota_iva = float(quota_iva_dec)
-      quota_tot = float(quota_tot_dec)
+        sum_millesimi += mil
+        sum_imp += quota_imp
+        sum_iva += quota_iva
+        sum_tot += quota_tot
 
-      sum_millesimi += mil
-      sum_imp += quota_imp
-      sum_iva += quota_iva
-      sum_tot += quota_tot
-
-      reparto_data.append(
-          {
-              "Condomino": app,
-              "Millesimi": round(mil, 2),
-              "Rapporto (%)": f"{float(rapporto_11) * 100:.9f}%",
-              "Quota Imponibile (€)": quota_imp,
-              "Quota IVA (€)": quota_iva,
-              "Quota Totale (€)": quota_tot,
-          }
-      )
+        reparto_data.append({
+            "Condomino": app,
+            "Millesimi": round(mil, 2),
+            "Rapporto (%)": f"{float(rapporto_11) * 100:.9f}%",
+            "Quota Imponibile (€)": quota_imp,
+            "Quota IVA (€)": quota_iva,
+            "Quota Totale (€)": quota_tot,
+        })
 
     reparto_data.append(
         {
