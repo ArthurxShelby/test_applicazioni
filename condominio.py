@@ -470,6 +470,8 @@ else:
     sum_iva = float(sum_iva_dec)
     sum_tot = float(sum_tot_dec)
 
+    st.error("TEST: QUESTO E' IL FILE AGGIORNATO AL 2026")
+
     df_reparto = pd.DataFrame(reparto_data)
     st.dataframe(df_reparto, use_container_width=True)
 
