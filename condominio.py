@@ -937,7 +937,7 @@ else:
                 "Stato": "Scaduto / Non Pagato"
             })
 
-      df_scaduti = pd.DataFrame(report_scaduti)
+    df_scaduti = pd.DataFrame(report_scaduti)
 
       if df_scaduti.empty:
         st.success("Ottimo! Non ci sono quote scoperte: tutte le fatture risultano pagate dai condomini.")
