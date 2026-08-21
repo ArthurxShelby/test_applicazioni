@@ -1,5 +1,6 @@
 import io
 import os
+from decimal import Decimal, ROUND_HALF_UP
 import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
@@ -405,8 +406,11 @@ else:
     st.markdown("---")
     st.subheader("Tabella di Riparto per Condomino")
 
-    # --- APPLICAZIONE DELLA LOGICA: (mq / mq_totali) con 11 cifre, poi moltiplicazione separata per imponibile e iva ---
+    # --- APPLICAZIONE DELLA LOGICA CON DECIMAL (11 cifre per la divisione, arrotondamento a 2 cifre post-moltiplicazione) ---
     tot_mq_reali = sum(st.session_state.mq_appartamenti.values())
+    tot_mq_dec = Decimal(str(tot_mq_reali))
+    imp_dec = Decimal(str(tot_imp))
+    iva_dec = Decimal(str(tot_iva))
 
     reparto_data = []
     sum_millesimi = 0.0
@@ -416,19 +420,22 @@ else:
 
     for app, mil in millesimi.items():
       mq_condomino = st.session_state.mq_appartamenti.get(app, 0.0)
+      mq_cond_dec = Decimal(str(mq_condomino))
 
-      if tot_mq_reali > 0:
-        # Calcolo del rapporto esatto a 11 cifre decimali
-        rapporto_11 = float(f"{mq_condomino / tot_mq_reali:.11f}")
-        rapporto_str = f"{rapporto_11:.11f}"
+      if tot_mq_dec > 0:
+        # 1. Divisione e mantenimento rigoroso a 11 cifre decimali
+        rapporto_11 = (mq_cond_dec / tot_mq_dec).quantize(Decimal('0.00000000001'), rounding=ROUND_HALF_UP)
       else:
-        rapporto_11 = 0.0
-        rapporto_str = "0.00000000000"
+        rapporto_11 = Decimal('0')
 
-      # FORMULA RICHIESTA: mq utente / mq totali * imponibile (e stessa cosa per iva)
-      quota_imp = rapporto_11 * tot_imp
-      quota_iva = rapporto_11 * tot_iva
-      quota_tot = quota_imp + quota_iva
+      # 2. Moltiplicazione separata per imponibile e IVA con arrotondamento finale a 2 cifre
+      quota_imp_dec = (rapporto_11 * imp_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+      quota_iva_dec = (rapporto_11 * iva_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+      quota_tot_dec = quota_imp_dec + quota_iva_dec
+
+      quota_imp = float(quota_imp_dec)
+      quota_iva = float(quota_iva_dec)
+      quota_tot = float(quota_tot_dec)
 
       sum_millesimi += mil
       sum_imp += quota_imp
@@ -439,10 +446,10 @@ else:
           {
               "Condomino": app,
               "Millesimi": round(mil, 2),
-              "Rapporto (%)": f"{float(rapporto_str) * 100:.9f}%",
-              "Quota Imponibile (€)": round(quota_imp, 2),
-              "Quota IVA (€)": round(quota_iva, 2),
-              "Quota Totale (€)": round(quota_tot, 2),
+              "Rapporto (%)": f"{float(rapporto_11) * 100:.9f}%",
+              "Quota Imponibile (€)": quota_imp,
+              "Quota IVA (€)": quota_iva,
+              "Quota Totale (€)": quota_tot,
           }
       )
 
@@ -527,11 +534,16 @@ else:
         iva_fat_temp = float(row_f_temp["iva"])
         
         mq_c = st.session_state.mq_appartamenti.get(cond_attivo, 0.0)
-        # APPLICAZIONE STESSA LOGICA A 11 CIFRE: (mq / mq_totali) separatamente su imponibile e iva
-        rapporto_11_temp = float(f"{mq_c / tot_mq_reali:.11f}") if tot_mq_reali > 0 else 0.0
-        q_imp = rapporto_11_temp * imp_fat_temp
-        q_iva = rapporto_11_temp * iva_fat_temp
-        quota_dovuta_automatica = q_imp + q_iva
+        mq_c_dec = Decimal(str(mq_c))
+        
+        if tot_mq_dec > 0:
+          r_11_t = (mq_c_dec / tot_mq_dec).quantize(Decimal('0.00000000001'), rounding=ROUND_HALF_UP)
+        else:
+          r_11_t = Decimal('0')
+          
+        q_imp_t = r_11_t * Decimal(str(imp_fat_temp))
+        q_iva_t = r_11_t * Decimal(str(iva_fat_temp))
+        quota_dovuta_automatica = float((q_imp_t + q_iva_t).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
       except Exception:
         pass
 
@@ -876,13 +888,20 @@ else:
         f_mese = f_row["mese"]
         f_tipo = f_row["tipo"]
         f_fornitore = f_row["fornitore"]
-        f_imp = float(f_row["imponibile"])
-        f_iva = float(f_row["iva"])
+        f_imp = Decimal(str(f_row["imponibile"]))
+        f_iva = Decimal(str(f_row["iva"]))
         
         for app, mil in millesimi.items():
           mq_c = st.session_state.mq_appartamenti.get(app, 0.0)
-          rapporto_11_scad = float(f"{mq_c / tot_mq_reali:.11f}") if tot_mq_reali > 0 else 0.0
-          quota_dovuta = (rapporto_11_scad * f_imp) + (rapporto_11_scad * f_iva)
+          mq_c_dec = Decimal(str(mq_c))
+          
+          if tot_mq_dec > 0:
+            r_11_scad = (mq_c_dec / tot_mq_dec).quantize(Decimal('0.00000000001'), rounding=ROUND_HALF_UP)
+          else:
+            r_11_scad = Decimal('0')
+            
+          quota_dovuta_dec = (r_11_scad * f_imp) + (r_11_scad * f_iva)
+          quota_dovuta = float(quota_dovuta_dec.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
           
           is_pagato = (app, f_id) in pagate_set
           
