@@ -406,11 +406,12 @@ else:
     st.markdown("---")
     st.subheader("Tabella di Riparto per Condomino")
 
-    # --- APPLICAZIONE DELLA LOGICA CON DECIMAL (11 cifre per la divisione, arrotondamento a 2 cifre post-moltiplicazione) ---
+    # --- APPLICAZIONE DELLA LOGICA CORRETTA (Calcolo sul Totale della fattura) ---
     tot_mq_reali = sum(st.session_state.mq_appartamenti.values())
     tot_mq_dec = Decimal(str(tot_mq_reali))
     imp_dec = Decimal(str(tot_imp))
     iva_dec = Decimal(str(tot_iva))
+    tot_fattura_dec = Decimal(str(tot_complessivo))
 
     reparto_data = []
     sum_millesimi = 0.0
@@ -428,10 +429,16 @@ else:
       else:
         rapporto_11 = Decimal('0')
 
-      # 2. Moltiplicazione separata per imponibile e IVA con arrotondamento finale a 2 cifre
-      quota_imp_dec = (rapporto_11 * imp_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-      quota_iva_dec = (rapporto_11 * iva_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-      quota_tot_dec = quota_imp_dec + quota_iva_dec
+      # 2. Calcolo diretto sul TOTALE della fattura e arrotondamento finale a 2 cifre
+      quota_tot_dec = (rapporto_11 * tot_fattura_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+      
+      # 3. Scorporo proporzionale per imponibile e IVA
+      if tot_complessivo > 0:
+        quota_imp_dec = (quota_tot_dec * (imp_dec / tot_fattura_dec)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        quota_iva_dec = quota_tot_dec - quota_imp_dec
+      else:
+        quota_imp_dec = Decimal('0')
+        quota_iva_dec = Decimal('0')
 
       quota_imp = float(quota_imp_dec)
       quota_iva = float(quota_iva_dec)
@@ -530,8 +537,7 @@ else:
       try:
         id_fat_temp = int(fattura_scelta_str.split("|")[0].replace("ID:", "").strip())
         row_f_temp = df_fatture_form[df_fatture_form["id"] == id_fat_temp].iloc[0]
-        imp_fat_temp = float(row_f_temp["imponibile"])
-        iva_fat_temp = float(row_f_temp["iva"])
+        tot_fat_temp = float(row_f_temp["totale"])
         
         mq_c = st.session_state.mq_appartamenti.get(cond_attivo, 0.0)
         mq_c_dec = Decimal(str(mq_c))
@@ -541,9 +547,8 @@ else:
         else:
           r_11_t = Decimal('0')
           
-        q_imp_t = r_11_t * Decimal(str(imp_fat_temp))
-        q_iva_t = r_11_t * Decimal(str(iva_fat_temp))
-        quota_dovuta_automatica = float((q_imp_t + q_iva_t).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+        q_tot_t = r_11_t * Decimal(str(tot_fat_temp))
+        quota_dovuta_automatica = float(q_tot_t.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
       except Exception:
         pass
 
@@ -888,8 +893,7 @@ else:
         f_mese = f_row["mese"]
         f_tipo = f_row["tipo"]
         f_fornitore = f_row["fornitore"]
-        f_imp = Decimal(str(f_row["imponibile"]))
-        f_iva = Decimal(str(f_row["iva"]))
+        f_tot = Decimal(str(f_row["totale"]))
         
         for app, mil in millesimi.items():
           mq_c = st.session_state.mq_appartamenti.get(app, 0.0)
@@ -900,7 +904,7 @@ else:
           else:
             r_11_scad = Decimal('0')
             
-          quota_dovuta_dec = (r_11_scad * f_imp) + (r_11_scad * f_iva)
+          quota_dovuta_dec = r_11_scad * f_tot
           quota_dovuta = float(quota_dovuta_dec.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
           
           is_pagato = (app, f_id) in pagate_set
