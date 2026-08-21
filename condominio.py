@@ -409,7 +409,7 @@ else:
     # --- LOGICA DI CALCOLO UNIFICATA E CORRETTA ---
     reparto_data = []
     
-    # Inizializzazione sicura delle variabili
+    # Inizializzazione sicura delle variabili di riepilogo
     sum_millesimi = Decimal('0.00')
     sum_imp_dec = Decimal('0.00')
     sum_iva_dec = Decimal('0.00')
@@ -425,6 +425,7 @@ else:
     imp_dec = Decimal(str(tot_imp))
     iva_dec = Decimal(str(tot_iva))
 
+    # Ciclo per ogni singolo condomino
     for app, mil in millesimi.items():
         mq_condomino = st.session_state.mq_appartamenti.get(app, 0.0)
         mq_cond_dec = Decimal(str(mq_condomino))
@@ -443,13 +444,25 @@ else:
         # Somma finale arrotondata a 2 cifre
         quota_tot_parziale = quota_imp_parziale + quota_iva_parziale
 
-        # Aggiorniamo i totali decimali
+        # Aggiorniamo i totali decimali progressivi
         sum_millesimi += mil_dec
         sum_imp_dec += quota_imp_parziale
         sum_iva_dec += quota_iva_parziale
         sum_tot_dec += quota_tot_parziale
 
+        # Aggiungiamo i dati del singolo condomino alla tabella
         reparto_data.append({
+            "Condomino": app,
+            "Millesimi": float(mil_dec),
+            "Rapporto (%)": f"{float(rapporto_11) * 100:.9f}%",
+            "Quota Imponibile (€)": float(quota_imp_parziale),
+            "Quota IVA (€)": float(quota_iva_parziale),
+            "Quota Totale (€)": float(quota_tot_parziale),
+        })
+
+    # --- RIEPILOGO FINALE (FUORI DAL CICLO FOR) ---
+    # Questa riga viene eseguita UNA SOLA VOLTA alla fine
+    reparto_data.append({
         "Condomino": "TOTALE",
         "Millesimi": float(sum_millesimi),
         "Rapporto (%)": "100.00%",
@@ -458,7 +471,7 @@ else:
         "Quota Totale (€)": float(sum_tot_dec),
     })
 
-    # Compatibilità con le vecchie variabili usate alle righe successive
+    # Variabili di compatibilità per eventuali sezioni successive del codice
     sum_imp = float(sum_imp_dec)
     sum_iva = float(sum_iva_dec)
     sum_tot = float(sum_tot_dec)
