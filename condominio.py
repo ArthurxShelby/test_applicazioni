@@ -47,7 +47,7 @@ def carica_mq_da_supabase():
     pass
   return {
       "ESPOSITO": 70.0,
-      "MARANGI": 75.0,
+      "MARANGI": 88.61,
       "LINCESSO": 80.0,
       "FUSO": 85.0,
       "PUCA": 90.0,
@@ -127,8 +127,8 @@ if "pagamenti" not in st.session_state:
 def calcola_millesimi_da_mq(mq_dict):
   tot_mq = sum(mq_dict.values())
   if tot_mq <= 0:
-    return {k: 0 for k in mq_dict}
-  return {app: round((mq / tot_mq) * 1000, 2) for app, mq in mq_dict.items()}
+    return {k: 0.0 for k in mq_dict}
+  return {app: round((mq / tot_mq) * 1000, 4) for app, mq in mq_dict.items()}
 
 
 # --- FUNZIONE PER GENERARE IL PDF ---
@@ -293,7 +293,6 @@ else:
 
   df_fatture = st.session_state.fatture
   millesimi = calcola_millesimi_da_mq(st.session_state.mq_appartamenti)
-  tot_millesimi = sum(millesimi.values())
 
   mese_map = {
       "Gennaio": 1, "Febbraio": 2, "Marzo": 3, "Aprile": 4, 
@@ -406,6 +405,9 @@ else:
     st.markdown("---")
     st.subheader("Tabella di Riparto per Condomino")
 
+    # --- APPLICAZIONE DELLA LOGICA: (mq / mq_totali) con 11 cifre, poi moltiplicazione separata per imponibile e iva ---
+    tot_mq_reali = sum(st.session_state.mq_appartamenti.values())
+
     reparto_data = []
     sum_millesimi = 0.0
     sum_imp = 0.0
@@ -413,9 +415,20 @@ else:
     sum_tot = 0.0
 
     for app, mil in millesimi.items():
-      quota_imp = tot_imp * (mil / tot_millesimi) if tot_millesimi > 0 else 0
-      quota_iva = tot_iva * (mil / tot_millesimi) if tot_millesimi > 0 else 0
-      quota_tot = tot_complessivo * (mil / tot_millesimi) if tot_millesimi > 0 else 0
+      mq_condomino = st.session_state.mq_appartamenti.get(app, 0.0)
+
+      if tot_mq_reali > 0:
+        # Calcolo del rapporto esatto a 11 cifre decimali
+        rapporto_11 = float(f"{mq_condomino / tot_mq_reali:.11f}")
+        rapporto_str = f"{rapporto_11:.11f}"
+      else:
+        rapporto_11 = 0.0
+        rapporto_str = "0.00000000000"
+
+      # FORMULA RICHIESTA: mq utente / mq totali * imponibile (e stessa cosa per iva)
+      quota_imp = rapporto_11 * tot_imp
+      quota_iva = rapporto_11 * tot_iva
+      quota_tot = quota_imp + quota_iva
 
       sum_millesimi += mil
       sum_imp += quota_imp
@@ -425,7 +438,8 @@ else:
       reparto_data.append(
           {
               "Condomino": app,
-              "Millesimi": mil,
+              "Millesimi": round(mil, 2),
+              "Rapporto (%)": f"{float(rapporto_str) * 100:.9f}%",
               "Quota Imponibile (€)": round(quota_imp, 2),
               "Quota IVA (€)": round(quota_iva, 2),
               "Quota Totale (€)": round(quota_tot, 2),
@@ -436,6 +450,7 @@ else:
         {
             "Condomino": "TOTALE",
             "Millesimi": round(sum_millesimi, 2),
+            "Rapporto (%)": "100.00%",
             "Quota Imponibile (€)": round(sum_imp, 2),
             "Quota IVA (€)": round(sum_iva, 2),
             "Quota Totale (€)": round(sum_tot, 2),
@@ -508,9 +523,15 @@ else:
       try:
         id_fat_temp = int(fattura_scelta_str.split("|")[0].replace("ID:", "").strip())
         row_f_temp = df_fatture_form[df_fatture_form["id"] == id_fat_temp].iloc[0]
-        tot_fat_temp = float(row_f_temp["totale"])
-        mil_c = millesimi.get(cond_attivo, 0.0)
-        quota_dovuta_automatica = (tot_fat_temp * (mil_c / tot_millesimi)) if tot_millesimi > 0 else 0.0
+        imp_fat_temp = float(row_f_temp["imponibile"])
+        iva_fat_temp = float(row_f_temp["iva"])
+        
+        mq_c = st.session_state.mq_appartamenti.get(cond_attivo, 0.0)
+        # APPLICAZIONE STESSA LOGICA A 11 CIFRE: (mq / mq_totali) separatamente su imponibile e iva
+        rapporto_11_temp = float(f"{mq_c / tot_mq_reali:.11f}") if tot_mq_reali > 0 else 0.0
+        q_imp = rapporto_11_temp * imp_fat_temp
+        q_iva = rapporto_11_temp * iva_fat_temp
+        quota_dovuta_automatica = q_imp + q_iva
       except Exception:
         pass
 
@@ -808,7 +829,6 @@ else:
     if df_fatture.empty:
       st.info("Nessuna fattura presente nello storico.")
     else:
-      # Filtri per Anno e Tipologia nella sezione Storico e Dettaglio
       col_storico1, col_storico2 = st.columns(2)
       with col_storico1:
         anni_disp_storico = sorted(df_fatture["anno"].unique(), reverse=True) if "anno" in df_fatture.columns else []
@@ -856,10 +876,14 @@ else:
         f_mese = f_row["mese"]
         f_tipo = f_row["tipo"]
         f_fornitore = f_row["fornitore"]
-        f_totale = float(f_row["totale"])
+        f_imp = float(f_row["imponibile"])
+        f_iva = float(f_row["iva"])
         
         for app, mil in millesimi.items():
-          quota_dovuta = (f_totale * (mil / tot_millesimi)) if tot_millesimi > 0 else 0.0
+          mq_c = st.session_state.mq_appartamenti.get(app, 0.0)
+          rapporto_11_scad = float(f"{mq_c / tot_mq_reali:.11f}") if tot_mq_reali > 0 else 0.0
+          quota_dovuta = (rapporto_11_scad * f_imp) + (rapporto_11_scad * f_iva)
+          
           is_pagato = (app, f_id) in pagate_set
           
           if not is_pagato:
@@ -897,7 +921,6 @@ else:
 
         st.dataframe(df_scad_filtered, use_container_width=True)
 
-        # --- FUNZIONE PER GENERARE IL PDF DELLO SCADUTO ---
         def genera_pdf_scaduti(df_res, filtro_c, filtro_t, totale_res):
           buf = io.BytesIO()
           doc = SimpleDocTemplate(buf, pagesize=letter)
@@ -935,7 +958,6 @@ else:
           buf.seek(0)
           return buf.getvalue()
 
-        # Pulsante di stampa / download PDF dello scaduto
         col_p_btn1, _ = st.columns([1, 2])
         with col_p_btn1:
           pdf_scadenze_bytes = genera_pdf_scaduti(df_scad_filtered, filtro_scad_cond, filtro_scad_tipo, tot_insoluto)
@@ -957,7 +979,6 @@ else:
       nuovi_mq = {}
       for app in APP_NAMES:
         val_attuale = st.session_state.mq_appartamenti.get(app, 70.0)
-        # MODIFICA QUI: aggiunto step=0.01 e modificato il formato a "%.2f"
         nuovi_mq[app] = st.number_input(
             f"MQ {app}",
             min_value=1.0,
