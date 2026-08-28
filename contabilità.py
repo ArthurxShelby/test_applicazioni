@@ -2,12 +2,10 @@ from decimal import Decimal
 import streamlit as st
 from supabase import create_client, Client
 
-# Configurazione pagina Streamlit
 st.set_page_config(
     page_title="Contabilità Scontrini Bancomat", page_icon="💳", layout="centered"
 )
 
-# Inizializzazione client Supabase da st.secrets
 @st.cache_resource
 def init_supabase():
     url = st.secrets["SUPABASE_URL"]
@@ -18,8 +16,6 @@ supabase: Client = init_supabase()
 
 def aggiungi_transazione(data, tipo, importo, esercente, categoria, scontrino_conservato):
     valore = float(Decimal(str(importo)).quantize(Decimal("0.01")))
-    
-    # Inserimento nella tabella 'transazioni' di Supabase
     response = supabase.table("transazioni").insert({
         "data": data,
         "tipo": tipo.upper(),
@@ -28,16 +24,13 @@ def aggiungi_transazione(data, tipo, importo, esercente, categoria, scontrino_co
         "categoria": categoria,
         "scontrino_conservato": 1 if scontrino_conservato else 0
     }).execute()
-    
     return response
 
 def ottieni_transazioni():
-    # Recupero dati da Supabase ordinati per data
     response = supabase.table("transazioni").select("*").order("data", desc=True).execute()
     return response.data
 
-st.title("💳 Contabilità e Riconciliazione Scontrini (Supabase)")
-st.markdown("Gestisci le tue transazioni con carta bancomat salvandole direttamente su Supabase.")
+st.title("💳 Contabilità e Riconciliazione Scontrini")
 
 menu = st.sidebar.selectbox("Seleziona Sezione", ["Aggiungi Transazione", "Visualizza e Riconcilia"])
 
@@ -50,7 +43,6 @@ if menu == "Aggiungi Transazione":
         importo = st.number_input("Importo (€)", min_value=0.01, format="%.2f", step=1.00)
         esercente = st.text_input("Esercente / Beneficiario")
         categoria = st.text_input("Categoria (es. Spesa, Ristorante, Stipendio)")
-        
         scontrino = st.checkbox("Scontrino conservato?", value=True if tipo == "Uscita" else False)
         
         submit = st.form_submit_button("Salva Transazione")
@@ -70,7 +62,7 @@ if menu == "Aggiungi Transazione":
                     )
                     st.success("Transazione salvata con successo su Supabase!")
                 except Exception as e:
-                    st.error(f"Errore durante il salvataggio su Supabase: {e}")
+                    st.error(f"Errore durante il salvataggio: {e}")
 
 elif menu == "Visualizza e Riconcilia":
     st.subheader("Elenco Transazioni e Riconciliazione Mensile")
@@ -82,9 +74,13 @@ elif menu == "Visualizza e Riconcilia":
         transazioni = []
     
     if not transazioni:
-        st.info("Nessuna transazione registrata.")
+        st.info("Nessuna transazione registrata nel database.")
     else:
-        anni_disponibili = sorted(list(set([t["data"][:4] for t in transazioni])), reverse=True)
+        # Sezione di controllo per verificare la presenza dei dati grezzi
+        with st.expander("🔍 Mostra dati grezzi da Supabase (Debug)"):
+            st.write(transazioni)
+
+        anni_disponibili = sorted(list(set([str(t["data"])[:4] for t in transazioni])), reverse=True)
         col1, col2 = st.columns(2)
         with col1:
             anno_sel = st.selectbox("Seleziona Anno", anni_disponibili)
@@ -99,7 +95,7 @@ elif menu == "Visualizza e Riconcilia":
         dati_tabella = []
         
         for t in transazioni:
-            data_t = t["data"]
+            data_t = str(t["data"])
             if data_t.startswith(prefisso_filtro):
                 val = Decimal(str(t["importo"]))
                 tipo_t = t["tipo"]
@@ -140,4 +136,4 @@ elif menu == "Visualizza e Riconcilia":
         if dati_tabella:
             st.dataframe(dati_tabella, use_container_width=True)
         else:
-            st.info("Nessuna transazione per il mese selezionato.")
+            st.info("Nessuna transazione trovata per il mese e anno selezionati. Verifica che l'anno/mese del filtro corrisponda alla data delle transazioni inserite.")
