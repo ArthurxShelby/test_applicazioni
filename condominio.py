@@ -303,8 +303,8 @@ def init_supabase():
 supabase: Client = init_supabase()
 
   if st.sidebar.button("Logout"):
-    st.session_state.logged_in = False
-    st.rerun()
+     st.session_state.logged_in = False
+     st.rerun()
 
   st.session_state.fatture = carica_fatture_da_supabase()
   st.session_state.pagamenti = carica_pagamenti_da_supabase()
