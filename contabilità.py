@@ -204,7 +204,10 @@ elif menu == "Visualizza e Riconcilia":
     transazioni = []
 
   if not transazioni:
-    st.info("Nessuna transazione registrata nel database.")
+    st.info(
+        "Nessuna transazione registrata nel database. Utilizza il menu a"
+        " sinistra per aggiungerne una."
+    )
   else:
     anni_disponibili = sorted(
         list(set([str(t["data"])[:4] for t in transazioni])), reverse=True
@@ -280,14 +283,13 @@ elif menu == "Visualizza e Riconcilia":
       )
       for esc, imp, dt in mancanti:
         st.write(f"- **{dt}** | {esc}: **€ {imp:.2f}**")
-    else:
+    elif dati_tabella:
       st.success("Tutte le uscite di questo mese hanno uno scontrino abbinato!")
 
     st.markdown("### Dettaglio Transazioni del Mese")
     if dati_tabella:
       st.dataframe(dati_tabella, use_container_width=True)
 
-      # --- SEZIONE ELIMINAZIONE VOCE ---
       st.markdown("#### 🗑️ Elimina Transazione")
       opzioni_elimina = {
           f"ID {t['id']} - {t['data']} - {t['tipo']} - € {t['importo']} - {t['esercente']}": t[
@@ -296,21 +298,21 @@ elif menu == "Visualizza e Riconcilia":
           for t in transazioni_filtrate
       }
 
-      voce_selezionata = st.selectbox(
-          "Seleziona la transazione da eliminare",
-          options=list(opzioni_elimina.keys()),
-      )
+      if opzioni_elimina:
+        voce_selezionata = st.selectbox(
+            "Seleziona la transazione da eliminare",
+            options=list(opzioni_elimina.keys()),
+        )
 
-      if st.button("Elimina Transazione Selezionata", type="primary"):
-        id_da_eliminare = opzioni_elimina[voce_selezionata]
-        try:
-          elimina_transazione(id_da_eliminare)
-          st.success("Transazione eliminata con successo!")
-          st.rerun()
-        except Exception as e:
-          st.error(f"Errore durante l'eliminazione: {e}")
+        if st.button("Elimina Transazione Selezionata", type="primary"):
+          id_da_eliminare = opzioni_elimina[voce_selezionata]
+          try:
+            elimina_transazione(id_da_eliminare)
+            st.success("Transazione eliminata con successo!")
+            st.rerun()
+          except Exception as e:
+            st.error(f"Errore durante l'eliminazione: {e}")
 
-      # --- BOTTONE STAMPA IN PDF ---
       pdf_bytes = genera_pdf_transazioni(
           prefisso_filtro,
           totale_entrate,
@@ -326,6 +328,6 @@ elif menu == "Visualizza e Riconcilia":
       )
     else:
       st.info(
-          "Nessuna transazione trovata per il mese selezionato. Controlla che"
-          " il mese corrisponda alla data della transazione."
+          "Nessuna transazione trovata per il mese selezionato. Cambia mese o"
+          " aggiungi una nuova transazione."
       )
