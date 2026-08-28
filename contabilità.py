@@ -13,7 +13,6 @@ st.set_page_config(
 )
 
 
-@st.cache_resource
 def init_supabase():
   url = st.secrets["SUPABASE_URL"]
   key = st.secrets["SUPABASE_KEY"]
@@ -163,7 +162,7 @@ menu = st.sidebar.selectbox(
 if menu == "Aggiungi Transazione":
   st.subheader("Registra Nuova Transazione")
 
-  with st.form("form_transazione"):
+  with st.form("form_transazione", clear_on_submit=True):
     data = st.date_input("Data Transazione")
     tipo = st.selectbox("Tipo", ["Uscita", "Entrata"])
     importo = st.number_input(
