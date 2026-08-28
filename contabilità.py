@@ -42,6 +42,13 @@ def aggiungi_transazione(
   return response
 
 
+def elimina_transazione(id_transazione):
+  response = (
+      supabase.table("transazioni").delete().eq("id", id_transazione).execute()
+  )
+  return response
+
+
 def ottieni_transazioni():
   response = (
       supabase.table("transazioni")
@@ -86,7 +93,6 @@ def genera_pdf_transazioni(
   elementi.append(Paragraph("Riepilogo Contabilità Bancomat", title_style))
   elementi.append(Paragraph(f"Periodo: {prefisso_filtro}", subtitle_style))
 
-  # Tabella Riepilogo
   riepilogo_data = [
       ["Totale Entrate", f"€ {totale_entrate:.2f}"],
       ["Totale Uscite", f"€ {totale_uscite:.2f}"],
@@ -106,7 +112,6 @@ def genera_pdf_transazioni(
   elementi.append(t_riepilogo)
   elementi.append(Spacer(1, 20))
 
-  # Tabella Dettaglio Transazioni
   elementi.append(Paragraph("Dettaglio Transazioni", subtitle_style))
 
   table_data = [
@@ -233,10 +238,12 @@ elif menu == "Visualizza e Riconcilia":
     totale_uscite = Decimal("0.00")
     mancanti = []
     dati_tabella = []
+    transazioni_filtrate = []
 
     for t in transazioni:
       data_t = str(t["data"])
       if data_t.startswith(prefisso_filtro):
+        transazioni_filtrate.append(t)
         val = Decimal(str(t["importo"]))
         tipo_t = t["tipo"]
         esc_t = t["esercente"]
@@ -279,6 +286,29 @@ elif menu == "Visualizza e Riconcilia":
     st.markdown("### Dettaglio Transazioni del Mese")
     if dati_tabella:
       st.dataframe(dati_tabella, use_container_width=True)
+
+      # --- SEZIONE ELIMINAZIONE VOCE ---
+      st.markdown("#### 🗑️ Elimina Transazione")
+      opzioni_elimina = {
+          f"ID {t['id']} - {t['data']} - {t['tipo']} - € {t['importo']} - {t['esercente']}": t[
+              "id"
+          ]
+          for t in transazioni_filtrate
+      }
+
+      voce_selezionata = st.selectbox(
+          "Seleziona la transazione da eliminare",
+          options=list(opzioni_elimina.keys()),
+      )
+
+      if st.button("Elimina Transazione Selezionata", type="primary"):
+        id_da_eliminare = opzioni_elimina[voce_selezionata]
+        try:
+          elimina_transazione(id_da_eliminare)
+          st.success("Transazione eliminata con successo!")
+          st.rerun()
+        except Exception as e:
+          st.error(f"Errore durante l'eliminazione: {e}")
 
       # --- BOTTONE STAMPA IN PDF ---
       pdf_bytes = genera_pdf_transazioni(
