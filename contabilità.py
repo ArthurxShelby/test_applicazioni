@@ -13,6 +13,47 @@ st.set_page_config(
 )
 
 
+def check_password():
+  """Restituisce True se l'utente ha inserito la password corretta."""
+
+  def password_entered():
+    if st.session_state["password_input"] == st.secrets.get(
+        "APP_PASSWORD", "admin123"
+    ):
+      st.session_state["password_correct"] = True
+      del st.session_state["password_input"]  # Non memorizzare la password
+    else:
+      st.session_state["password_correct"] = False
+
+  if "password_correct" not in st.session_state:
+    # Mostra il campo di input per la password
+    st.title("🔒 Autenticazione Richiesta")
+    st.text_input(
+        "Inserisci la password di accesso",
+        type="password",
+        on_change=password_entered,
+        key="password_input",
+    )
+    return False
+  elif not st.session_state["password_correct"]:
+    st.title("🔒 Autenticazione Richiesta")
+    st.text_input(
+        "Inserisci la password di accesso",
+        type="password",
+        on_change=password_entered,
+        key="password_input",
+    )
+    st.error("😕 Password errata. Riprova.")
+    return False
+  else:
+    return True
+
+
+if not check_password():
+  st.stop()
+
+
+@st.cache_resource
 def init_supabase():
   url = st.secrets["SUPABASE_URL"]
   key = st.secrets["SUPABASE_KEY"]
