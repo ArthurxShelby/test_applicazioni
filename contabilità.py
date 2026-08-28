@@ -14,19 +14,20 @@ st.set_page_config(
 
 
 def check_password():
-  """Restituisce True se l'utente ha inserito la password corretta."""
+  """Restituisce True se l'utente ha inserito la password correta."""
 
   def password_entered():
-    if st.session_state["password_input"] == st.secrets.get(
-        "APP_PASSWORD", "admin123"
+    # Controlla la password esclusivamente dai segreti configurati
+    if (
+        "APP_PASSWORD" in st.secrets
+        and st.session_state["password_input"] == st.secrets["APP_PASSWORD"]
     ):
       st.session_state["password_correct"] = True
-      del st.session_state["password_input"]  # Non memorizzare la password
+      del st.session_state["password_input"]
     else:
       st.session_state["password_correct"] = False
 
   if "password_correct" not in st.session_state:
-    # Mostra il campo di input per la password
     st.title("🔒 Autenticazione Richiesta")
     st.text_input(
         "Inserisci la password di accesso",
