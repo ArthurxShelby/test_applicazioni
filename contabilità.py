@@ -1,5 +1,10 @@
 from datetime import datetime
 from decimal import Decimal
+import io
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 import streamlit as st
 from supabase import Client, create_client
 
@@ -45,6 +50,103 @@ def ottieni_transazioni():
       .execute()
   )
   return response.data
+
+
+def genera_pdf_transazioni(
+    prefisso_filtro, totale_entrate, totale_uscite, saldo, dati_tabella
+):
+  buffer = io.BytesIO()
+  doc = SimpleDocTemplate(
+      buffer,
+      pagesize=A4,
+      rightMargin=30,
+      leftMargin=30,
+      topMargin=30,
+      bottomMargin=30,
+  )
+  elementi = []
+
+  styles = getSampleStyleSheet()
+  title_style = ParagraphStyle(
+      "TitleStyle",
+      parent=styles["Heading1"],
+      fontSize=18,
+      textColor=colors.HexColor("#1E3A8A"),
+      spaceAfter=15,
+  )
+
+  subtitle_style = ParagraphStyle(
+      "SubTitleStyle",
+      parent=styles["Heading2"],
+      fontSize=12,
+      textColor=colors.HexColor("#4B5563"),
+      spaceAfter=15,
+  )
+
+  elementi.append(Paragraph("Riepilogo Contabilità Bancomat", title_style))
+  elementi.append(Paragraph(f"Periodo: {prefisso_filtro}", subtitle_style))
+
+  # Tabella Riepilogo
+  riepilogo_data = [
+      ["Totale Entrate", f"€ {totale_entrate:.2f}"],
+      ["Totale Uscite", f"€ {totale_uscite:.2f}"],
+      ["Saldo Netto", f"€ {saldo:.2f}"],
+  ]
+  t_riepilogo = Table(riepilogo_data, colWidths=[150, 100])
+  t_riepilogo.setStyle(
+      TableStyle([
+          ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F3F4F6")),
+          ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#1F2937")),
+          ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+          ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+          ("TOPPADDING", (0, 0), (-1, -1), 6),
+          ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D1D5DB")),
+      ])
+  )
+  elementi.append(t_riepilogo)
+  elementi.append(Spacer(1, 20))
+
+  # Tabella Dettaglio Transazioni
+  elementi.append(Paragraph("Dettaglio Transazioni", subtitle_style))
+
+  table_data = [
+      ["Data", "Tipo", "Importo (€)", "Esercente", "Categoria", "Scontrino"]
+  ]
+  for row in dati_tabella:
+    table_data.append([
+        row["Data"],
+        row["Tipo"],
+        row["Importo (€)"],
+        row["Esercente"],
+        row["Categoria"],
+        row["Scontrino"],
+    ])
+
+  t_dettaglio = Table(table_data, colWidths=[75, 65, 80, 110, 100, 70])
+  t_dettaglio.setStyle(
+      TableStyle([
+          ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E3A8A")),
+          ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+          ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+          ("FONTSIZE", (0, 0), (-1, 0), 10),
+          ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+          ("TOPPADDING", (0, 0), (-1, -1), 5),
+          (
+              "ROWBACKGROUNDS",
+              (0, 1),
+              (-1, -1),
+              [colors.white, colors.HexColor("#F9FAFB")],
+          ),
+          ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E5E7EB")),
+          ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+          ("FONTSIZE", (0, 1), (-1, -1), 9),
+      ])
+  )
+
+  elementi.append(t_dettaglio)
+  doc.build(elementi)
+  buffer.seek(0)
+  return buffer.getvalue()
 
 
 st.title("💳 Contabilità e Riconciliazione Scontrini")
@@ -103,7 +205,6 @@ elif menu == "Visualizza e Riconcilia":
         list(set([str(t["data"])[:4] for t in transazioni])), reverse=True
     )
 
-    # Imposta l'anno e il mese correnti come default se presenti nei dati
     anno_corrente = str(datetime.now().year)
     mese_corrente = datetime.now().month
 
@@ -162,7 +263,8 @@ elif menu == "Visualizza e Riconcilia":
     m1, m2, m3 = st.columns(3)
     m1.metric("Entrate", f"€ {totale_entrate:.2f}")
     m2.metric("Uscite", f"€ {totale_uscite:.2f}")
-    m3.metric("Saldo Netto", f"€ {totale_entrate - totale_uscite:.2f}")
+    saldo_netto = totale_entrate - totale_uscite
+    m3.metric("Saldo Netto", f"€ {saldo_netto:.2f}")
 
     if mancanti:
       st.warning(
@@ -177,6 +279,21 @@ elif menu == "Visualizza e Riconcilia":
     st.markdown("### Dettaglio Transazioni del Mese")
     if dati_tabella:
       st.dataframe(dati_tabella, use_container_width=True)
+
+      # --- BOTTONE STAMPA IN PDF ---
+      pdf_bytes = genera_pdf_transazioni(
+          prefisso_filtro,
+          totale_entrate,
+          totale_uscite,
+          saldo_netto,
+          dati_tabella,
+      )
+      st.download_button(
+          label="📄 Stampa in PDF",
+          data=pdf_bytes,
+          file_name=f"contabilita_{prefisso_filtro}.pdf",
+          mime="application/pdf",
+      )
     else:
       st.info(
           "Nessuna transazione trovata per il mese selezionato. Controlla che"
