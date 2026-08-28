@@ -114,8 +114,6 @@ def carica_pagamenti_da_supabase():
 
 
 # --- INIZIALIZZAZIONE SESSION STATE ---
-if "logged_in" not in st.session_state:
-  st.session_state.logged_in = False
 
 if "mq_appartamenti" not in st.session_state:
   st.session_state.mq_appartamenti = carica_mq_da_supabase()
@@ -255,34 +253,54 @@ def genera_ricevuta_pagamento(row_pag, df_fatture_ref):
   return buffer.getvalue()
 
 
-def login_screen():
-  st.title("🏢 Accesso Gestione Condominio")
-  with st.form("login_form"):
-    username = st.text_input("Nome Utente")
-    password = st.text_input("Password", type="password")
-    submit = st.form_submit_button("Accedi")
+def check_password():
+  """Restituisce True se l'utente ha inserito la password corretta."""
 
-    if submit:
-      if username == "admin" and password == "condominio2026":
-        st.session_state.logged_in = True
-        st.rerun()
-      else:
-        st.error("Credenziali non valide.")
+  def password_entered():
+    if (
+        "APP_PASSWORD" in st.secrets
+        and st.session_state["password_input"] == st.secrets["APP_PASSWORD"]
+    ):
+      st.session_state["password_correct"] = True
+      del st.session_state["password_input"]
+    else:
+      st.session_state["password_correct"] = False
+
+  if "password_correct" not in st.session_state:
+    st.title("🔒 Autenticazione Richiesta")
+    st.text_input(
+        "Inserisci la password di accesso",
+        type="password",
+        on_change=password_entered,
+        key="password_input",
+    )
+    return False
+  elif not st.session_state["password_correct"]:
+    st.title("🔒 Autenticazione Richiesta")
+    st.text_input(
+        "Inserisci la password di accesso",
+        type="password",
+        on_change=password_entered,
+        key="password_input",
+    )
+    st.error("😕 Password errata. Riprova.")
+    return False
+  else:
+    return True
 
 
-if not st.session_state.logged_in:
-  login_screen()
-else:
-  st.sidebar.title("Menu Principale")
-  menu = st.sidebar.selectbox(
-      "Seleziona Sezione",
-      [
-          "Dashboard & Riepilogo",
-          "Inserisci Fattura",
-          "Storico e Dettaglio",
-          "Gestione Millesimi & Riporti",
-      ],
-  )
+if not check_password():
+  st.stop()
+
+
+@st.cache_resource
+def init_supabase():
+  url = st.secrets["SUPABASE_URL"]
+  key = st.secrets["SUPABASE_KEY"]
+  return create_client(url, key)
+
+
+supabase: Client = init_supabase()
 
   if st.sidebar.button("Logout"):
     st.session_state.logged_in = False
