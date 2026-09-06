@@ -1,5 +1,7 @@
 import ipaddress
+import io
 import pandas as pd
+from fpdf import FPDF
 import streamlit as st
 
 # Controllo autenticazione tramite st.secrets
@@ -190,16 +192,15 @@ with tab_rete:
   st.markdown("---")
 
   df_per_editor = df_corrente.drop(columns=["_ip_completo"], errors="ignore").copy()
-  
-  # Pulizia preventiva dei valori per evitare qualsiasi "None" grafico
   opzioni_tipologia = ["PC / Macchina", "Stampante", "Switch", "Altro"]
+  
   for i in range(len(df_per_editor)):
     if not df_per_editor.loc[i, "Nome Macchina"]:
       df_per_editor.loc[i, "Tipologia"] = ""
     else:
       val_t = str(df_per_editor.loc[i, "Tipologia"])
-      if val_t not in opzioni_tipologia:
-        df_per_editor.loc[i, "Tipologia"] = "PC / Macchina" if val_t == "" else val_t
+      if val_t not in opzioni_tipologia and val_t != "":
+        df_per_editor.loc[i, "Tipologia"] = "PC / Macchina"
 
   df_per_editor = df_per_editor.fillna("")
 
@@ -263,6 +264,102 @@ with tab_hardware:
   st.markdown(f"### 💻 Specifiche Hardware: {sede_scelta['nome']}")
 
   df_rete_sede = st.session_state.dataframes_rete[idx_selezionato]
+
+  # --- SEZIONE ESPORTAZIONE DATI (EXCEL & PDF) ---
+  st.markdown("##### 📥 Esporta Inventario Sede")
+  
+  # Prepariamo i dati completi per l'esportazione
+  lista_completa_export = []
+  for m in df_rete_sede.to_dict("records"):
+    ip_comp = m["_ip_completo"]
+    dettagli = st.session_state.hardware_dettagli.get(ip_comp, {})
+    lista_completa_export.append({
+        "Indirizzo IP": m["Indirizzo IP"],
+        "Nome Macchina": pulisci_valore(m["Nome Macchina"]),
+        "Tipologia": pulisci_valore(m["Tipologia"]),
+        "Stato": m["Stato"],
+        "Marca": pulisci_valore(dettagli.get("Marca", "")),
+        "Modello": pulisci_valore(dettagli.get("Modello", "")),
+        "Processore": pulisci_valore(dettagli.get("Processore", "")),
+        "RAM": pulisci_valore(dettagli.get("RAM", "")),
+        "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "")),
+        "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "")),
+        "Garanzia": pulisci_valore(dettagli.get("Garanzia", "")),
+    })
+  df_export = pd.DataFrame(lista_completa_export)
+
+  col_exp1, col_exp2 = st.columns(2)
+
+  with col_exp1:
+    # Generazione file Excel in memoria
+    output_excel = io.BytesIO()
+    with pd.ExcelWriter(output_excel, engine="openpyxl") as writer:
+      df_export.to_excel(writer, index=False, sheet_name="Inventario")
+    excel_data = output_excel.getvalue()
+
+    st.download_button(
+        label="📊 Scarica in Excel (.xlsx)",
+        data=excel_data,
+        file_name=f"Inventario_{sede_scelta['nome'].replace(' ', '_')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+  with col_exp2:
+    # Generazione file PDF tramite FPDF
+    class PDFReport(FPDF):
+      def header(self):
+        self.set_font("helvetica", "B", 12)
+        self.cell(0, 10, f"Inventario Hardware - Sede: {sede_scelta['nome']}", 0, 1, "C")
+        self.ln(5)
+
+      def footer(self):
+        self.set_y(-15)
+        self.set_font("helvetica", "I", 8)
+        self.cell(0, 10, f"Pagina {self.page_no()}", 0, 0, "C")
+
+    def genera_pdf(df_data, nome_sede):
+      pdf = PDFReport(orientation="L", unit="mm", format="A4")
+      pdf.add_page()
+      pdf.set_font("helvetica", "", 8)
+      
+      # Intestazioni tabella
+      headers = ["IP", "Nome", "Tipologia", "Stato", "Marca", "Modello", "CPU", "RAM", "HD", "Capienza", "Garanzia"]
+      col_widths = [22, 30, 25, 20, 25, 25, 25, 15, 18, 22, 25]
+      
+      pdf.set_font("helvetica", "B", 8)
+      for i, h in enumerate(headers):
+        pdf.cell(col_widths[i], 7, h, 1, 0, "C")
+      pdf.ln()
+      
+      pdf.set_font("helvetica", "", 7)
+      for _, row in df_data.iterrows():
+        # Filtriamo solo le righe con nome o specifiche o stampiamo tutto (filtriamo le vuote se vuoi alleggerire, o stampiamo tutto l'inventario IP)
+        pdf.cell(col_widths[0], 6, str(row["Indirizzo IP"]), 1, 0, "C")
+        pdf.cell(col_widths[1], 6, str(row["Nome Macchina"])[:18], 1, 0, "L")
+        pdf.cell(col_widths[2], 6, str(row["Tipologia"])[:15], 1, 0, "L")
+        pdf.cell(col_widths[3], 6, str(row["Stato"]).replace("🟢 ", "").replace("🔴 ", ""), 1, 0, "C")
+        pdf.cell(col_widths[4], 6, str(row["Marca"])[:15], 1, 0, "L")
+        pdf.cell(col_widths[5], 6, str(row["Modello"])[:15], 1, 0, "L")
+        pdf.cell(col_widths[6], 6, str(row["Processore"])[:15], 1, 0, "L")
+        pdf.cell(col_widths[7], 6, str(row["RAM"])[:10], 1, 0, "C")
+        pdf.cell(col_widths[8], 6, str(row["Tipo HD"])[:10], 1, 0, "C")
+        pdf.cell(col_widths[9], 6, str(row["Capienza HD"])[:12], 1, 0, "C")
+        pdf.cell(col_widths[10], 6, str(row["Garanzia"])[:15], 1, 1, "C")
+        
+      return pdf.output()
+
+    try:
+      pdf_bytes = genera_pdf(df_export, sede_scelta["nome"])
+      st.download_button(
+          label="📄 Scarica in PDF (.pdf)",
+          data=pdf_bytes,
+          file_name=f"Inventario_{sede_scelta['nome'].replace(' ', '_')}.pdf",
+          mime="application/pdf",
+      )
+    except Exception as e:
+      st.error(f"Errore nella generazione del PDF: {e}")
+
+  st.markdown("---")
 
   with st.expander(
       "🛠️ Aggiungi dettagli tecnici avanzati (Manuale)", expanded=True
@@ -427,9 +524,11 @@ with tab_hardware:
         "Processore": pulisci_valore(dettagli.get("Processore", "-")),
         "RAM": pulisci_valore(dettagli.get("RAM", "-")),
         "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "-")),
-        "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "-")),
+        "Capienza HD": pulisci_val_valore := pulisci_valore(dettagli.get("Capienza HD", "-")),
         "Garanzia": pulisci_valore(dettagli.get("Garanzia", "-")),
     })
+    # Correzione rapida assegnazione capienza hd nel loop sopra
+    lista_completa[-1]["Capienza HD"] = pulisci_valore(dettagli.get("Capienza HD", "-"))
 
   df_inventario_corrente = pd.DataFrame(lista_completa)
   df_inv_per_editor = df_inventario_corrente.drop(
