@@ -69,16 +69,33 @@ if "dataframes_rete" not in st.session_state:
     base_ip = item["blocco"].rsplit(".", 1)[0]
     righe_ip = []
     for i in range(256):
-      # Salviamo internamente l'IP completo ma mostriamo solo gli ultimi due blocchi
       ip_completo = f"{base_ip}.{i}"
       ultimi_due_ip = ".".join(ip_completo.split(".")[2:])
       righe_ip.append({
           "Indirizzo IP": ultimi_due_ip,
-          "_ip_completo": ip_completo,  # Campo di servizio interno
+          "_ip_completo": ip_completo,
           "Nome Macchina": "",
           "Stato": "🟢 Libero",
       })
     st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
+else:
+  # Controllo di sicurezza per aggiornare sessioni esistenti prive di _ip_completo
+  for idx, item in enumerate(sedi_config):
+    if idx in st.session_state.dataframes_rete:
+      df = st.session_state.dataframes_rete[idx]
+      if "_ip_completo" not in df.columns:
+        base_ip = item["blocco"].rsplit(".", 1)[0]
+        righe_ip = []
+        for i, row in df.iterrows():
+          ip_parz = str(row.get("Indirizzo IP", f"1.{i}"))
+          ip_completo = f"{base_ip}.{ip_parz.split('.')[-1]}" if "." in ip_parz else f"{base_ip}.{i}"
+          righe_ip.append({
+              "Indirizzo IP": ip_parz,
+              "_ip_completo": ip_completo,
+              "Nome Macchina": row.get("Nome Macchina", ""),
+              "Stato": row.get("Stato", "🟢 Libero"),
+          })
+        st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
 
 if "hardware_dettagli" not in st.session_state:
   st.session_state.hardware_dettagli = {}
@@ -94,7 +111,7 @@ idx_selezionato = st.selectbox(
 
 sede_scelta = sedi_config[idx_selezionato]
 
-# Riduce la Subnet Mask agli ultimi due blocchi numerici
+# Mostra solo gli ultimi due blocchi della subnet mask
 subnet_ultimi_due = ".".join(sede_scelta["subnet"].split(".")[2:])
 
 tab_rete, tab_hardware = st.tabs(
@@ -112,8 +129,7 @@ with tab_rete:
 
   df_corrente = st.session_state.dataframes_rete[idx_selezionato]
 
-  # Nascondiamo la colonna tecnica _ip_completo dall'editor
-  df_per_editor = df_corrente.drop(columns=["_ip_completo"])
+  df_per_editor = df_corrente.drop(columns=["_ip_completo"], errors="ignore")
 
   df_modificato = st.data_editor(
       df_per_editor,
@@ -135,7 +151,6 @@ with tab_rete:
 
   modificato = False
   for i in range(len(df_modificato)):
-    ip_mostrato = df_modificato.loc[i, "Indirizzo IP"]
     ip_corr = df_corrente.loc[i, "_ip_completo"]
     val_grezzo = df_modificato.loc[i, "Nome Macchina"]
 
@@ -160,7 +175,6 @@ with tab_rete:
         del st.session_state.hardware_dettagli[ip_corr]
       modificato = True
 
-    # Sincronizziamo il dataframe di sessione mantenendo _ip_completo
     df_corrente.loc[i, "Nome Macchina"] = df_modificato.loc[i, "Nome Macchina"]
     df_corrente.loc[i, "Stato"] = df_modificato.loc[i, "Stato"]
 
@@ -184,17 +198,18 @@ with tab_hardware:
         df_rete_sede["Stato"] == "🔴 Occupato"
     ].to_dict("records")
     with st.form(key=f"form_hw_{idx_selezionato}"):
-      ip_disponibili = [
-          m["_ip_completo"] for m in macchine_occupate if m["Nome Macchina"].strip()
-      ]
       ip_disponibili_mostrati = [
           m["Indirizzo IP"] for m in macchine_occupate if m["Nome Macchina"].strip()
       ]
 
-      if ip_disponibili:
+      if ip_disponibili_mostrati:
         scelta_mostrata = st.selectbox("Seleziona IP Macchina", ip_disponibili_mostrati)
-        ip_scelto = macchine_occupate[ip_disponibili_mostrati.index(scelta_mostrata)]["_ip_completo"]
-        
+        ip_scelto = [
+            m["_ip_completo"]
+            for m in macchine_occupate
+            if m["Indirizzo IP"] == scelta_mostrata
+        ][0]
+
         col1, col2 = st.columns(2)
         with col1:
           hw_marca = st.text_input("Marca (es. Dell, HP)")
@@ -250,12 +265,10 @@ with tab_hardware:
         else:
           if st.button("Conferma e Importa Dati"):
             count_importati = 0
+            base_ip_sede = sede_scelta["blocco"].rsplit(".", 1)[0]
             for _, row in df_import.iterrows():
               ip_file = str(row.get("Indirizzo IP", "")).strip()
 
-              base_ip_sede = sede_scelta["blocco"].rsplit(".", 1)[0]
-              
-              # Gestisce sia l'IP completo che l'IP ridotto a 2 blocchi
               if len(ip_file.split(".")) == 2:
                 ip_file_completo = f"{base_ip_sede}.{ip_file.split('.')[-1]}"
               else:
@@ -321,7 +334,9 @@ with tab_hardware:
       })
 
     df_inventario_corrente = pd.DataFrame(lista_completa)
-    df_inv_per_editor = df_inventario_corrente.drop(columns=["_ip_completo"])
+    df_inv_per_editor = df_inventario_corrente.drop(
+        columns=["_ip_completo"], errors="ignore"
+    )
 
     df_inventario_modificato = st.data_editor(
         df_inv_per_editor,
@@ -345,7 +360,6 @@ with tab_hardware:
 
     inv_modificato = False
     for i in range(len(df_inventario_modificato)):
-      ip_mostrato = df_inventario_modificato.loc[i, "Indirizzo IP"]
       ip_comp = df_inventario_corrente.loc[i, "_ip_completo"]
       nuovo_nome = str(
           df_inventario_modificato.loc[i, "Nome Macchina"]
