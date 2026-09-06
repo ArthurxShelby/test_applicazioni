@@ -7,56 +7,56 @@ st.subheader("Gestione Reti e Hardware per Sede")
 sedi_config = [
     {
         "id": 1,
-        "nome": "Sede Trieste",
+        "nome": "Sede Centrale",
         "blocco": "192.168.1.0",
         "subnet": "255.255.254.0",
         "gruppo": "Blocco 1",
     },
     {
         "id": 2,
-        "nome": "Sede Trieste",
+        "nome": "Sede Centrale",
         "blocco": "192.168.2.0",
         "subnet": "255.255.254.0",
         "gruppo": "Blocco 2",
     },
     {
         "id": 3,
-        "nome": "Sede Monfalcne",
+        "nome": "Sede 2",
         "blocco": "192.168.3.0",
         "subnet": "255.255.255.0",
         "gruppo": "Blocco Unico",
     },
     {
         "id": 4,
-        "nome": "Sede Grado",
+        "nome": "Sede 3",
         "blocco": "192.168.4.0",
         "subnet": "255.255.255.0",
         "gruppo": "Blocco Unico",
     },
     {
         "id": 5,
-        "nome": "Sede Nogaro",
+        "nome": "Sede 4",
         "blocco": "192.168.5.0",
         "subnet": "255.255.255.0",
         "gruppo": "Blocco Unico",
     },
     {
         "id": 6,
-        "nome": "Sede Lignano",
+        "nome": "Sede 5",
         "blocco": "192.168.6.0",
         "subnet": "255.255.255.0",
         "gruppo": "Blocco Unico",
     },
     {
         "id": 7,
-        "nome": "Sede Marano",
+        "nome": "Sede 6",
         "blocco": "192.168.7.0",
         "subnet": "255.255.255.0",
         "gruppo": "Blocco Unico",
     },
     {
         "id": 8,
-        "nome": "Sede Mezzi Nauti",
+        "nome": "Sede 7",
         "blocco": "192.168.8.0",
         "subnet": "255.255.255.0",
         "gruppo": "Blocco Unico",
@@ -111,7 +111,7 @@ idx_selezionato = st.selectbox(
     options=range(len(sedi_config)),
     format_func=lambda i: (
         f"{sedi_config[i]['nome']} ({sedi_config[i]['gruppo']}) — Rete:"
-        f" {sedi_config[i]['blocco'].rsplit('.', 2)[0]}.X.X / "
+        f" {'.'.join(sedi_config[i]['blocco'].split('.')[-2:])} / "
         f"{'.'.join(sedi_config[i]['subnet'].split('.')[-2:])}"
     ),
 )
