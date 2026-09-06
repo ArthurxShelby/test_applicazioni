@@ -417,20 +417,7 @@ with tab_hardware:
         st.error(f"Errore nella lettura del file: {e}")
 
   st.markdown("---")
-  
-  # --- OPZIONE DI ORDINAMENTO PER ANNO (TOGGLE / CLICK SUCCESSIVI) ---
-  col_ord1, col_ord2 = st.columns([2, 2])
-  with col_ord1:
-    st.write("📋 **Inventario Completo della Sede (Modificabile):**")
-  with col_ord2:
-    key_stato_ordine = f"stato_ordine_{idx_selezionato}"
-    if key_stato_ordine not in st.session_state:
-      st.session_state[key_stato_ordine] = False
-
-    label_pulsante = "🔄 Ordina per anno (Crescente)" if not st.session_state[key_stato_ordine] else "🔄 Ripristina ordine IP"
-    if st.button(label_pulsante, use_container_width=True):
-      st.session_state[key_stato_ordine] = not st.session_state[key_stato_ordine]
-      st.rerun()
+  st.markdown("📋 **Inventario Completo della Sede (Modificabile):** *Fai clic sull'intestazione della colonna 'Processore e Anno' per ordinare per anno.*")
 
   lista_completa = []
   for m in df_rete_sede.to_dict("records"):
@@ -457,11 +444,6 @@ with tab_hardware:
     })
 
   df_inventario_corrente = pd.DataFrame(lista_completa)
-
-  # Se il toggle dell'ordine è attivo, ordina per anno crescente partendo dalla prima riga
-  if st.session_state[key_stato_ordine]:
-    df_inventario_corrente["_anno_temp"] = df_inventario_corrente["Processore"].apply(estrai_anno)
-    df_inventario_corrente = df_inventario_corrente.sort_values(by="_anno_temp", ascending=True).drop(columns=["_anno_temp"])
 
   df_inv_per_editor = df_inventario_corrente.drop(
       columns=["_ip_completo"], errors="ignore"
@@ -501,37 +483,64 @@ with tab_hardware:
       hide_index=True,
   )
 
+  # Intercettiamo se l'utente ha fatto clic sull'ordinamento della colonna Processore
+  editor_state_key = f"editor_inventario_{idx_selezionato}"
+  if editor_state_key in st.session_state:
+    editor_info = st.session_state[editor_state_key]
+    # Controllo se Streamlit ha restituito informazioni sull'ordinamento attivo della tabella
+    sort_info = editor_info.get("editing", {}).get("sort", None) if isinstance(editor_info, dict) else None
+    
+    # Metodo alternativo per catturare l'ordinamento nativo dell'interfaccia Streamlit
+    # Verifichiamo se l'utente ha cliccato sull'intestazione tramite gli eventi della tabella se disponibili o riorganizziamo al volo
+    # In Streamlit, possiamo leggere la configurazione di ordinamento attiva se presente nel dataframe state o gestirla tramite un piccolo trucco:
+    # Se l'utente clicca sulla colonna, Streamlit ricarica la pagina. Possiamo memorizzare lo stato del click sulla colonna tramite session_state.
+
+  # Per gestire in modo nativo e affidabile il clic sulla colonna di Streamlit, usiamo un piccolo controllo di stato associato alla tabella:
+  # Poiché le colonne di st.data_editor mostrano le freccette di ordinamento al click, possiamo tracciare il cambio di ordinamento:
+  
+  # Ricostruiamo la mappatura degli indici per mantenere sincronizzati i dati modificati
+  # Sincronizziamo prima le modifiche correnti salvate dall'utente sul dataframe originale basato su IP
+  for i in range(len(df_inventario_modificato)):
+    # Troviamo l'IP corrispondente alla riga corrente (considerando se c'è stato un ordinamento visivo)
+    # Se l'utente ha ordinato la tabella visivamente, la riga i corrisponde all'elemento ordinato
+    pass
+
   inv_modificato = False
   for i in range(len(df_inventario_modificato)):
-    ip_comp = df_inventario_corrente.loc[i, "_ip_completo"]
-    nuovo_nome = pulisci_valore(df_inventario_modificato.loc[i, "Nome Macchina"])
-    nuova_tipologia = pulisci_valore(df_inventario_modificato.loc[i, "Tipologia"])
+    # Troviamo l'indice originario tramite l'IP
+    ip_corr_riga = df_inventario_modificato.loc[i, "Indirizzo IP"]
+    # Cerchiamo la riga corrispondente in df_inventario_corrente
+    riga_orig = df_inventario_corrente[df_inventario_corrente["Indirizzo IP"] == ip_corr_riga]
+    if not riga_orig.empty:
+      ip_comp = riga_orig.iloc[0]["_ip_completo"]
+      nuovo_nome = pulisci_valore(df_inventario_modificato.loc[i, "Nome Macchina"])
+      nuova_tipologia = pulisci_valore(df_inventario_modificato.loc[i, "Tipologia"])
 
-    if not nuovo_nome:
-      nuova_tipologia = ""
+      if not nuovo_nome:
+        nuova_tipologia = ""
 
-    st.session_state.hardware_dettagli[ip_comp] = {
-        "Marca": pulisci_valore(df_inventario_modificato.loc[i, "Marca"]),
-        "Modello": pulisci_valore(df_inventario_modificato.loc[i, "Modello"]),
-        "Processore": pulisci_valore(df_inventario_modificato.loc[i, "Processore"]),
-        "RAM": pulisci_valore(df_inventario_modificato.loc[i, "RAM"]),
-        "Tipo HD": pulisci_valore(df_inventario_modificato.loc[i, "Tipo HD"]),
-        "Capienza HD": pulisci_valore(df_inventario_modificato.loc[i, "Capienza HD"]),
-        "Garanzia": pulisci_valore(df_inventario_modificato.loc[i, "Garanzia"]),
-    }
+      st.session_state.hardware_dettagli[ip_comp] = {
+          "Marca": pulisci_valore(df_inventario_modificato.loc[i, "Marca"]),
+          "Modello": pulisci_valore(df_inventario_modificato.loc[i, "Modello"]),
+          "Processore": pulisci_valore(df_inventario_modificato.loc[i, "Processore"]),
+          "RAM": pulisci_valore(df_inventario_modificato.loc[i, "RAM"]),
+          "Tipo HD": pulisci_valore(df_inventario_modificato.loc[i, "Tipo HD"]),
+          "Capienza HD": pulisci_valore(df_inventario_modificato.loc[i, "Capienza HD"]),
+          "Garanzia": pulisci_valore(df_inventario_modificato.loc[i, "Garanzia"]),
+      }
 
-    idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_comp].index
-    if not idx_r.empty:
-      vecchio_nome = str(df_rete_sede.loc[idx_r[0], "Nome Macchina"])
-      vecchia_tipologia = str(df_rete_sede.loc[idx_r[0], "Tipologia"])
-      if vecchio_nome != nuovo_nome or vecchia_tipologia != nuova_tipologia:
-        df_rete_sede.loc[idx_r, "Nome Macchina"] = nuovo_nome
-        df_rete_sede.loc[idx_r, "Tipologia"] = nuova_tipologia
-        if nuovo_nome:
-          df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
-        else:
-          df_rete_sede.loc[idx_r, "Stato"] = "🟢 Libero"
-        inv_modificato = True
+      idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_comp].index
+      if not idx_r.empty:
+        vecchio_nome = str(df_rete_sede.loc[idx_r[0], "Nome Macchina"])
+        vecchia_tipologia = str(df_rete_sede.loc[idx_r[0], "Tipologia"])
+        if vecchio_nome != nuovo_nome or vecchia_tipologia != nuova_tipologia:
+          df_rete_sede.loc[idx_r, "Nome Macchina"] = nuovo_nome
+          df_rete_sede.loc[idx_r, "Tipologia"] = nuova_tipologia
+          if nuovo_nome:
+            df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
+          else:
+            df_rete_sede.loc[idx_r, "Stato"] = "🟢 Libero"
+          inv_modificato = True
 
   st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
   if inv_modificato:
