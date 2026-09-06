@@ -1,66 +1,37 @@
 import ipaddress
 import streamlit as st
 
-st.title("Gestione Rete Aziendale")
+st.subheader("Panoramica Completa: Sedi e Blocchi IP (0 - 255)")
 
+# Elenco delle sedi e dei blocchi associati (puoi sostituirlo con una query a Supabase: supabase.table('sedi').select('*').execute())
+sedi_config = [
+    {"nome": "Sede Centrale", "blocco": "192.168.1.0/24"},
+    {"nome": "Sede Centrale", "blocco": "192.168.2.0/24"},
+    {"nome": "Sede 2", "blocco": "192.168.3.0/24"},
+    {"nome": "Sede 3", "blocco": "192.168.4.0/24"},
+    {"nome": "Sede 4", "blocco": "192.168.5.0/24"},
+    {"nome": "Sede 5", "blocco": "192.168.6.0/24"},
+    {"nome": "Sede 6", "blocco": "192.168.7.0/24"},
+    {"nome": "Sede 7", "blocco": "192.168.8.0/24"},
+]
 
-class GestioneReteAziendale:
+for item in sedi_config:
+  nome_sede = item["nome"]
+  blocco = item["blocco"]
 
-  def __init__(self):
-    if "sedi" not in st.session_state:
-      st.session_state.sedi = {}
-      st.session_state.dispositivi = {}
-      self._configura_infrastruttura()
+  # Crea un menu a tendina per ogni blocco di ogni sede
+  with st.expander(f"📍 {nome_sede} — Blocco: {blocco}"):
+    # Estrae la parte di rete comune (es. '192.168.1')
+    base_ip = blocco.split("/")[0].rsplit(".", 1)[0]
 
-  def _configura_infrastruttura(self):
-    st.session_state.sedi["Sede_Centrale"] = [
-        ipaddress.ip_network("192.168.1.0/24"),
-        ipaddress.ip_network("192.168.2.0/24"),
-    ]
-    for i in range(2, 8):
-      st.session_state.sedi[f"Sede_{i}"] = [
-          ipaddress.ip_network(f"192.168.{i+1}.0/24")
-      ]
+    # Genera tutte le 256 righe da 0 a 255
+    colonne_dati = []
+    for i in range(256):
+      indirizzo_corrente = f"{base_ip}.{i}"
+      colonne_dati.append(
+          {"Indirizzo IP": indirizzo_corrente, "Stato": "Disponibile / Libero"}
+      )
 
-  def assegna_ip(self, nome_macchina, indirizzo_ip):
-    try:
-      ip = ipaddress.ip_address(indirizzo_ip)
-    except ValueError:
-      return f"Errore: '{indirizzo_ip}' non è un indirizzo IP valido."
-
-    for sede, reti in st.session_state.sedi.items():
-      for rete in reti:
-        if ip in rete:
-          if ip in (rete.network_address, rete.broadcast_address):
-            return f"Errore: {ip} è un indirizzo di rete o broadcast."
-          st.session_state.dispositivi[str(ip)] = {
-              "nome": nome_macchina,
-              "sede": sede,
-              "subnet": str(rete),
-          }
-          return (
-              f"Registrato: {nome_macchina} ({ip}) associato correttamente alla"
-              f" {sede}."
-          )
-    return "Errore: Indirizzo IP non appartenente ad alcuna sede configurata."
-
-
-rete = GestioneReteAziendale()
-
-# Interfaccia utente web
-nome_pc = st.text_input("Nome Dispositivo", "PC-Ufficio-01")
-ip_pc = st.text_input("Indirizzo IP", "192.168.1.15")
-
-if st.button("Registra IP"):
-  risultato = rete.assegna_ip(nome_pc, ip_pc)
-  if "Errore" in risultato:
-    st.error(risultato)
-  else:
-    st.success(risultato)
-
-st.subheader("Dispositivi Registrati")
-if st.session_state.dispositivi:
-  st.json(st.session_state.dispositivi)
-else:
-  st.info("Nessun dispositivo registrato.")
-  
+    # Mostra la tabella completa da 0 a 255 per questo blocco
+    st.dataframe(colonne_dati, use_container_width=True)
+    
