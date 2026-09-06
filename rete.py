@@ -1,7 +1,8 @@
 import ipaddress
+import pandas as pd
 import streamlit as st
 
-st.subheader("Panoramica Sedi e Reti")
+st.subheader("Panoramica Sedi e Reti con Stati Dinamici")
 
 sedi_config = [
     {
@@ -54,19 +55,32 @@ sedi_config = [
     },
 ]
 
+
+def colora_stato(valore):
+  if valore == "Occupata":
+    return "color: #ff4b4b; font-weight: bold;"  # Rosso
+  else:
+    return "color: #28a745; font-weight: bold;"  # Verde
+
+
 for item in sedi_config:
   label = f"📍 Sede: {item['nome']} ({item['gruppo']})  |  Rete: {item['blocco']}/24  |  Subnet Mask: {item['subnet']}"
 
   with st.expander(label):
     base_ip = item["blocco"].rsplit(".", 1)[0]
-    colonne_dati = []
-    
-    # Genera esattamente 256 righe (da .0 a .255) per ciascun blocco con la propria colonna di stato
-    for i in range(256):
-      colonne_dati.append({
-          "Indirizzo IP": f"{base_ip}.{i}",
-          "Stato": "Disponibile / Libero",
-      })
+    righe_ip = []
 
-    st.dataframe(colonne_dati, use_container_width=True)
-      
+    for i in range(256):
+      indirizzo = f"{base_ip}.{i}"
+      # Simulazione: l'IP .10 viene marchiato come occupato per testare il rosso
+      stato = "Occupata" if i == 10 else "Disponibile / Libero"
+      righe_ip.append({"Indirizzo IP": indirizzo, "Stato": stato})
+
+    df = pd.DataFrame(righe_ip)
+
+    # Applicazione dello stile condizionale tramite pandas Styler
+    df_stilizzato = df.style.map(
+        colora_stato, subset=["Stato"]
+    )  # Usa .applymap se usi versioni di pandas precedenti alla 2.1.0
+
+    st.dataframe(df_stilizzato, use_container_width=True)
