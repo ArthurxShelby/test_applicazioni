@@ -88,6 +88,14 @@ sedi_config = [
     },
 ]
 
+def pulisci_valore(val):
+  if val is None or pd.isna(val):
+    return ""
+  s = str(val).strip()
+  if s.lower() in ["none", "nan", ""]:
+    return ""
+  return s
+
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
 
@@ -99,25 +107,9 @@ for idx, item in enumerate(sedi_config):
   old_data_map = {}
   if not old_df.empty and "_ip_completo" in old_df.columns:
     for _, r in old_df.iterrows():
-      nome_mac = r.get("Nome Macchina", "")
-      if (
-          pd.isna(nome_mac)
-          or str(nome_mac).strip().lower() in ["none", "nan", ""]
-          or str(nome_mac) == "None"
-      ):
-        nome_mac = ""
-      
-      tipo_mac = r.get("Tipologia", "")
-      if (
-          pd.isna(tipo_mac)
-          or str(tipo_mac).strip().lower() in ["none", "nan", ""]
-          or str(tipo_mac) == "None"
-      ):
-        tipo_mac = ""
-
       old_data_map[r["_ip_completo"]] = {
-          "Nome Macchina": nome_mac,
-          "Tipologia": tipo_mac,
+          "Nome Macchina": pulisci_valore(r.get("Nome Macchina", "")),
+          "Tipologia": pulisci_valore(r.get("Tipologia", "")),
           "Stato": r.get("Stato", "🟢 Libero"),
       }
 
@@ -170,15 +162,9 @@ with tab_rete:
 
   df_corrente = st.session_state.dataframes_rete[idx_selezionato]
 
-  # Pulisci rigorosamente eventuali "None" o "nan" nel DataFrame
-  df_corrente["Nome Macchina"] = df_corrente["Nome Macchina"].apply(
-      lambda x: "" if pd.isna(x) or str(x).strip().lower() in ["none", "nan", ""] or str(x) == "None" else str(x)
-  )
-  df_corrente["Tipologia"] = df_corrente["Tipologia"].apply(
-      lambda x: "" if pd.isna(x) or str(x).strip().lower() in ["none", "nan", ""] or str(x) == "None" else str(x)
-  )
+  df_corrente["Nome Macchina"] = df_corrente["Nome Macchina"].apply(pulisci_valore)
+  df_corrente["Tipologia"] = df_corrente["Tipologia"].apply(pulisci_valore)
 
-  # Calcolo statistiche e conteggi in evidenza per tipologia
   totale_ip = len(df_corrente)
   df_occupati = df_corrente[
       df_corrente["Stato"].astype(str).str.contains("Occupato")
@@ -190,7 +176,6 @@ with tab_rete:
   n_stampanti = len(df_corrente[df_corrente["Tipologia"] == "Stampante"])
   n_switch = len(df_corrente[df_corrente["Tipologia"] == "Switch"])
 
-  # Pannello Metriche Principali
   col_m1, col_m2, col_m3 = st.columns(3)
   col_m1.metric("Totale IP", totale_ip)
   col_m2.metric("🟢 Liberi", liberi)
@@ -204,13 +189,10 @@ with tab_rete:
 
   st.markdown("---")
 
-  # Creiamo una copia per l'editor e gestiamo la colonna disabilitata condizionalmente
   df_per_editor = df_corrente.drop(columns=["_ip_completo"], errors="ignore").copy()
   
-  # Streamlit data_editor gestisce i disabled a livello di colonna fissa. 
-  # Per farlo dipendere dalla riga, puliamo la tipologia se il nome macchina è vuoto.
   for i in range(len(df_per_editor)):
-    if not str(df_per_editor.loc[i, "Nome Macchina"]).strip():
+    if not df_per_editor.loc[i, "Nome Macchina"]:
       df_per_editor.loc[i, "Tipologia"] = ""
 
   df_modificato = st.data_editor(
@@ -239,28 +221,10 @@ with tab_rete:
   modificato = False
   for i in range(len(df_modificato)):
     ip_corr = df_corrente.loc[i, "_ip_completo"]
-    val_grezzo = df_modificato.loc[i, "Nome Macchina"]
-    tipo_scelto = df_modificato.loc[i, "Tipologia"]
+    nome_mac = pulisci_valore(df_modificato.loc[i, "Nome Macchina"])
+    tipo_scelto = pulisci_valore(df_modificato.loc[i, "Tipologia"])
 
-    if (
-        val_grezzo is None
-        or pd.isna(val_grezzo)
-        or str(val_grezzo).strip().lower() in ["none", "nan", ""]
-        or str(val_grezzo) == "None"
-    ):
-      nome_mac = ""
-    else:
-      nome_mac = str(val_grezzo).strip()
-
-    # Se non c'è il nome macchina, forziamo la tipologia a vuoto
     if not nome_mac:
-      tipo_scelto = ""
-    elif (
-        tipo_scelto is None
-        or pd.isna(tipo_scelto)
-        or str(tipo_scelto).strip().lower() in ["none", "nan", ""]
-        or str(tipo_scelto) == "None"
-    ):
       tipo_scelto = ""
 
     stato_attuale = df_modificato.loc[i, "Stato"]
@@ -315,13 +279,13 @@ with tab_hardware:
         with col1:
           hw_marca = st.text_input(
               "Marca (es. Dell, HP, Cisco)",
-              value=str(dettagli_esistenti.get("Marca", "")).replace("None", "").replace("nan", ""),
+              value=pulisci_valore(dettagli_esistenti.get("Marca", "")),
           )
           hw_modello = st.text_input(
-              "Modello", value=str(dettagli_esistenti.get("Modello", "")).replace("None", "").replace("nan", "")
+              "Modello", value=pulisci_valore(dettagli_esistenti.get("Modello", ""))
           )
           hw_cpu = st.text_input(
-              "Processore / Dettaglio", value=str(dettagli_esistenti.get("Processore", "")).replace("None", "").replace("nan", "")
+              "Processore / Dettaglio", value=pulisci_valore(dettagli_esistenti.get("Processore", ""))
           )
         with col2:
           ram_salvata = dettagli_esistenti.get("RAM", "16 GB")
@@ -331,7 +295,7 @@ with tab_hardware:
             ram_val = 16
           hw_ram = st.number_input("RAM / Porte (GB o Num)", min_value=2, max_value=256, value=ram_val)
           
-          tipo_hd_esistente = str(dettagli_esistenti.get("Tipo HD", "SSD"))
+          tipo_hd_esistente = pulisci_valore(dettagli_esistenti.get("Tipo HD", "SSD"))
           if tipo_hd_esistente not in ["SSD", "HDD", "NVMe", "Altro"]:
             tipo_hd_esistente = "SSD"
             
@@ -341,11 +305,11 @@ with tab_hardware:
               index=["SSD", "HDD", "NVMe", "Altro"].index(tipo_hd_esistente),
           )
           hw_cap_hd = st.text_input(
-              "Capienza / Note", value=str(dettagli_esistenti.get("Capienza HD", "")).replace("None", "").replace("nan", "")
+              "Capienza / Note", value=pulisci_valore(dettagli_esistenti.get("Capienza HD", ""))
           )
           hw_garanzia = st.text_input(
               "Scadenza Garanzia",
-              value=str(dettagli_esistenti.get("Garanzia", "")).replace("None", "").replace("nan", ""),
+              value=pulisci_valore(dettagli_esistenti.get("Garanzia", "")),
           )
 
         btn_salva = st.form_submit_button("Salva Specifiche Tecniche")
@@ -357,7 +321,7 @@ with tab_hardware:
               "RAM": f"{hw_ram} GB",
               "Tipo HD": hw_tipo_hd,
               "Capienza HD": hw_cap_hd,
-              "Garanzia": str(hw_garanzia),
+              "Garanzia": hw_garanzia,
           }
           idx_r = df_rete_sede[
               df_rete_sede["_ip_completo"] == ip_scelto
@@ -403,11 +367,8 @@ with tab_hardware:
                 ip_file_completo = ip_file
 
               if ip_file_completo.startswith(base_ip_sede):
-                nome_mac_file = str(row.get("Nome Macchina", "")).strip()
-                if nome_mac_file.lower() in ["none", "nan", ""] or nome_mac_file == "None":
-                  nome_mac_file = ""
-
-                tipo_file = str(row.get("Tipologia", "")).strip()
+                nome_mac_file = pulisci_valore(row.get("Nome Macchina", ""))
+                tipo_file = pulisci_valore(row.get("Tipologia", ""))
                 if tipo_file not in ["PC / Macchina", "Stampante", "Switch"] or not nome_mac_file:
                   tipo_file = ""
 
@@ -420,18 +381,14 @@ with tab_hardware:
                     df_rete_sede.loc[idx_r, "Tipologia"] = tipo_file
                     df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
 
-                def clean_val(val):
-                  v = str(val).strip()
-                  return "" if v.lower() in ["none", "nan", ""] or v == "None" else v
-
                 st.session_state.hardware_dettagli[ip_file_completo] = {
-                    "Marca": clean_val(row.get("Marca", "-")),
-                    "Modello": clean_val(row.get("Modello", "-")),
-                    "Processore": clean_val(row.get("Processore", "-")),
-                    "RAM": clean_val(row.get("RAM", "-")),
-                    "Tipo HD": clean_val(row.get("Tipo HD", "-")),
-                    "Capienza HD": clean_val(row.get("Capienza HD", "-")),
-                    "Garanzia": clean_val(row.get("Garanzia", "-")),
+                    "Marca": pulisci_valore(row.get("Marca", "-")),
+                    "Modello": pulisci_valore(row.get("Modello", "-")),
+                    "Processore": pulisci_valore(row.get("Processore", "-")),
+                    "RAM": pulisci_valore(row.get("RAM", "-")),
+                    "Tipo HD": pulisci_valore(row.get("Tipo HD", "-")),
+                    "Capienza HD": pulisci_valore(row.get("Capienza HD", "-")),
+                    "Garanzia": pulisci_valore(row.get("Garanzia", "-")),
                 }
                 count_importati += 1
 
@@ -451,30 +408,21 @@ with tab_hardware:
     ip_comp = m["_ip_completo"]
     dettagli = st.session_state.hardware_dettagli.get(ip_comp, {})
 
-    nome_m = m["Nome Macchina"]
-    if pd.isna(nome_m) or str(nome_m).strip().lower() in ["none", "nan", ""] or str(nome_m) == "None":
-      nome_m = ""
-
-    tipo_m = m["Tipologia"]
-    if pd.isna(tipo_m) or str(tipo_m).strip().lower() in ["none", "nan", ""] or str(tipo_m) == "None":
-      tipo_m = ""
-
-    def clean_det(val):
-      v = str(val).strip()
-      return "" if v.lower() in ["none", "nan", ""] or v == "None" else v
+    nome_m = pulisci_valore(m["Nome Macchina"])
+    tipo_m = pulisci_valore(m["Tipologia"])
 
     lista_completa.append({
         "Indirizzo IP": m["Indirizzo IP"],
         "_ip_completo": ip_comp,
         "Nome Macchina": nome_m,
         "Tipologia": tipo_m,
-        "Marca": clean_det(dettagli.get("Marca", "-")),
-        "Modello": clean_det(dettagli.get("Modello", "-")),
-        "Processore": clean_det(dettagli.get("Processore", "-")),
-        "RAM": clean_det(dettagli.get("RAM", "-")),
-        "Tipo HD": clean_det(dettagli.get("Tipo HD", "-")),
-        "Capienza HD": clean_det(dettagli.get("Capienza HD", "-")),
-        "Garanzia": clean_det(dettagli.get("Garanzia", "-")),
+        "Marca": pulisci_valore(dettagli.get("Marca", "-")),
+        "Modello": pulisci_valore(dettagli.get("Modello", "-")),
+        "Processore": pulisci_valore(dettagli.get("Processore", "-")),
+        "RAM": pulisci_valore(dettagli.get("RAM", "-")),
+        "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "-")),
+        "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "-")),
+        "Garanzia": pulisci_valore(dettagli.get("Garanzia", "-")),
     })
 
   df_inventario_corrente = pd.DataFrame(lista_completa)
@@ -483,7 +431,7 @@ with tab_hardware:
   ).copy()
 
   for i in range(len(df_inv_per_editor)):
-    if not str(df_inv_per_editor.loc[i, "Nome Macchina"]).strip():
+    if not df_inv_per_editor.loc[i, "Nome Macchina"]:
       df_inv_per_editor.loc[i, "Tipologia"] = ""
 
   df_inventario_modificato = st.data_editor(
@@ -512,33 +460,20 @@ with tab_hardware:
   inv_modificato = False
   for i in range(len(df_inventario_modificato)):
     ip_comp = df_inventario_corrente.loc[i, "_ip_completo"]
-    nuovo_nome = str(df_inventario_modificato.loc[i, "Nome Macchina"]).strip()
-    nuova_tipologia = str(df_inventario_modificato.loc[i, "Tipologia"])
-
-    if (
-        nuovo_nome.lower() in ["none", "nan", ""]
-        or nuovo_nome is None
-        or nuovo_nome == "None"
-    ):
-      nuovo_nome = ""
+    nuovo_nome = pulisci_valore(df_inventario_modificato.loc[i, "Nome Macchina"])
+    nuova_tipologia = pulisci_valore(df_inventario_modificato.loc[i, "Tipologia"])
 
     if not nuovo_nome:
       nuova_tipologia = ""
-    elif (
-        nuova_tipologia.lower() in ["none", "nan", ""]
-        or nuova_tipologia is None
-        or nuova_tipologia == "None"
-    ):
-      nuova_tipologia = ""
 
     st.session_state.hardware_dettagli[ip_comp] = {
-        "Marca": str(df_inventario_modificato.loc[i, "Marca"]),
-        "Modello": str(df_inventario_modificato.loc[i, "Modello"]),
-        "Processore": str(df_inventario_modificato.loc[i, "Processore"]),
-        "RAM": str(df_inventario_modificato.loc[i, "RAM"]),
-        "Tipo HD": str(df_inventario_modificato.loc[i, "Tipo HD"]),
-        "Capienza HD": str(df_inventario_modificato.loc[i, "Capienza HD"]),
-        "Garanzia": str(df_inventario_modificato.loc[i, "Garanzia"]),
+        "Marca": pulisci_valore(df_inventario_modificato.loc[i, "Marca"]),
+        "Modello": pulisci_valore(df_inventario_modificato.loc[i, "Modello"]),
+        "Processore": pulisci_valore(df_inventario_modificato.loc[i, "Processore"]),
+        "RAM": pulisci_valore(df_inventario_modificato.loc[i, "RAM"]),
+        "Tipo HD": pulisci_valore(df_inventario_modificato.loc[i, "Tipo HD"]),
+        "Capienza HD": pulisci_valore(df_inventario_modificato.loc[i, "Capienza HD"]),
+        "Garanzia": pulisci_valore(df_inventario_modificato.loc[i, "Garanzia"]),
     }
 
     idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_comp].index
