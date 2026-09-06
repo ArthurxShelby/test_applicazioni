@@ -150,7 +150,6 @@ with tab_hardware:
 
   df_rete_sede = st.session_state.dataframes_rete[idx_selezionato]
 
-  # Menù a tendina 1: Inserimento manuale
   with st.expander(
       "🛠️ Aggiungi dettagli tecnici avanzati (Manuale)", expanded=False
   ):
@@ -196,7 +195,6 @@ with tab_hardware:
             " Occupazione' per associargli i componenti hardware."
         )
 
-  # Menù a tendina 2: Importazione da File CSV / Excel
   with st.expander("📁 Importa inventario da file (CSV o Excel)"):
     st.info(
         "Il file deve contenere almeno una colonna 'Indirizzo IP' e, se"
@@ -214,7 +212,6 @@ with tab_hardware:
         else:
           df_import = pd.read_excel(uploaded_file)
 
-        # Controllo colonna obbligatoria
         if "Indirizzo IP" not in df_import.columns:
           st.error(
               "Il file caricato deve contenere una colonna denominata"
@@ -226,20 +223,17 @@ with tab_hardware:
             for _, row in df_import.iterrows():
               ip_file = str(row.get("Indirizzo IP", "")).strip()
 
-              # Verifica se l'IP appartiene alla rete della sede corrente
               base_ip_sede = sede_scelta["blocco"].rsplit(".", 1)[0]
               if ip_file.startswith(base_ip_sede):
-                # 1. Aggiorna lo stato IP a occupato se c'è un nome macchina
                 nome_mac_file = str(row.get("Nome Macchina", "")).strip()
                 if nome_mac_file and nome_mac_file != "nan":
-                  idx_ r = df_rete_sede[
+                  idx_r = df_rete_sede[
                       df_rete_sede["Indirizzo IP"] == ip_file
                   ].index
                   if not idx_r.empty:
                     df_rete_sede.loc[idx_r, "Nome Macchina"] = nome_mac_file
                     df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
 
-                # 2. Salva i dettagli hardware nel session_state
                 st.session_state.hardware_dettagli[ip_file] = {
                     "Marca": str(row.get("Marca", "-")),
                     "Modello": str(row.get("Modello", "-")),
