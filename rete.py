@@ -101,7 +101,7 @@ for idx, item in enumerate(sedi_config):
     for _, r in old_df.iterrows():
       old_data_map[r["_ip_completo"]] = {
           "Nome Macchina": r.get("Nome Macchina", ""),
-          "Tipologia": r.get("Tipologia", "PC / Macchina"),
+          "Tipologia": r.get("Tipologia", ""),
           "Stato": r.get("Stato", "🟢 Libero"),
       }
 
@@ -112,7 +112,7 @@ for idx, item in enumerate(sedi_config):
         ip_completo,
         {
             "Nome Macchina": "",
-            "Tipologia": "PC / Macchina",
+            "Tipologia": "",
             "Stato": "🟢 Libero",
         },
     )
@@ -191,8 +191,8 @@ with tab_rete:
           ),
           "Tipologia": st.column_config.SelectboxColumn(
               "Tipologia",
-              options=["PC / Macchina", "Stampante", "Switch"],
-              required=True,
+              options=["", "PC / Macchina", "Stampante", "Switch"],
+              required=False,
           ),
           "Stato": st.column_config.SelectboxColumn(
               "Stato", options=["🟢 Libero", "🔴 Occupato"], required=True
@@ -218,6 +218,9 @@ with tab_rete:
       df_modificato.loc[i, "Nome Macchina"] = ""
     else:
       nome_mac = str(val_grezzo).strip()
+
+    if tipo_scelto is None or pd.isna(tipo_scelto):
+      tipo_scelto = ""
 
     stato_attuale = df_modificato.loc[i, "Stato"]
 
@@ -358,9 +361,9 @@ with tab_hardware:
 
               if ip_file_completo.startswith(base_ip_sede):
                 nome_mac_file = str(row.get("Nome Macchina", "")).strip()
-                tipo_file = str(row.get("Tipologia", "PC / Macchina")).strip()
+                tipo_file = str(row.get("Tipologia", "")).strip()
                 if tipo_file not in ["PC / Macchina", "Stampante", "Switch"]:
-                  tipo_file = "PC / Macchina"
+                  tipo_file = ""
 
                 if (
                     nome_mac_file
@@ -429,7 +432,7 @@ with tab_hardware:
           ),
           "Nome Macchina": st.column_config.TextColumn("Nome Dispositivo"),
           "Tipologia": st.column_config.SelectboxColumn(
-              "Tipologia", options=["PC / Macchina", "Stampante", "Switch"]
+              "Tipologia", options=["", "PC / Macchina", "Stampante", "Switch"]
           ),
           "Marca": st.column_config.TextColumn("Marca"),
           "Modello": st.column_config.TextColumn("Modello"),
@@ -458,6 +461,9 @@ with tab_hardware:
     ):
       nuovo_nome = ""
       df_inventario_modificato.loc[i, "Nome Macchina"] = ""
+
+    if nuova_tipologia == "None" or nuova_tipologia == "nan" or nuova_tipologia is None:
+      nuova_tipologia = ""
 
     st.session_state.hardware_dettagli[ip_comp] = {
         "Marca": str(df_inventario_modificato.loc[i, "Marca"]),
