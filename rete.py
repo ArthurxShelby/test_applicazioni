@@ -13,7 +13,7 @@ sedi_config = [
     },
     {
         "id": 2,
-        "nome": "Trieste",
+        "nome": "Sede Centrale",
         "blocco": "39.0",
         "subnet": "254.0",
     },
@@ -65,6 +65,9 @@ if "dataframes_rete" not in st.session_state:
     elif idx == 1:
       base_ip = "39"
       range_ip = range(1, 256)
+    elif idx == 2:
+      base_ip = "86"
+      range_ip = range(1, 256)
     else:
       third_oct = item["blocco"].split(".")[0]
       base_ip = f"192.168.{third_oct}"
@@ -89,6 +92,8 @@ else:
         base_ip = "38"
       elif idx == 1:
         base_ip = "39"
+      elif idx == 2:
+        base_ip = "86"
       else:
         third_oct = item["blocco"].split(".")[0]
         base_ip = f"192.168.{third_oct}"
@@ -103,6 +108,10 @@ else:
           ip_num = i + 1
           ip_completo = f"39.{ip_num}"
           ultimi_due_ip = f"39.{ip_num}"
+        elif idx == 2:
+          ip_num = i + 1
+          ip_completo = f"86.{ip_num}"
+          ultimi_due_ip = f"86.{ip_num}"
         else:
           ip_parz = str(row.get("Indirizzo IP", f"1.{i}"))
           if ip_parz.count(".") == 1:
@@ -138,6 +147,8 @@ if idx_selezionato == 0:
   blocco_completo_ip = "38"
 elif idx_selezionato == 1:
   blocco_completo_ip = "39"
+elif idx_selezionato == 2:
+  blocco_completo_ip = "86"
 else:
   third_oct_scelto = sede_scelta["blocco"].split(".")[0]
   blocco_completo_ip = f"192.168.{third_oct_scelto}"
@@ -302,6 +313,11 @@ with tab_hardware:
               elif idx_selezionato == 1:
                 if not ip_file.startswith("39."):
                   ip_file_completo = f"39.{ip_file}"
+                else:
+                  ip_file_completo = ip_file
+              elif idx_selezionato == 2:
+                if not ip_file.startswith("86."):
+                  ip_file_completo = f"86.{ip_file}"
                 else:
                   ip_file_completo = ip_file
               else:
