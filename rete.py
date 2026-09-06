@@ -210,6 +210,7 @@ with tab_rete:
               "Tipologia (Richiede Nome)",
               options=["", "PC / Macchina", "Stampante", "Switch"],
               required=False,
+              placeholder="",
           ),
           "Stato": st.column_config.SelectboxColumn(
               "Stato", options=["🟢 Libero", "🔴 Occupato"], required=True
@@ -446,7 +447,10 @@ with tab_hardware:
           ),
           "Nome Macchina": st.column_config.TextColumn("Nome Dispositivo"),
           "Tipologia": st.column_config.SelectboxColumn(
-              "Tipologia (Richiede Nome)", options=["", "PC / Macchina", "Stampante", "Switch"]
+              "Tipologia (Richiede Nome)",
+              options=["", "PC / Macchina", "Stampante", "Switch"],
+              required=False,
+              placeholder="",
           ),
           "Marca": st.column_config.TextColumn("Marca"),
           "Modello": st.column_config.TextColumn("Modello"),
