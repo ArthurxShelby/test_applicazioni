@@ -2,7 +2,7 @@ import ipaddress
 import pandas as pd
 import streamlit as st
 
-st.subheader("Panoramica Sedi e Reti con Stati Dinamici")
+st.subheader("Gestione Interattiva Sedi e Reti IP")
 
 sedi_config = [
     {
@@ -55,36 +55,51 @@ sedi_config = [
     },
 ]
 
-# ⚠️ Vuoto per default: nessun IP occupato finché non registri una macchina reale
-dispositivi_registrati = {}
+# Inizializza lo stato di sessione per rendere persistenti le modifiche
+if "dataframes_rete" not in st.session_state:
+  st.session_state.dataframes_rete = {}
+  for idx, item in enumerate(sedi_config):
+    base_ip = item["blocco"].rsplit(".", 1)[0]
+    righe_ip = []
+    for i in range(256):
+      righe_ip.append({
+          "Indirizzo IP": f"{base_ip}.{i}",
+          "Nome Macchina": "",
+          "Stato": "🟢 Libero",
+      })
+    st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
 
-
-def colora_stato(valore):
-  if "Occupata" in valore:
-    return "color: #ff4b4b; font-weight: bold;"  # Rosso
-  else:
-    return "color: #28a745; font-weight: bold;"  # Verde
-
-
-for item in sedi_config:
+for idx, item in enumerate(sedi_config):
   label = f"📍 Sede: {item['nome']} ({item['gruppo']})  |  Rete: {item['blocco']}/24  |  Subnet Mask: {item['subnet']}"
 
   with st.expander(label):
-    base_ip = item["blocco"].rsplit(".", 1)[0]
-    righe_ip = []
+    df_corrente = st.session_state.dataframes_rete[idx]
 
-    for i in range(256):
-      indirizzo = f"{base_ip}.{i}"
+    # Tabella editabile con st.data_editor
+    df_modificato = st.data_editor(
+        df_corrente,
+        column_config={
+            "Indirizzo IP": st.column_config.TextColumn(
+                "Indirizzo IP", disabled=True
+            ),
+            "Nome Macchina": st.column_config.TextColumn(
+                "Nome Macchina (Digita per occupare)"
+            ),
+            "Stato": st.column_config.SelectboxColumn(
+                "Stato", options=["🟢 Libero", "🔴 Occupato"], required=True
+            ),
+        },
+        key=f"editor_sede_{idx}",
+        use_container_width=True,
+        hide_index=True,
+    )
 
-      if indirizzo in dispositivi_registrati:
-        nome_macchina = dispositivi_registrati[indirizzo]
-        stato = f"Occupata ({nome_macchina})"
-      else:
-        stato = "Disponibile / Libero"
+    # Logica automatica: se inserisci un nome macchina, lo stato diventa rosso (Occupato)
+    for i in range(len(df_modificato)):
+      nome_mac = str(df_modificato.loc[i, "Nome Macchina"]).strip()
+      if nome_mac and nome_mac != "nan":
+        df_modificato.loc[i, "Stato"] = "🔴 Occupato"
+      elif df_modificato.loc[i, "Stato"] == "🟢 Libero":
+        df_modificato.loc[i, "Nome Macchina"] = ""
 
-      righe_ip.append({"Indirizzo IP": indirizzo, "Stato": stato})
-
-    df = pd.DataFrame(righe_ip)
-    df_stilizzato = df.style.map(colora_stato, subset=["Stato"])
-
-    st.dataframe(df_stilizzato, use_container_width=True)
+    st.session_state.dataframes_rete[idx] = df_modificato
