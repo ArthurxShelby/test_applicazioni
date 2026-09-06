@@ -20,7 +20,7 @@ sedi_config = [
     {
         "id": 3,
         "nome": "Monfalcone",
-        "blocco": "3.0",
+        "blocco": "86.0",
         "subnet": "255.0",
     },
     {
