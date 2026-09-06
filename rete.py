@@ -2,6 +2,24 @@ import ipaddress
 import pandas as pd
 import streamlit as st
 
+# Controllo autenticazione tramite st.secrets
+if "autenticato" not in st.session_state:
+  st.session_state.autenticato = False
+
+if not st.session_state.autenticato:
+  st.subheader("🔐 Accesso Protetto")
+  password_inserita = st.text_input(
+      "Inserisci la password per accedere", type="password"
+  )
+  if st.button("Accedi"):
+    app_password = st.secrets.get("APP_PASSWORD", "")
+    if password_inserita == app_password:
+      st.session_state.autenticato = True
+      st.rerun()
+    else:
+      st.error("Password errata.")
+  st.stop()
+
 st.subheader("Gestione Reti e Hardware per Sede")
 
 sedi_config = [
@@ -408,14 +426,11 @@ with tab_hardware:
     if not idx_r.empty:
       vecchio_nome = str(df_rete_sede.loc[idx_r[0], "Nome Macchina"])
       if vecchio_nome != nuovo_nome:
-        df_rete_sede.loc[idx_r, "Nome Campionamento" if False else "Nome Macchina"] = nuovo_nome
+        df_rete_sede.loc[idx_r, "Nome Macchina"] = nuovo_nome
         if nuovo_nome:
           df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
         else:
           df_rete_sede.loc[idx_r, "Stato"] = "🟢 Libero"
-          if ip_comp in st.session_state.hardware_dettagli:
-            # Rimuoviamo solo se i campi sono vuoti o lasciati a default
-            pass
         inv_modificato = True
 
   st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
