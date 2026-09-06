@@ -66,10 +66,15 @@ sedi_config = [
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
   for idx, item in enumerate(sedi_config):
-    third_oct = item["blocco"].split(".")[0]
-    base_ip = f"192.168.{third_oct}"
     righe_ip = []
-    range_ip = range(1, 256) if idx == 0 else range(256)
+    if idx == 0:
+      base_ip = "38"
+      range_ip = range(1, 256)
+    else:
+      third_oct = item["blocco"].split(".")[0]
+      base_ip = f"192.168.{third_oct}"
+      range_ip = range(256)
+
     for i in range_ip:
       ip_completo = f"{base_ip}.{i}"
       parti = ip_completo.split(".")
@@ -85,19 +90,28 @@ else:
   for idx, item in enumerate(sedi_config):
     if idx in st.session_state.dataframes_rete:
       df = st.session_state.dataframes_rete[idx]
-      third_oct = item["blocco"].split(".")[0]
-      base_ip = f"192.168.{third_oct}"
+      if idx == 0:
+        base_ip = "38"
+      else:
+        third_oct = item["blocco"].split(".")[0]
+        base_ip = f"192.168.{third_oct}"
+
       righe_ip = []
       for i, row in df.iterrows():
-        ip_parz = str(row.get("Indirizzo IP", f"38.1" if idx == 0 else f"1.{i}"))
-        if ip_parz.count(".") == 1:
-          ultimi_due_ip = ip_parz
-          ip_completo = f"{base_ip}.{ip_parz.split('.')[-1]}"
+        if idx == 0:
+          ip_num = i + 1
+          ip_completo = f"38.{ip_num}"
+          ultimi_due_ip = f"38.{ip_num}"
         else:
-          ip_completo = f"{base_ip}.{i}"
-          parti = ip_completo.split(".")
-          ultimi_due_ip = f"{parti[-2]}.{parti[-1]}"
-          
+          ip_parz = str(row.get("Indirizzo IP", f"1.{i}"))
+          if ip_parz.count(".") == 1:
+            ultimi_due_ip = ip_parz
+            ip_completo = f"{base_ip}.{ip_parz.split('.')[-1]}"
+          else:
+            ip_completo = f"{base_ip}.{i}"
+            parti = ip_completo.split(".")
+            ultimi_due_ip = f"{parti[-2]}.{parti[-1]}"
+
         righe_ip.append({
             "Indirizzo IP": ultimi_due_ip,
             "_ip_completo": ip_completo,
@@ -119,8 +133,12 @@ idx_selezionato = st.selectbox(
 )
 
 sede_scelta = sedi_config[idx_selezionato]
-third_oct_scelto = sede_scelta["blocco"].split(".")[0]
-blocco_completo_ip = f"192.168.{third_oct_scelto}"
+if idx_selezionato == 0:
+  blocco_completo_ip = "38"
+else:
+  third_oct_scelto = sede_scelta["blocco"].split(".")[0]
+  blocco_completo_ip = f"192.168.{third_oct_scelto}"
+
 subnet_ultimi_due = sede_scelta["subnet"]
 
 tab_rete, tab_hardware = st.tabs(
@@ -144,7 +162,7 @@ with tab_rete:
       df_per_editor,
       column_config={
           "Indirizzo IP": st.column_config.TextColumn(
-              "Indirizzo IP (Ultimi 2 blocchi)", disabled=True
+              "Indirizzo IP", disabled=True
           ),
           "Nome Macchina": st.column_config.TextColumn(
               "Nome Macchina (Digita e premi Invio)"
@@ -278,10 +296,16 @@ with tab_hardware:
             for _, row in df_import.iterrows():
               ip_file = str(row.get("Indirizzo IP", "")).strip()
 
-              if ip_file.count(".") == 1:
-                ip_file_completo = f"{base_ip_sede}.{ip_file.split('.')[-1]}"
+              if idx_selezionato == 0:
+                if not ip_file.startswith("38."):
+                  ip_file_completo = f"38.{ip_file}"
+                else:
+                  ip_file_completo = ip_file
               else:
-                ip_file_completo = ip_file
+                if ip_file.count(".") == 1:
+                  ip_file_completo = f"{base_ip_sede}.{ip_file.split('.')[-1]}"
+                else:
+                  ip_file_completo = ip_file
 
               if ip_file_completo.startswith(base_ip_sede):
                 nome_mac_file = str(row.get("Nome Macchina", "")).strip()
