@@ -189,15 +189,11 @@ with tab_hardware:
   df_rete_sede = st.session_state.dataframes_rete[idx_selezionato]
 
   with st.expander(
-      "🛠️ Aggiungi dettagli tecnici avanzati (Manuale)", expanded=False
+      "🛠️ Aggiungi dettagli tecnici avanzati (Manuale)", expanded=True
   ):
-    macchine_occupate = df_rete_sede[
-        df_rete_sede["Stato"] == "🔴 Occupato"
-    ].to_dict("records")
+    macchine_occupate = df_rete_sede.to_dict("records")
     with st.form(key=f"form_hw_{idx_selezionato}"):
-      ip_disponibili_mostrati = [
-          m["Indirizzo IP"] for m in macchine_occupate if m["Nome Macchina"].strip()
-      ]
+      ip_disponibili_mostrati = [m["Indirizzo IP"] for m in macchine_occupate]
 
       if ip_disponibili_mostrati:
         scelta_mostrata = st.selectbox("Seleziona IP Macchina", ip_disponibili_mostrati)
@@ -207,16 +203,48 @@ with tab_hardware:
             if m["Indirizzo IP"] == scelta_mostrata
         ][0]
 
+        dettagli_esistenti = st.session_state.hardware_dettagli.get(
+            ip_scelto, {}
+        )
+
         col1, col2 = st.columns(2)
         with col1:
-          hw_marca = st.text_input("Marca (es. Dell, HP)")
-          hw_modello = st.text_input("Modello")
-          hw_cpu = st.text_input("Processore")
+          hw_marca = st.text_input(
+              "Marca (es. Dell, HP)",
+              value=dettagli_esistenti.get("Marca", ""),
+          )
+          hw_modello = st.text_input(
+              "Modello", value=dettagli_esistenti.get("Modello", "")
+          )
+          hw_cpu = st.text_input(
+              "Processore", value=dettagli_esistenti.get("Processore", "")
+          )
         with col2:
-          hw_ram = st.number_input("RAM (GB)", min_value=2, max_value=256, value=16)
-          hw_tipo_hd = st.selectbox("Tipo HD", ["SSD", "HDD", "NVMe"])
-          hw_cap_hd = st.text_input("Capienza HD")
-          hw_garanzia = st.date_input("Scadenza Garanzia")
+          ram_salvata = dettagli_esistenti.get("RAM", "16 GB")
+          try:
+            ram_val = int(str(ram_salvata).replace(" GB", "").strip())
+          except:
+            ram_val = 16
+          hw_ram = st.number_input("RAM (GB)", min_value=2, max_value=256, value=ram_val)
+          hw_tipo_hd = st.selectbox(
+              "Tipo HD",
+              ["SSD", "HDD", "NVMe"],
+              index=(
+                  ["SSD", "HDD", "NVMe"].index(
+                      dettagli_esistenti.get("Tipo HD", "SSD")
+                  )
+                  if dettagli_esistenti.get("Tipo HD", "SSD")
+                  in ["SSD", "HDD", "NVMe"]
+                  else 0
+              ),
+          )
+          hw_cap_hd = st.text_input(
+              "Capienza HD", value=dettagli_esistenti.get("Capienza HD", "")
+          )
+          hw_garanzia = st.text_input(
+              "Scadenza Garanzia",
+              value=dettagli_esistenti.get("Garanzia", ""),
+          )
 
         btn_salva = st.form_submit_button("Salva Specifiche Tecniche")
         if btn_salva:
@@ -229,13 +257,14 @@ with tab_hardware:
               "Capienza HD": hw_cap_hd,
               "Garanzia": str(hw_garanzia),
           }
+          idx_r = df_rete_sede[
+              df_rete_sede["_ip_completo"] == ip_scelto
+          ].index
+          if not idx_r.empty and df_rete_sede.loc[idx_r[0], "Stato"] != "🔴 Occupato":
+            df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
+            st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
           st.success(f"Specifiche salvate con successo per l'IP {scelta_mostrata}!")
           st.rerun()
-      else:
-        st.info(
-            "Prima inserisci almeno un nome macchina nella tab 'Blocco IP &"
-            " Occupazione' per associargli i componenti hardware."
-        )
 
   with st.expander("📁 Importa inventario da file (CSV o Excel)"):
     st.info(
@@ -308,96 +337,87 @@ with tab_hardware:
   st.markdown("---")
   st.write("📋 **Inventario Completo della Sede (Modificabile):**")
 
-  macchine_occupate_aggiornate = df_rete_sede[
-      df_rete_sede["Stato"] == "🔴 Occupato"
-  ].to_dict("records")
+  lista_completa = []
+  for m in df_rete_sede.to_dict("records"):
+    ip_comp = m["_ip_completo"]
+    dettagli = st.session_state.hardware_dettagli.get(ip_comp, {})
 
-  if macchine_occupate_aggiornate:
-    lista_completa = []
-    for m in macchine_occupate_aggiornate:
-      ip_comp = m["_ip_completo"]
-      dettagli = st.session_state.hardware_dettagli.get(ip_comp, {})
+    lista_completa.append({
+        "Indirizzo IP": m["Indirizzo IP"],
+        "_ip_completo": ip_comp,
+        "Nome Macchina": m["Nome Macchina"],
+        "Marca": dettagli.get("Marca", "-"),
+        "Modello": dettagli.get("Modello", "-"),
+        "Processore": dettagli.get("Processore", "-"),
+        "RAM": dettagli.get("RAM", "-"),
+        "Tipo HD": dettagli.get("Tipo HD", "-"),
+        "Capienza HD": dettagli.get("Capienza HD", "-"),
+        "Garanzia": dettagli.get("Garanzia", "-"),
+    })
 
-      lista_completa.append({
-          "Indirizzo IP": m["Indirizzo IP"],
-          "_ip_completo": ip_comp,
-          "Nome Macchina": m["Nome Macchina"],
-          "Marca": dettagli.get("Marca", "-"),
-          "Modello": dettagli.get("Modello", "-"),
-          "Processore": dettagli.get("Processore", "-"),
-          "RAM": dettagli.get("RAM", "-"),
-          "Tipo HD": dettagli.get("Tipo HD", "-"),
-          "Capienza HD": dettagli.get("Capienza HD", "-"),
-          "Garanzia": dettagli.get("Garanzia", "-"),
-      })
+  df_inventario_corrente = pd.DataFrame(lista_completa)
+  df_inv_per_editor = df_inventario_corrente.drop(
+      columns=["_ip_completo"], errors="ignore"
+  )
 
-    df_inventario_corrente = pd.DataFrame(lista_completa)
-    df_inv_per_editor = df_inventario_corrente.drop(
-        columns=["_ip_completo"], errors="ignore"
-    )
+  df_inventario_modificato = st.data_editor(
+      df_inv_per_editor,
+      column_config={
+          "Indirizzo IP": st.column_config.TextColumn(
+              "Indirizzo IP", disabled=True
+          ),
+          "Nome Macchina": st.column_config.TextColumn("Nome Macchina"),
+          "Marca": st.column_config.TextColumn("Marca"),
+          "Modello": st.column_config.TextColumn("Modello"),
+          "Processore": st.column_config.TextColumn("Processore"),
+          "RAM": st.column_config.TextColumn("RAM"),
+          "Tipo HD": st.column_config.TextColumn("Tipo HD"),
+          "Capienza HD": st.column_config.TextColumn("Capienza HD"),
+          "Garanzia": st.column_config.TextColumn("Garanzia"),
+      },
+      key=f"editor_inventario_{idx_selezionato}",
+      use_container_width=True,
+      hide_index=True,
+  )
 
-    df_inventario_modificato = st.data_editor(
-        df_inv_per_editor,
-        column_config={
-            "Indirizzo IP": st.column_config.TextColumn(
-                "Indirizzo IP", disabled=True
-            ),
-            "Nome Macchina": st.column_config.TextColumn("Nome Macchina"),
-            "Marca": st.column_config.TextColumn("Marca"),
-            "Modello": st.column_config.TextColumn("Modello"),
-            "Processore": st.column_config.TextColumn("Processore"),
-            "RAM": st.column_config.TextColumn("RAM"),
-            "Tipo HD": st.column_config.TextColumn("Tipo HD"),
-            "Capienza HD": st.column_config.TextColumn("Capienza HD"),
-            "Garanzia": st.column_config.TextColumn("Garanzia"),
-        },
-        key=f"editor_inventario_{idx_selezionato}",
-        use_container_width=True,
-        hide_index=True,
-    )
+  inv_modificato = False
+  for i in range(len(df_inventario_modificato)):
+    ip_comp = df_inventario_corrente.loc[i, "_ip_completo"]
+    nuovo_nome = str(df_inventario_modificato.loc[i, "Nome Macchina"]).strip()
 
-    inv_modificato = False
-    for i in range(len(df_inventario_modificato)):
-      ip_comp = df_inventario_corrente.loc[i, "_ip_completo"]
-      nuovo_nome = str(
-          df_inventario_modificato.loc[i, "Nome Macchina"]
-      ).strip()
+    if (
+        nuovo_nome == "None"
+        or nuovo_nome == "nan"
+        or nuovo_nome == ""
+        or nuovo_nome is None
+    ):
+      nuovo_nome = ""
+      df_inventario_modificato.loc[i, "Nome Macchina"] = ""
 
-      if (
-          nuovo_nome == "None"
-          or nuovo_nome == "nan"
-          or nuovo_nome == ""
-          or nuovo_nome is None
-      ):
-        nuovo_nome = ""
-        df_inventario_modificato.loc[i, "Nome Macchina"] = ""
+    st.session_state.hardware_dettagli[ip_comp] = {
+        "Marca": str(df_inventario_modificato.loc[i, "Marca"]),
+        "Modello": str(df_inventario_modificato.loc[i, "Modello"]),
+        "Processore": str(df_inventario_modificato.loc[i, "Processore"]),
+        "RAM": str(df_inventario_modificato.loc[i, "RAM"]),
+        "Tipo HD": str(df_inventario_modificato.loc[i, "Tipo HD"]),
+        "Capienza HD": str(df_inventario_modificato.loc[i, "Capienza HD"]),
+        "Garanzia": str(df_inventario_modificato.loc[i, "Garanzia"]),
+    }
 
-      st.session_state.hardware_dettagli[ip_comp] = {
-          "Marca": str(df_inventario_modificato.loc[i, "Marca"]),
-          "Modello": str(df_inventario_modificato.loc[i, "Modello"]),
-          "Processore": str(df_inventario_modificato.loc[i, "Processore"]),
-          "RAM": str(df_inventario_modificato.loc[i, "RAM"]),
-          "Tipo HD": str(df_inventario_modificato.loc[i, "Tipo HD"]),
-          "Capienza HD": str(df_inventario_modificato.loc[i, "Capienza HD"]),
-          "Garanzia": str(df_inventario_modificato.loc[i, "Garanzia"]),
-      }
+    idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_comp].index
+    if not idx_r.empty:
+      vecchio_nome = str(df_rete_sede.loc[idx_r[0], "Nome Macchina"])
+      if vecchio_nome != nuovo_nome:
+        df_rete_sede.loc[idx_r, "Nome Campionamento" if False else "Nome Macchina"] = nuovo_nome
+        if nuovo_nome:
+          df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
+        else:
+          df_rete_sede.loc[idx_r, "Stato"] = "🟢 Libero"
+          if ip_comp in st.session_state.hardware_dettagli:
+            # Rimuoviamo solo se i campi sono vuoti o lasciati a default
+            pass
+        inv_modificato = True
 
-      idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_comp].index
-      if not idx_r.empty:
-        vecchio_nome = str(df_rete_sede.loc[idx_r[0], "Nome Macchina"])
-        if vecchio_nome != nuovo_nome:
-          df_rete_sede.loc[idx_r, "Nome Macchina"] = nuovo_nome
-          if nuovo_nome:
-            df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
-          else:
-            df_rete_sede.loc[idx_r, "Stato"] = "🟢 Libero"
-            if ip_comp in st.session_state.hardware_dettagli:
-              del st.session_state.hardware_dettagli[ip_comp]
-          inv_modificato = True
-
-    st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
-    if inv_modificato:
-      st.rerun()
-
-  else:
-    st.warning("Nessun dispositivo registrato in questa sede.")
+  st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
+  if inv_modificato:
+    st.rerun()
