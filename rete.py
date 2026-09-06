@@ -111,7 +111,8 @@ idx_selezionato = st.selectbox(
     options=range(len(sedi_config)),
     format_func=lambda i: (
         f"{sedi_config[i]['nome']} ({sedi_config[i]['gruppo']}) — Rete:"
-        f" {sedi_config[i]['blocco']}/24"
+        f" {sedi_config[i]['blocco'].rsplit('.', 2)[0]}.X.X / "
+        f"{'.'.join(sedi_config[i]['subnet'].split('.')[-2:])}"
     ),
 )
 
