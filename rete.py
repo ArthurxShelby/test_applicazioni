@@ -1,37 +1,61 @@
 import ipaddress
 import streamlit as st
 
-st.subheader("Panoramica Completa: Sedi e Blocchi IP (0 - 255)")
+st.subheader("Panoramica Sedi e Reti")
 
-# Elenco delle sedi e dei blocchi associati (puoi sostituirlo con una query a Supabase: supabase.table('sedi').select('*').execute())
 sedi_config = [
-    {"nome": "Sede Centrale", "blocco": "192.168.1.0/24"},
-    {"nome": "Sede Centrale", "blocco": "192.168.2.0/24"},
-    {"nome": "Sede 2", "blocco": "192.168.3.0/24"},
-    {"nome": "Sede 3", "blocco": "192.168.4.0/24"},
-    {"nome": "Sede 4", "blocco": "192.168.5.0/24"},
-    {"nome": "Sede 5", "blocco": "192.168.6.0/24"},
-    {"nome": "Sede 6", "blocco": "192.168.7.0/24"},
-    {"nome": "Sede 7", "blocco": "192.168.8.0/24"},
+    {
+        "nome": "Sede Centrale",
+        "blocco": "192.168.1.0/23",
+        "subnet_mask": "255.255.254.0",
+    },
+    {
+        "nome": "Sede 2",
+        "blocco": "192.168.3.0/24",
+        "subnet_mask": "255.255.255.0",
+    },
+    {
+        "nome": "Sede 3",
+        "blocco": "192.168.4.0/24",
+        "subnet_mask": "255.255.255.0",
+    },
+    {
+        "nome": "Sede 4",
+        "blocco": "192.168.5.0/24",
+        "subnet_mask": "255.255.255.0",
+    },
+    {
+        "nome": "Sede 5",
+        "blocco": "192.168.6.0/24",
+        "subnet_mask": "255.255.255.0",
+    },
+    {
+        "nome": "Sede 6",
+        "blocco": "192.168.7.0/24",
+        "subnet_mask": "255.255.255.0",
+    },
+    {
+        "nome": "Sede 7",
+        "blocco": "192.168.8.0/24",
+        "subnet_mask": "255.255.255.0",
+    },
 ]
 
 for item in sedi_config:
   nome_sede = item["nome"]
-  blocco = item["blocco"]
+  blocco_cidr = item["blocco"]
+  subnet_mask = item["subnet_mask"]
 
-  # Crea un menu a tendina per ogni blocco di ogni sede
-  with st.expander(f"📍 {nome_sede} — Blocco: {blocco}"):
-    # Estrae la parte di rete comune (es. '192.168.1')
-    base_ip = blocco.split("/")[0].rsplit(".", 1)[0]
+  label = f"📍 Sede: {nome_sede}  |  Rete: {blocco_cidr}  |  Subnet Mask: {subnet_mask}"
 
-    # Genera tutte le 256 righe da 0 a 255
+  with st.expander(label):
+    rete = ipaddress.ip_network(blocco_cidr, strict=False)
     colonne_dati = []
-    for i in range(256):
-      indirizzo_corrente = f"{base_ip}.{i}"
+    
+    # Genera tutti gli indirizzi IP inclusi nella subnet specificata
+    for ip in rete:
       colonne_dati.append(
-          {"Indirizzo IP": indirizzo_corrente, "Stato": "Disponibile / Libero"}
+          {"Indirizzo IP": str(ip), "Stato": "Disponibile / Libero"}
       )
 
-    # Mostra la tabella completa da 0 a 255 per questo blocco
     st.dataframe(colonne_dati, use_container_width=True)
-    
