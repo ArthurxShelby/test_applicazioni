@@ -99,12 +99,9 @@ for idx, item in enumerate(sedi_config):
   old_data_map = {}
   if not old_df.empty and "_ip_completo" in old_df.columns:
     for _, r in old_df.iterrows():
-      tipologia_salvata = r.get("Tipologia", "")
-      if pd.isna(tipologia_salvata):
-        tipologia_salvata = ""
       old_data_map[r["_ip_completo"]] = {
           "Nome Macchina": r.get("Nome Macchina", ""),
-          "Tipologia": tipologia_salvata,
+          "Tipologia": "",  # Azzera forzatamente la tipologia al reset/avvio
           "Stato": r.get("Stato", "🟢 Libero"),
       }
 
@@ -123,7 +120,7 @@ for idx, item in enumerate(sedi_config):
         "Indirizzo IP": ip_completo,
         "_ip_completo": ip_completo,
         "Nome Macchina": existing["Nome Macchina"],
-        "Tipologia": existing["Tipologia"],
+        "Tipologia": "",  # Vuoto di default per ogni riga
         "Stato": existing["Stato"],
     })
   st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
@@ -224,7 +221,7 @@ with tab_rete:
     else:
       nome_mac = str(val_grezzo).strip()
 
-    if tipo_scelto is None or pd.isna(tipo_scelto):
+    if tipo_scelto is None or pd.isna(tipo_scelto) or str(tipo_scelto).strip().lower() in ["none", "nan", ""]:
       tipo_scelto = ""
 
     stato_attuale = df_modificato.loc[i, "Stato"]
@@ -236,6 +233,9 @@ with tab_rete:
       df_modificato.loc[i, "Stato"] = "🟢 Libero"
       if ip_corr in st.session_state.hardware_dettagli:
         del st.session_state.hardware_dettagli[ip_corr]
+      modificato = True
+
+    if df_corrente.loc[i, "Tipologia"] != tipo_scelto:
       modificato = True
 
     df_corrente.loc[i, "Nome Macchina"] = df_modificato.loc[i, "Nome Macchina"]
