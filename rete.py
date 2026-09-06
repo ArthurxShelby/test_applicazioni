@@ -5,7 +5,7 @@ st.subheader("Panoramica Completa: Sedi e Blocchi IP (0 - 255)")
 
 # Elenco delle sedi e dei blocchi associati (puoi sostituirlo con una query a Supabase: supabase.table('sedi').select('*').execute())
 sedi_config = [
-    {"nome": "Sede Centrale", "blocco": "192.168.1.0/24", "subnet": "255.255.254.0"},
+    {"nome": "Sede Centrale", "blocco": "192.168.1.0/24", "subnet": "hhhhhh",},
     {"nome": "Sede Centrale", "blocco": "192.168.2.0/24"},
     {"nome": "Sede 2", "blocco": "192.168.3.0/24"},
     {"nome": "Sede 3", "blocco": "192.168.4.0/24"},
