@@ -62,7 +62,6 @@ sedi_config = [
     },
 ]
 
-# Inizializzazione della memoria di sessione per le reti
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
   for idx, item in enumerate(sedi_config):
@@ -76,9 +75,9 @@ if "dataframes_rete" not in st.session_state:
       })
     st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
 
-# Inizializzazione della memoria di sessione per l'hardware dettagliato
-if "inventario_hardware" not in st.session_state:
-  st.session_state.inventario_hardware = []
+# Memoria di sessione per salvare i dettagli hardware associati a ciascun IP
+if "hardware_dettagli" not in st.session_state:
+  st.session_state.hardware_dettagli = {}
 
 sede_scelta = st.selectbox(
     "📍 Seleziona la Sede da Gestire",
@@ -146,38 +145,16 @@ with tab_hardware:
       f" {sede_scelta['gruppo']}"
   )
 
-  # 1. Estrae in automatico le macchine che hanno un IP occupato nella tabella sopra per questa sede
   df_rete_sede = st.session_state.dataframes_rete[idx_selezionato]
   macchine_occupate = df_rete_sede[
       df_rete_sede["Stato"] == "🔴 Occupato"
   ].to_dict("records")
-
-  st.write("📋 **Dispositivi registrati in questa sede (da Tabella IP):**")
-
-  if macchine_occupate:
-    lista_esterna = []
-    for m in macchine_occupate:
-      lista_esterna.append({
-          "Sede": sede_scelta["nome"],
-          "Blocco": sede_scelta["gruppo"],
-          "Indirizzo IP": m["Indirizzo IP"],
-          "Nome Macchina": m["Nome Macchina"],
-      })
-    st.dataframe(
-        pd.DataFrame(lista_esterna), use_container_width=True, hide_index=True
-    )
-  else:
-    st.warning(
-        "Nessun dispositivo registrato in questo blocco. Assegna un nome"
-        " macchina nella tab 'Blocco IP & Occupazione'."
-    )
 
   st.markdown("---")
   st.markdown(
       "🛠️ **Aggiungi dettagli tecnici avanzati per le macchine della sede:**"
   )
 
-  # Form per aggiungere marca, modello, ram, ecc. collegati alla macchina
   with st.form(key=f"form_hw_{idx_selezionato}"):
     ip_disponibili = [
         m["Indirizzo IP"]
@@ -200,6 +177,16 @@ with tab_hardware:
 
       btn_salva = st.form_submit_button("Salva Specifiche Tecniche")
       if btn_salva:
+        # Salvataggio nel dizionario di sessione collegato all'IP specifico
+        st.session_state.hardware_dettagli[ip_scelto] = {
+            "Marca": hw_marca,
+            "Modello": hw_modello,
+            "Processore": hw_cpu,
+            "RAM": f"{hw_ram} GB",
+            "Tipo HD": hw_tipo_hd,
+            "Capienza HD": hw_cap_hd,
+            "Garanzia": str(hw_garanzia),
+        }
         st.success(
             f"Specifiche salvate con successo per l'IP {ip_scelto}!"
         )
@@ -208,3 +195,31 @@ with tab_hardware:
           "Prima inserisci almeno un nome macchina nella tab 'Blocco IP &"
           " Occupazione' per associargli i componenti hardware."
       )
+
+  st.markdown("---")
+  st.write("📋 **Inventario Completo della Sede:**")
+
+  if macchine_occupate:
+    lista_completa = []
+    for m in macchine_occupate:
+      ip = m["Indirizzo IP"]
+      # Recupera i dettagli salvati per questo IP (se esistono)
+      dettagli = st.session_state.hardware_dettagli.get(ip, {})
+
+      lista_completa.append({
+          "Indirizzo IP": ip,
+          "Nome Macchina": m["Nome Macchina"],
+          "Marca": dettagli.get("Marca", "-"),
+          "Modello": dettagli.get("Modello", "-"),
+          "Processore": dettagli.get("Processore", "-"),
+          "RAM": dettagli.get("RAM", "-"),
+          "Tipo HD": dettagli.get("Tipo HD", "-"),
+          "Capienza HD": dettagli.get("Capienza HD", "-"),
+          "Garanzia": dettagli.get("Garanzia", "-"),
+      })
+
+    st.dataframe(
+        pd.DataFrame(lista_completa), use_container_width=True, hide_index=True
+    )
+  else:
+    st.warning("Nessun dispositivo registrato in questa sede.")
