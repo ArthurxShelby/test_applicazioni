@@ -9,7 +9,7 @@ sedi_config = [
         "id": 1,
         "nome": "Sede Centrale",
         "blocco": "192.168.1.0",
-        "subnet": "255.255.255.0",
+        "subnet": "255.255.254.0",
         "gruppo": "Blocco 1",
     },
     {
