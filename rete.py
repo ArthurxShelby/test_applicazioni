@@ -76,7 +76,6 @@ if "dataframes_rete" not in st.session_state:
       })
     st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
 
-# Memoria di sessione per salvare i dettagli hardware associati a ciascun IP
 if "hardware_dettagli" not in st.session_state:
   st.session_state.hardware_dettagli = {}
 
@@ -125,6 +124,7 @@ with tab_rete:
 
   modificato = False
   for i in range(len(df_modificato)):
+    ip_corr = df_modificato.loc[i, "Indirizzo IP"]
     nome_mac = str(df_modificato.loc[i, "Nome Macchina"]).strip()
     stato_attuale = df_modificato.loc[i, "Stato"]
 
@@ -133,6 +133,9 @@ with tab_rete:
       modificato = True
     elif (not nome_mac or nome_mac == "nan") and stato_attuale == "🔴 Occupato":
       df_modificato.loc[i, "Stato"] = "🟢 Libero"
+      # Pulisce i vecchi dati hardware se l'IP viene liberato
+      if ip_corr in st.session_state.hardware_dettagli:
+        del st.session_state.hardware_dettagli[ip_corr]
       modificato = True
 
   st.session_state.dataframes_rete[idx_selezionato] = df_modificato
@@ -178,7 +181,6 @@ with tab_hardware:
 
       btn_salva = st.form_submit_button("Salva Specifiche Tecniche")
       if btn_salva:
-        # Salvataggio nel dizionario di sessione collegato all'IP specifico
         st.session_state.hardware_dettagli[ip_scelto] = {
             "Marca": hw_marca,
             "Modello": hw_modello,
@@ -204,7 +206,6 @@ with tab_hardware:
     lista_completa = []
     for m in macchine_occupate:
       ip = m["Indirizzo IP"]
-      # Recupera i dettagli salvati per questo IP (se esistono)
       dettagli = st.session_state.hardware_dettagli.get(ip, {})
 
       lista_completa.append({
