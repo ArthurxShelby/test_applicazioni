@@ -26,31 +26,31 @@ sedi_config = [
     {
         "id": 4,
         "nome": "Grado",
-        "blocco": "4.0",
+        "blocco": "168.0",
         "subnet": "255.0",
     },
     {
         "id": 5,
         "nome": "Nogaro",
-        "blocco": "5.0",
+        "blocco": "61.0",
         "subnet": "255.0",
     },
     {
         "id": 6,
         "nome": "Lignao",
-        "blocco": "6.0",
+        "blocco": "26.0",
         "subnet": "255.0",
     },
     {
         "id": 7,
         "nome": "Marano",
-        "blocco": "7.0",
+        "blocco": "29.0",
         "subnet": "255.0",
     },
     {
         "id": 8,
         "nome": "MMnn",
-        "blocco": "8.0",
+        "blocco": "66.0",
         "subnet": "255.0",
     },
 ]
@@ -67,6 +67,21 @@ if "dataframes_rete" not in st.session_state:
       range_ip = range(1, 256)
     elif idx == 2:
       base_ip = "86"
+      range_ip = range(1, 256)
+    elif idx == 3:
+      base_ip = "168"
+      range_ip = range(1, 256)
+    elif idx == 4:
+      base_ip = "61"
+      range_ip = range(1, 256)
+    elif idx == 5:
+      base_ip = "26"
+      range_ip = range(1, 256)
+    elif idx == 6:
+      base_ip = "29"
+      range_ip = range(1, 256)
+    elif idx == 7:
+      base_ip = "66"
       range_ip = range(1, 256)
     else:
       third_oct = item["blocco"].split(".")[0]
@@ -94,6 +109,16 @@ else:
         base_ip = "39"
       elif idx == 2:
         base_ip = "86"
+      elif idx == 3:
+        base_ip = "168"
+      elif idx == 4:
+        base_ip = "61"
+      elif idx == 5:
+        base_ip = "26"
+      elif idx == 6:
+        base_ip = "29"
+      elif idx == 7:
+        base_ip = "66"
       else:
         third_oct = item["blocco"].split(".")[0]
         base_ip = f"192.168.{third_oct}"
@@ -112,6 +137,26 @@ else:
           ip_num = i + 1
           ip_completo = f"86.{ip_num}"
           ultimi_due_ip = f"86.{ip_num}"
+        elif idx == 3:
+          ip_num = i + 1
+          ip_completo = f"168.{ip_num}"
+          ultimi_due_ip = f"168.{ip_num}"
+        elif idx == 4:
+          ip_num = i + 1
+          ip_completo = f"61.{ip_num}"
+          ultimi_due_ip = f"61.{ip_num}"
+        elif idx == 5:
+          ip_num = i + 1
+          ip_completo = f"26.{ip_num}"
+          ultimi_due_ip = f"26.{ip_num}"
+        elif idx == 6:
+          ip_num = i + 1
+          ip_completo = f"29.{ip_num}"
+          ultimi_due_ip = f"29.{ip_num}"
+        elif idx == 7:
+          ip_num = i + 1
+          ip_completo = f"66.{ip_num}"
+          ultimi_due_ip = f"66.{ip_num}"
         else:
           ip_parz = str(row.get("Indirizzo IP", f"1.{i}"))
           if ip_parz.count(".") == 1:
@@ -149,6 +194,16 @@ elif idx_selezionato == 1:
   blocco_completo_ip = "39"
 elif idx_selezionato == 2:
   blocco_completo_ip = "86"
+elif idx_selezionato == 3:
+  blocco_completo_ip = "168"
+elif idx_selezionato == 4:
+  blocco_completo_ip = "61"
+elif idx_selezionato == 5:
+  blocco_completo_ip = "26"
+elif idx_selezionato == 6:
+  blocco_completo_ip = "29"
+elif idx_selezionato == 7:
+  blocco_completo_ip = "66"
 else:
   third_oct_scelto = sede_scelta["blocco"].split(".")[0]
   blocco_completo_ip = f"192.168.{third_oct_scelto}"
@@ -306,25 +361,28 @@ with tab_hardware:
               ip_file = str(row.get("Indirizzo IP", "")).strip()
 
               if idx_selezionato == 0:
-                if not ip_file.startswith("38."):
-                  ip_file_completo = f"38.{ip_file}"
-                else:
-                  ip_file_completo = ip_file
+                prefix = "38."
               elif idx_selezionato == 1:
-                if not ip_file.startswith("39."):
-                  ip_file_completo = f"39.{ip_file}"
-                else:
-                  ip_file_completo = ip_file
+                prefix = "39."
               elif idx_selezionato == 2:
-                if not ip_file.startswith("86."):
-                  ip_file_completo = f"86.{ip_file}"
-                else:
-                  ip_file_completo = ip_file
+                prefix = "86."
+              elif idx_selezionato == 3:
+                prefix = "168."
+              elif idx_selezionato == 4:
+                prefix = "61."
+              elif idx_selezionato == 5:
+                prefix = "26."
+              elif idx_selezionato == 6:
+                prefix = "29."
+              elif idx_selezionato == 7:
+                prefix = "66."
               else:
-                if ip_file.count(".") == 1:
-                  ip_file_completo = f"{base_ip_sede}.{ip_file.split('.')[-1]}"
-                else:
-                  ip_file_completo = ip_file
+                prefix = f"{base_ip_sede}."
+
+              if not ip_file.startswith(prefix):
+                ip_file_completo = f"{prefix}{ip_file}"
+              else:
+                ip_file_completo = ip_file
 
               if ip_file_completo.startswith(base_ip_sede):
                 nome_mac_file = str(row.get("Nome Macchina", "")).strip()
