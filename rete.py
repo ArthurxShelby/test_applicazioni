@@ -210,6 +210,7 @@ with tab_rete:
               "Tipologia (Richiede Nome)",
               options=["", "PC / Macchina", "Stampante", "Switch"],
               required=False,
+              format_func=lambda x: "" if pd.isna(x) or str(x).lower() in ["none", "nan", ""] else str(x),
           ),
           "Stato": st.column_config.SelectboxColumn(
               "Stato", options=["🟢 Libero", "🔴 Occupato"], required=True
@@ -449,6 +450,7 @@ with tab_hardware:
               "Tipologia (Richiede Nome)",
               options=["", "PC / Macchina", "Stampante", "Switch"],
               required=False,
+              format_func=lambda x: "" if pd.isna(x) or str(x).lower() in ["none", "nan", ""] else str(x),
           ),
           "Marca": st.column_config.TextColumn("Marca"),
           "Modello": st.column_config.TextColumn("Modello"),
