@@ -69,8 +69,12 @@ if "dataframes_rete" not in st.session_state:
     base_ip = item["blocco"].rsplit(".", 1)[0]
     righe_ip = []
     for i in range(256):
+      # Salviamo internamente l'IP completo ma mostriamo solo gli ultimi due blocchi
+      ip_completo = f"{base_ip}.{i}"
+      ultimi_due_ip = ".".join(ip_completo.split(".")[2:])
       righe_ip.append({
-          "Indirizzo IP": f"{base_ip}.{i}",
+          "Indirizzo IP": ultimi_due_ip,
+          "_ip_completo": ip_completo,  # Campo di servizio interno
           "Nome Macchina": "",
           "Stato": "🟢 Libero",
       })
@@ -79,7 +83,6 @@ if "dataframes_rete" not in st.session_state:
 if "hardware_dettagli" not in st.session_state:
   st.session_state.hardware_dettagli = {}
 
-# Selezione basata sugli indici per evitare errori di matching dei dizionari
 idx_selezionato = st.selectbox(
     "📍 Seleziona la Sede da Gestire",
     options=range(len(sedi_config)),
@@ -91,6 +94,9 @@ idx_selezionato = st.selectbox(
 
 sede_scelta = sedi_config[idx_selezionato]
 
+# Riduce la Subnet Mask agli ultimi due blocchi numerici
+subnet_ultimi_due = ".".join(sede_scelta["subnet"].split(".")[2:])
+
 tab_rete, tab_hardware = st.tabs(
     ["🌐 Blocco IP & Occupazione", "💻 Inventario Hardware Dettagliato"]
 )
@@ -100,17 +106,20 @@ with tab_rete:
       f"### 🌐 Gestione IP: {sede_scelta['nome']} - {sede_scelta['gruppo']}"
   )
   st.info(
-      f"Subnet Mask associata: {sede_scelta['subnet']} | Digita il nome"
-      " macchina per occupare l'IP."
+      f"Subnet Mask associata: {subnet_ultimi_due} | Digita il nome macchina"
+      " per occupare l'IP."
   )
 
   df_corrente = st.session_state.dataframes_rete[idx_selezionato]
 
+  # Nascondiamo la colonna tecnica _ip_completo dall'editor
+  df_per_editor = df_corrente.drop(columns=["_ip_completo"])
+
   df_modificato = st.data_editor(
-      df_corrente,
+      df_per_editor,
       column_config={
           "Indirizzo IP": st.column_config.TextColumn(
-              "Indirizzo IP", disabled=True
+              "Indirizzo IP (Ultimi 2 blocchi)", disabled=True
           ),
           "Nome Macchina": st.column_config.TextColumn(
               "Nome Macchina (Digita e premi Invio)"
@@ -126,7 +135,8 @@ with tab_rete:
 
   modificato = False
   for i in range(len(df_modificato)):
-    ip_corr = df_modificato.loc[i, "Indirizzo IP"]
+    ip_mostrato = df_modificato.loc[i, "Indirizzo IP"]
+    ip_corr = df_corrente.loc[i, "_ip_completo"]
     val_grezzo = df_modificato.loc[i, "Nome Macchina"]
 
     if (
@@ -150,7 +160,11 @@ with tab_rete:
         del st.session_state.hardware_dettagli[ip_corr]
       modificato = True
 
-  st.session_state.dataframes_rete[idx_selezionato] = df_modificato
+    # Sincronizziamo il dataframe di sessione mantenendo _ip_completo
+    df_corrente.loc[i, "Nome Macchina"] = df_modificato.loc[i, "Nome Macchina"]
+    df_corrente.loc[i, "Stato"] = df_modificato.loc[i, "Stato"]
+
+  st.session_state.dataframes_rete[idx_selezionato] = df_corrente
 
   if modificato:
     st.rerun()
@@ -171,13 +185,16 @@ with tab_hardware:
     ].to_dict("records")
     with st.form(key=f"form_hw_{idx_selezionato}"):
       ip_disponibili = [
-          m["Indirizzo IP"]
-          for m in macchine_occupate
-          if m["Nome Macchina"].strip()
+          m["_ip_completo"] for m in macchine_occupate if m["Nome Macchina"].strip()
+      ]
+      ip_disponibili_mostrati = [
+          m["Indirizzo IP"] for m in macchine_occupate if m["Nome Macchina"].strip()
       ]
 
       if ip_disponibili:
-        ip_scelto = st.selectbox("Seleziona IP Macchina", ip_disponibili)
+        scelta_mostrata = st.selectbox("Seleziona IP Macchina", ip_disponibili_mostrati)
+        ip_scelto = macchine_occupate[ip_disponibili_mostrati.index(scelta_mostrata)]["_ip_completo"]
+        
         col1, col2 = st.columns(2)
         with col1:
           hw_marca = st.text_input("Marca (es. Dell, HP)")
@@ -200,7 +217,7 @@ with tab_hardware:
               "Capienza HD": hw_cap_hd,
               "Garanzia": str(hw_garanzia),
           }
-          st.success(f"Specifiche salvate con successo per l'IP {ip_scelto}!")
+          st.success(f"Specifiche salvate con successo per l'IP {scelta_mostrata}!")
           st.rerun()
       else:
         st.info(
@@ -237,7 +254,14 @@ with tab_hardware:
               ip_file = str(row.get("Indirizzo IP", "")).strip()
 
               base_ip_sede = sede_scelta["blocco"].rsplit(".", 1)[0]
-              if ip_file.startswith(base_ip_sede):
+              
+              # Gestisce sia l'IP completo che l'IP ridotto a 2 blocchi
+              if len(ip_file.split(".")) == 2:
+                ip_file_completo = f"{base_ip_sede}.{ip_file.split('.')[-1]}"
+              else:
+                ip_file_completo = ip_file
+
+              if ip_file_completo.startswith(base_ip_sede):
                 nome_mac_file = str(row.get("Nome Macchina", "")).strip()
                 if (
                     nome_mac_file
@@ -245,13 +269,13 @@ with tab_hardware:
                     and nome_mac_file != "None"
                 ):
                   idx_r = df_rete_sede[
-                      df_rete_sede["Indirizzo IP"] == ip_file
+                      df_rete_sede["_ip_completo"] == ip_file_completo
                   ].index
                   if not idx_r.empty:
                     df_rete_sede.loc[idx_r, "Nome Macchina"] = nome_mac_file
                     df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
 
-                st.session_state.hardware_dettagli[ip_file] = {
+                st.session_state.hardware_dettagli[ip_file_completo] = {
                     "Marca": str(row.get("Marca", "-")),
                     "Modello": str(row.get("Modello", "-")),
                     "Processore": str(row.get("Processore", "-")),
@@ -280,11 +304,12 @@ with tab_hardware:
   if macchine_occupate_aggiornate:
     lista_completa = []
     for m in macchine_occupate_aggiornate:
-      ip = m["Indirizzo IP"]
-      dettagli = st.session_state.hardware_dettagli.get(ip, {})
+      ip_comp = m["_ip_completo"]
+      dettagli = st.session_state.hardware_dettagli.get(ip_comp, {})
 
       lista_completa.append({
-          "Indirizzo IP": ip,
+          "Indirizzo IP": m["Indirizzo IP"],
+          "_ip_completo": ip_comp,
           "Nome Macchina": m["Nome Macchina"],
           "Marca": dettagli.get("Marca", "-"),
           "Modello": dettagli.get("Modello", "-"),
@@ -296,9 +321,10 @@ with tab_hardware:
       })
 
     df_inventario_corrente = pd.DataFrame(lista_completa)
+    df_inv_per_editor = df_inventario_corrente.drop(columns=["_ip_completo"])
 
     df_inventario_modificato = st.data_editor(
-        df_inventario_corrente,
+        df_inv_per_editor,
         column_config={
             "Indirizzo IP": st.column_config.TextColumn(
                 "Indirizzo IP", disabled=True
@@ -319,7 +345,8 @@ with tab_hardware:
 
     inv_modificato = False
     for i in range(len(df_inventario_modificato)):
-      ip = df_inventario_modificato.loc[i, "Indirizzo IP"]
+      ip_mostrato = df_inventario_modificato.loc[i, "Indirizzo IP"]
+      ip_comp = df_inventario_corrente.loc[i, "_ip_completo"]
       nuovo_nome = str(
           df_inventario_modificato.loc[i, "Nome Macchina"]
       ).strip()
@@ -333,7 +360,7 @@ with tab_hardware:
         nuovo_nome = ""
         df_inventario_modificato.loc[i, "Nome Macchina"] = ""
 
-      st.session_state.hardware_dettagli[ip] = {
+      st.session_state.hardware_dettagli[ip_comp] = {
           "Marca": str(df_inventario_modificato.loc[i, "Marca"]),
           "Modello": str(df_inventario_modificato.loc[i, "Modello"]),
           "Processore": str(df_inventario_modificato.loc[i, "Processore"]),
@@ -343,7 +370,7 @@ with tab_hardware:
           "Garanzia": str(df_inventario_modificato.loc[i, "Garanzia"]),
       }
 
-      idx_r = df_rete_sede[df_rete_sede["Indirizzo IP"] == ip].index
+      idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_comp].index
       if not idx_r.empty:
         vecchio_nome = str(df_rete_sede.loc[idx_r[0], "Nome Macchina"])
         if vecchio_nome != nuovo_nome:
@@ -352,8 +379,8 @@ with tab_hardware:
             df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
           else:
             df_rete_sede.loc[idx_r, "Stato"] = "🟢 Libero"
-            if ip in st.session_state.hardware_dettagli:
-              del st.session_state.hardware_dettagli[ip]
+            if ip_comp in st.session_state.hardware_dettagli:
+              del st.session_state.hardware_dettagli[ip_comp]
           inv_modificato = True
 
     st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
