@@ -149,12 +149,14 @@ with tab_hardware:
   )
 
   df_rete_sede = st.session_state.dataframes_rete[idx_selezionato]
-  macchine_occupate = df_rete_sede[
-      df_rete_sede["Stato"] == "🔴 Occupato"
-  ].to_dict("records")
 
-  # Modulo inserito all'interno di un menu a tendina (expander)
-  with st.expander("🛠️ Aggiungi dettagli tecnici avanzati per le macchine della sede"):
+  # Menù a tendina 1: Inserimento manuale
+  with st.expander(
+      "🛠️ Aggiungi dettagli tecnici avanzati (Manuale)", expanded=False
+  ):
+    macchine_occupate = df_rete_sede[
+        df_rete_sede["Stato"] == "🔴 Occupato"
+    ].to_dict("records")
     with st.form(key=f"form_hw_{idx_selezionato}"):
       ip_disponibili = [
           m["Indirizzo IP"]
@@ -186,21 +188,87 @@ with tab_hardware:
               "Capienza HD": hw_cap_hd,
               "Garanzia": str(hw_garanzia),
           }
-          st.success(
-              f"Specifiche salvate con successo per l'IP {ip_scelto}!"
-          )
+          st.success(f"Specifiche salvate con successo per l'IP {ip_scelto}!")
+          st.rerun()
       else:
         st.info(
             "Prima inserisci almeno un nome macchina nella tab 'Blocco IP &"
             " Occupazione' per associargli i componenti hardware."
         )
 
+  # Menù a tendina 2: Importazione da File CSV / Excel
+  with st.expander("📁 Importa inventario da file (CSV o Excel)"):
+    st.info(
+        "Il file deve contenere almeno una colonna 'Indirizzo IP' e, se"
+        " desideri, le colonne: 'Nome Macchina', 'Marca', 'Modello',"
+        " 'Processore', 'RAM', 'Tipo HD', 'Capienza HD', 'Garanzia'."
+    )
+    uploaded_file = st.file_uploader(
+        "Carica file CSV o XLSX", type=["csv", "xlsx"]
+    )
+
+    if uploaded_file is not None:
+      try:
+        if uploaded_file.name.endswith(".csv"):
+          df_import = pd.read_csv(uploaded_file)
+        else:
+          df_import = pd.read_excel(uploaded_file)
+
+        # Controllo colonna obbligatoria
+        if "Indirizzo IP" not in df_import.columns:
+          st.error(
+              "Il file caricato deve contenere una colonna denominata"
+              " 'Indirizzo IP'."
+          )
+        else:
+          if st.button("Conferma e Importa Dati"):
+            count_importati = 0
+            for _, row in df_import.iterrows():
+              ip_file = str(row.get("Indirizzo IP", "")).strip()
+
+              # Verifica se l'IP appartiene alla rete della sede corrente
+              base_ip_sede = sede_scelta["blocco"].rsplit(".", 1)[0]
+              if ip_file.startswith(base_ip_sede):
+                # 1. Aggiorna lo stato IP a occupato se c'è un nome macchina
+                nome_mac_file = str(row.get("Nome Macchina", "")).strip()
+                if nome_mac_file and nome_mac_file != "nan":
+                  idx_ r = df_rete_sede[
+                      df_rete_sede["Indirizzo IP"] == ip_file
+                  ].index
+                  if not idx_r.empty:
+                    df_rete_sede.loc[idx_r, "Nome Macchina"] = nome_mac_file
+                    df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
+
+                # 2. Salva i dettagli hardware nel session_state
+                st.session_state.hardware_dettagli[ip_file] = {
+                    "Marca": str(row.get("Marca", "-")),
+                    "Modello": str(row.get("Modello", "-")),
+                    "Processore": str(row.get("Processore", "-")),
+                    "RAM": str(row.get("RAM", "-")),
+                    "Tipo HD": str(row.get("Tipo HD", "-")),
+                    "Capienza HD": str(row.get("Capienza HD", "-")),
+                    "Garanzia": str(row.get("Garanzia", "-")),
+                }
+                count_importati += 1
+
+            st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
+            st.success(
+                f"Importati con successo {count_importati} dispositivi!"
+            )
+            st.rerun()
+      except Exception as e:
+        st.error(f"Errore nella lettura del file: {e}")
+
   st.markdown("---")
   st.write("📋 **Inventario Completo della Sede:**")
 
-  if macchine_occupate:
+  macchine_occupate_aggiornate = df_rete_sede[
+      df_rete_sede["Stato"] == "🔴 Occupato"
+  ].to_dict("records")
+
+  if macchine_occupate_aggiornate:
     lista_completa = []
-    for m in macchine_occupate:
+    for m in macchine_occupate_aggiornate:
       ip = m["Indirizzo IP"]
       dettagli = st.session_state.hardware_dettagli.get(ip, {})
 
