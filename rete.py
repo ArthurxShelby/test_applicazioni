@@ -8,7 +8,7 @@ sedi_config = [
     {
         "id": 1,
         "nome": "Sede Centrale",
-        "blocco": "38.1",
+        "blocco": "38.0",
         "subnet": "254.0",
         "gruppo": "Blocco 1",
     },
@@ -66,9 +66,11 @@ sedi_config = [
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
   for idx, item in enumerate(sedi_config):
-    base_ip = item["blocco"].rsplit(".", 1)[0]
+    third_oct = item["blocco"].split(".")[0]
+    base_ip = f"192.168.{third_oct}"
     righe_ip = []
-    for i in range(256):
+    range_ip = range(1, 256) if idx == 0 else range(256)
+    for i in range_ip:
       ip_completo = f"{base_ip}.{i}"
       parti = ip_completo.split(".")
       ultimi_due_ip = f"{parti[-2]}.{parti[-1]}"
@@ -83,10 +85,11 @@ else:
   for idx, item in enumerate(sedi_config):
     if idx in st.session_state.dataframes_rete:
       df = st.session_state.dataframes_rete[idx]
-      base_ip = item["blocco"].rsplit(".", 1)[0]
+      third_oct = item["blocco"].split(".")[0]
+      base_ip = f"192.168.{third_oct}"
       righe_ip = []
       for i, row in df.iterrows():
-        ip_parz = str(row.get("Indirizzo IP", f"1.{i}"))
+        ip_parz = str(row.get("Indirizzo IP", f"38.1" if idx == 0 else f"1.{i}"))
         if ip_parz.count(".") == 1:
           ultimi_due_ip = ip_parz
           ip_completo = f"{base_ip}.{ip_parz.split('.')[-1]}"
@@ -116,7 +119,8 @@ idx_selezionato = st.selectbox(
 )
 
 sede_scelta = sedi_config[idx_selezionato]
-blocco_completo_ip = sede_scelta["blocco"]
+third_oct_scelto = sede_scelta["blocco"].split(".")[0]
+blocco_completo_ip = f"192.168.{third_oct_scelto}"
 subnet_ultimi_due = sede_scelta["subnet"]
 
 tab_rete, tab_hardware = st.tabs(
@@ -270,7 +274,7 @@ with tab_hardware:
         else:
           if st.button("Conferma e Importa Dati"):
             count_importati = 0
-            base_ip_sede = sede_scelta["blocco"].rsplit(".", 1)[0]
+            base_ip_sede = blocco_completo_ip
             for _, row in df_import.iterrows():
               ip_file = str(row.get("Indirizzo IP", "")).strip()
 
