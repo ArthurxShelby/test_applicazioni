@@ -157,7 +157,7 @@ with tab_rete:
   st.markdown(f"### 🌐 Gestione IP: {sede_scelta['nome']}")
   st.info(
       f"Subnet Mask associata: {subnet_ultimi_due} | Digita il nome dispositivo"
-      " per occupare l'IP e inserisci la tipologia."
+      " per occupare l'IP e seleziona la tipologia."
   )
 
   df_corrente = st.session_state.dataframes_rete[idx_selezionato]
@@ -191,9 +191,15 @@ with tab_rete:
 
   df_per_editor = df_corrente.drop(columns=["_ip_completo"], errors="ignore").copy()
   
+  # Pulizia preventiva dei valori per evitare qualsiasi "None" grafico
+  opzioni_tipologia = ["PC / Macchina", "Stampante", "Switch", "Altro"]
   for i in range(len(df_per_editor)):
     if not df_per_editor.loc[i, "Nome Macchina"]:
       df_per_editor.loc[i, "Tipologia"] = ""
+    else:
+      val_t = str(df_per_editor.loc[i, "Tipologia"])
+      if val_t not in opzioni_tipologia:
+        df_per_editor.loc[i, "Tipologia"] = "PC / Macchina" if val_t == "" else val_t
 
   df_per_editor = df_per_editor.fillna("")
 
@@ -206,8 +212,10 @@ with tab_rete:
           "Nome Macchina": st.column_config.TextColumn(
               "Nome / Identificativo Dispositivo"
           ),
-          "Tipologia": st.column_config.TextColumn(
-              "Tipologia (es. PC / Macchina, Stampante, Switch)"
+          "Tipologia": st.column_config.SelectboxColumn(
+              "Tipologia Dispositivo",
+              options=opzioni_tipologia,
+              required=False
           ),
           "Stato": st.column_config.SelectboxColumn(
               "Stato", options=["🟢 Libero", "🔴 Occupato"], required=True
@@ -441,7 +449,11 @@ with tab_hardware:
               "Indirizzo IP", disabled=True
           ),
           "Nome Macchina": st.column_config.TextColumn("Nome Dispositivo"),
-          "Tipologia": st.column_config.TextColumn("Tipologia"),
+          "Tipologia": st.column_config.SelectboxColumn(
+              "Tipologia",
+              options=opzioni_tipologia,
+              required=False
+          ),
           "Marca": st.column_config.TextColumn("Marca"),
           "Modello": st.column_config.TextColumn("Modello"),
           "Processore": st.column_config.TextColumn("Processore"),
