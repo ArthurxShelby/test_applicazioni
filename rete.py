@@ -125,13 +125,25 @@ with tab_rete:
   modificato = False
   for i in range(len(df_modificato)):
     ip_corr = df_modificato.loc[i, "Indirizzo IP"]
-    nome_mac = str(df_modificato.loc[i, "Nome Macchina"]).strip()
+    val_grezzo = df_modificato.loc[i, "Nome Macchina"]
+
+    # Gestione della pulizia quando viene cancellato il testo
+    if (
+        val_grezzo is None
+        or pd.isna(val_grezzo)
+        or str(val_grezzo).strip().lower() in ["none", "nan", ""]
+    ):
+      nome_mac = ""
+      df_modificato.loc[i, "Nome Macchina"] = ""
+    else:
+      nome_mac = str(val_grezzo).strip()
+
     stato_attuale = df_modificato.loc[i, "Stato"]
 
-    if nome_mac and nome_mac != "nan" and stato_attuale != "🔴 Occupato":
+    if nome_mac and stato_attuale != "🔴 Occupato":
       df_modificato.loc[i, "Stato"] = "🔴 Occupato"
       modificato = True
-    elif (not nome_mac or nome_mac == "nan") and stato_attuale == "🔴 Occupato":
+    elif not nome_mac and stato_attuale == "🔴 Occupato":
       df_modificato.loc[i, "Stato"] = "🟢 Libero"
       if ip_corr in st.session_state.hardware_dettagli:
         del st.session_state.hardware_dettagli[ip_corr]
@@ -226,7 +238,11 @@ with tab_hardware:
               base_ip_sede = sede_scelta["blocco"].rsplit(".", 1)[0]
               if ip_file.startswith(base_ip_sede):
                 nome_mac_file = str(row.get("Nome Macchina", "")).strip()
-                if nome_mac_file and nome_mac_file != "nan":
+                if (
+                    nome_mac_file
+                    and nome_mac_file != "nan"
+                    and nome_mac_file != "None"
+                ):
                   idx_r = df_rete_sede[
                       df_rete_sede["Indirizzo IP"] == ip_file
                   ].index
