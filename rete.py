@@ -127,7 +127,6 @@ with tab_rete:
     ip_corr = df_modificato.loc[i, "Indirizzo IP"]
     val_grezzo = df_modificato.loc[i, "Nome Macchina"]
 
-    # Gestione della pulizia quando viene cancellato il testo
     if (
         val_grezzo is None
         or pd.isna(val_grezzo)
@@ -270,7 +269,7 @@ with tab_hardware:
         st.error(f"Errore nella lettura del file: {e}")
 
   st.markdown("---")
-  st.write("📋 **Inventario Completo della Sede:**")
+  st.write("📋 **Inventario Completo della Sede (Modificabile):**")
 
   macchine_occupate_aggiornate = df_rete_sede[
       df_rete_sede["Stato"] == "🔴 Occupato"
@@ -294,8 +293,74 @@ with tab_hardware:
           "Garanzia": dettagli.get("Garanzia", "-"),
       })
 
-    st.dataframe(
-        pd.DataFrame(lista_completa), use_container_width=True, hide_index=True
+    df_inventario_corrente = pd.DataFrame(lista_completa)
+
+    # Tabella modificabile per l'inventario
+    df_inventario_modificato = st.data_editor(
+        df_inventario_corrente,
+        column_config={
+            "Indirizzo IP": st.column_config.TextColumn(
+                "Indirizzo IP", disabled=True
+            ),
+            "Nome Macchina": st.column_config.TextColumn("Nome Macchina"),
+            "Marca": st.column_config.TextColumn("Marca"),
+            "Modello": st.column_config.TextColumn("Modello"),
+            "Processore": st.column_config.TextColumn("Processore"),
+            "RAM": st.column_config.TextColumn("RAM"),
+            "Tipo HD": st.column_config.TextColumn("Tipo HD"),
+            "Capienza HD": st.column_config.TextColumn("Capienza HD"),
+            "Garanzia": st.column_config.TextColumn("Garanzia"),
+        },
+        key=f"editor_inventario_{idx_selezionato}",
+        use_container_width=True,
+        hide_index=True,
     )
+
+    # Sincronizza le modifiche manuali apportate nella tabella inventario
+    inv_modificato = False
+    for i in range(len(df_inventario_modificato)):
+      ip = df_inventario_modificato.loc[i, "Indirizzo IP"]
+      nuovo_nome = str(
+          df_inventario_modificato.loc[i, "Nome Macchina"]
+      ).strip()
+
+      if (
+          nuovo_nome == "None"
+          or nuovo_nome == "nan"
+          or nuovo_nome == ""
+          or nuovo_nome is None
+      ):
+        nuovo_nome = ""
+        df_inventario_modificato.loc[i, "Nome Macchina"] = ""
+
+      # Aggiorna i dettagli hardware salvati in sessione
+      st.session_state.hardware_dettagli[ip] = {
+          "Marca": str(df_inventario_modificato.loc[i, "Marca"]),
+          "Modello": str(df_inventario_modificato.loc[i, "Modello"]),
+          "Processore": str(df_inventario_modificato.loc[i, "Processore"]),
+          "RAM": str(df_inventario_modificato.loc[i, "RAM"]),
+          "Tipo HD": str(df_inventario_modificato.loc[i, "Tipo HD"]),
+          "Capienza HD": str(df_inventario_modificato.loc[i, "Capienza HD"]),
+          "Garanzia": str(df_inventario_modificato.loc[i, "Garanzia"]),
+      }
+
+      # Sincronizza anche il nome macchina e lo stato nella tab di rete principale
+      idx_r = df_rete_sede[df_rete_sede["Indirizzo IP"] == ip].index
+      if not idx_r.empty:
+        vecchio_nome = str(df_rete_sede.loc[idx_r[0], "Nome Macchina"])
+        if vecchio_nome != nuovo_nome:
+          df_rete_sede.loc[idx_r, "Nome Macchina"] = nuovo_nome
+          if nuovo_nome:
+            df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
+          else:
+            df_rete_sede.loc[idx_r, "Stato"] = "🟢 Libero"
+            if ip in st.session_state.hardware_dettagli:
+              del st.session_state.hardware_dettagli[ip]
+          inv_modificato = True
+
+    st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
+    if inv_modificato:
+      st.rerun()
+
   else:
     st.warning("Nessun dispositivo registrato in questa sede.")
