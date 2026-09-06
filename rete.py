@@ -2,111 +2,66 @@ import ipaddress
 import pandas as pd
 import streamlit as st
 
-st.subheader("Gestione Interattiva Sedi e Reti IP")
+st.subheader("Inventario Hardware e Gestione Sedi")
 
-sedi_config = [
-    {
-        "nome": "Sede Centrale",
-        "blocco": "192.168.1.0",
-        "subnet": "255.255.255.0",
-        "gruppo": "Blocco 1",
-    },
-    {
-        "nome": "Sede Centrale",
-        "blocco": "192.168.2.0",
-        "subnet": "255.255.255.0",
-        "gruppo": "Blocco 2",
-    },
-    {
-        "nome": "Sede 2",
-        "blocco": "192.168.3.0",
-        "subnet": "255.255.255.0",
-        "gruppo": "Blocco Unico",
-    },
-    {
-        "nome": "Sede 3",
-        "blocco": "192.168.4.0",
-        "subnet": "255.255.255.0",
-        "gruppo": "Blocco Unico",
-    },
-    {
-        "nome": "Sede 4",
-        "blocco": "192.168.5.0",
-        "subnet": "255.255.255.0",
-        "gruppo": "Blocco Unico",
-    },
-    {
-        "nome": "Sede 5",
-        "blocco": "192.168.6.0",
-        "subnet": "255.255.255.0",
-        "gruppo": "Blocco Unico",
-    },
-    {
-        "nome": "Sede 6",
-        "blocco": "192.168.7.0",
-        "subnet": "255.255.255.0",
-        "gruppo": "Blocco Unico",
-    },
-    {
-        "nome": "Sede 7",
-        "blocco": "192.168.8.0",
-        "subnet": "255.255.255.0",
-        "gruppo": "Blocco Unico",
-    },
+# Recupera le sedi (puoi sostituire questa finta chiamata con la query a Supabase: supabase.table('sedi').select('*').execute())
+sedi_list = [
+    {"id": 1, "nome": "Sede Centrale (Blocco 1)"},
+    {"id": 2, "nome": "Sede Centrale (Blocco 2)"},
+    {"id": 3, "nome": "Sede 2"},
+    {"id": 4, "nome": "Sede 3"},
+    {"id": 5, "nome": "Sede 4"},
+    {"id": 6, "nome": "Sede 5"},
+    {"id": 7, "nome": "Sede 6"},
+    {"id": 8, "nome": "Sede 7"},
 ]
 
-if "dataframes_rete" not in st.session_state:
-  st.session_state.dataframes_rete = {}
-  for idx, item in enumerate(sedi_config):
-    base_ip = item["blocco"].rsplit(".", 1)[0]
-    righe_ip = []
-    for i in range(256):
-      righe_ip.append({
-          "Indirizzo IP": f"{base_ip}.{i}",
-          "Nome Macchina": "",
-          "Stato": "🟢 Libero",
-      })
-    st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
+# Selezione della sede da gestire o visualizzare
+sede_selezionata = st.selectbox(
+    "Seleziona Sede", sedi_list, format_func=lambda x: x["nome"]
+)
 
-for idx, item in enumerate(sedi_config):
-  label = f"📍 Sede: {item['nome']} ({item['gruppo']})  |  Rete: {item['blocco']}/24  |  Subnet Mask: {item['subnet']}"
+# Sezione per registrare o aggiornare una macchina per la sede scelta
+with st.expander("➕ Registra / Aggiorna Hardware Macchina"):
+  with st.form(key="form_hardware"):
+    col1, col2 = st.columns(2)
+    with col1:
+      nome_macchina = st.text_input("Nome Macchina")
+      indirizzo_ip = st.text_input("Indirizzo IP")
+      marca = st.text_input("Marca (es. Dell, HP)")
+      modello = st.text_input("Modello")
+      processore = st.text_input("Processore (es. i7-12700)")
+    with col2:
+      ram_gb = st.number_input("RAM (GB)", min_value=2, max_value=256, value=16)
+      tipo_hd = st.selectbox("Tipo HD", ["SSD", "HDD", "NVMe"])
+      capienza_hd = st.text_input("Capienza HD (es. 512GB, 1TB)")
+      garanzia = st.date_input("Scadenza Garanzia")
 
-  with st.expander(label):
-    df_corrente = st.session_state.dataframes_rete[idx]
-
-    df_modificato = st.data_editor(
-        df_corrente,
-        column_config={
-            "Indirizzo IP": st.column_config.TextColumn(
-                "Indirizzo IP", disabled=True
-            ),
-            "Nome Macchina": st.column_config.TextColumn(
-                "Nome Macchina (Digita e premi Invio)"
-            ),
-            "Stato": st.column_config.SelectboxColumn(
-                "Stato", options=["🟢 Libero", "🔴 Occupato"], required=True
-            ),
-        },
-        key=f"editor_sede_{idx}",
-        use_container_width=True,
-        hide_index=True,
+    submit_button = st.form_submit_button(
+        label="Salva su Supabase (Simulato)"
     )
+    if submit_button:
+      st.success(
+          f"Macchina {nome_macchina} ({indirizzo_ip}) associata con successo alla"
+          f" {sede_selezionata['nome']}!"
+      )
 
-    # Verifica se ci sono modifiche da applicare sullo stato
-    modificato = False
-    for i in range(len(df_modificato)):
-      nome_mac = str(df_modificato.loc[i, "Nome Macchina"]).strip()
-      stato_attuale = df_modificato.loc[i, "Stato"]
+# Visualizzazione della tabella delle macchine registrate per la sede selezionata
+st.markdown(f"### 💻 Elenco Macchine - {sede_selezionata['nome']}")
 
-      if nome_mac and nome_mac != "nan" and stato_attuale != "🔴 Occupato":
-        df_modificato.loc[i, "Stato"] = "🔴 Occupato"
-        modificato = True
-      elif (not nome_mac or nome_mac == "nan") and stato_attuale == "🔴 Occupato":
-        df_modificato.loc[i, "Stato"] = "🟢 Libero"
-        modificato = True
+# Simulazione dei dati provenienti dalla tabella 'macchine' di Supabase filtrata per sede_id
+dati_hardware_finti = [
+    {
+        "Nome Macchina": "PC-Ufficio-01",
+        "IP": "192.168.1.15",
+        "Marca": "Dell",
+        "Modello": "OptiPlex 7090",
+        "CPU": "i5-11500",
+        "RAM": "16 GB",
+        "HD": "512GB SSD",
+        "Garanzia": "2027-05-12",
+    }
+]
 
-    st.session_state.dataframes_rete[idx] = df_modificato
-
-    # Se lo stato è cambiato, forza il ricaricamento visivo immediato
-    if modificato:
-      st.rerun()
+df_macchine = pd.DataFrame(dati_hardware_finti)
+st.dataframe(df_macchine, use_container_width=True, hide_index=True)
