@@ -101,6 +101,7 @@ for idx, item in enumerate(sedi_config):
     for _, r in old_df.iterrows():
       old_data_map[r["_ip_completo"]] = {
           "Nome Macchina": r.get("Nome Macchina", ""),
+          "Tipologia": r.get("Tipologia", "PC / Macchina"),
           "Stato": r.get("Stato", "🟢 Libero"),
       }
 
@@ -108,12 +109,18 @@ for idx, item in enumerate(sedi_config):
   for i in range_ip:
     ip_completo = f"{base_ip}.{i}"
     existing = old_data_map.get(
-        ip_completo, {"Nome Macchina": "", "Stato": "🟢 Libero"}
+        ip_completo,
+        {
+            "Nome Macchina": "",
+            "Tipologia": "PC / Macchina",
+            "Stato": "🟢 Libero",
+        },
     )
     righe_ip.append({
         "Indirizzo IP": ip_completo,
         "_ip_completo": ip_completo,
         "Nome Macchina": existing["Nome Macchina"],
+        "Tipologia": existing["Tipologia"],
         "Stato": existing["Stato"],
     })
   st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
@@ -141,23 +148,33 @@ tab_rete, tab_hardware = st.tabs(
 with tab_rete:
   st.markdown(f"### 🌐 Gestione IP: {sede_scelta['nome']}")
   st.info(
-      f"Subnet Mask associata: {subnet_ultimi_due} | Digita il nome macchina"
+      f"Subnet Mask associata: {subnet_ultimi_due} | Digita il nome dispositivo"
       " per occupare l'IP."
   )
 
   df_corrente = st.session_state.dataframes_rete[idx_selezionato]
 
-  # Calcolo rapido degli stati liberi e occupati
+  # Calcolo statistiche e conteggi per tipologia
   totale_ip = len(df_corrente)
-  occupati = len(
-      df_corrente[df_corrente["Stato"].astype(str).str.contains("Occupato")]
-  )
+  df_occupati = df_corrente[
+      df_corrente["Stato"].astype(str).str.contains("Occupato")
+  ]
+  occupati = len(df_occupati)
   liberi = totale_ip - occupati
+
+  n_pc = len(df_occupati[df_occupati["Tipologia"] == "PC / Macchina"])
+  n_stampanti = len(df_occupati[df_occupati["Tipologia"] == "Stampante"])
+  n_switch = len(df_occupati[df_occupati["Tipologia"] == "Switch"])
 
   col_m1, col_m2, col_m3 = st.columns(3)
   col_m1.metric("Totale IP", totale_ip)
   col_m2.metric("🟢 Liberi", liberi)
   col_m3.metric("🔴 Occupati", occupati)
+
+  col_t1, col_t2, col_t3 = st.columns(3)
+  col_t1.metric("🖥️ PC / Macchine", n_pc)
+  col_t2.metric("🖨️ Stampanti", n_stampanti)
+  col_t3.metric("🔌 Switch", n_switch)
 
   st.markdown("---")
 
@@ -170,7 +187,12 @@ with tab_rete:
               "Indirizzo IP", disabled=True
           ),
           "Nome Macchina": st.column_config.TextColumn(
-              "Nome Macchina (Digita e premi Invio)"
+              "Nome / Identificativo Dispositivo"
+          ),
+          "Tipologia": st.column_config.SelectboxColumn(
+              "Tipologia",
+              options=["PC / Macchina", "Stampante", "Switch"],
+              required=True,
           ),
           "Stato": st.column_config.SelectboxColumn(
               "Stato", options=["🟢 Libero", "🔴 Occupato"], required=True
@@ -185,6 +207,7 @@ with tab_rete:
   for i in range(len(df_modificato)):
     ip_corr = df_corrente.loc[i, "_ip_completo"]
     val_grezzo = df_modificato.loc[i, "Nome Macchina"]
+    tipo_scelto = df_modificato.loc[i, "Tipologia"]
 
     if (
         val_grezzo is None
@@ -208,6 +231,7 @@ with tab_rete:
       modificato = True
 
     df_corrente.loc[i, "Nome Macchina"] = df_modificato.loc[i, "Nome Macchina"]
+    df_corrente.loc[i, "Tipologia"] = tipo_scelto
     df_corrente.loc[i, "Stato"] = df_modificato.loc[i, "Stato"]
 
   st.session_state.dataframes_rete[idx_selezionato] = df_corrente
@@ -228,7 +252,7 @@ with tab_hardware:
       ip_disponibili_mostrati = [m["Indirizzo IP"] for m in macchine_occupate]
 
       if ip_disponibili_mostrati:
-        scelta_mostrata = st.selectbox("Seleziona IP Macchina", ip_disponibili_mostrati)
+        scelta_mostrata = st.selectbox("Seleziona IP Dispositivo", ip_disponibili_mostrati)
         ip_scelto = [
             m["_ip_completo"]
             for m in macchine_occupate
@@ -242,14 +266,14 @@ with tab_hardware:
         col1, col2 = st.columns(2)
         with col1:
           hw_marca = st.text_input(
-              "Marca (es. Dell, HP)",
+              "Marca (es. Dell, HP, Cisco)",
               value=dettagli_esistenti.get("Marca", ""),
           )
           hw_modello = st.text_input(
               "Modello", value=dettagli_esistenti.get("Modello", "")
           )
           hw_cpu = st.text_input(
-              "Processore", value=dettagli_esistenti.get("Processore", "")
+              "Processore / Dettaglio", value=dettagli_esistenti.get("Processore", "")
           )
         with col2:
           ram_salvata = dettagli_esistenti.get("RAM", "16 GB")
@@ -257,21 +281,21 @@ with tab_hardware:
             ram_val = int(str(ram_salvata).replace(" GB", "").strip())
           except:
             ram_val = 16
-          hw_ram = st.number_input("RAM (GB)", min_value=2, max_value=256, value=ram_val)
+          hw_ram = st.number_input("RAM / Porte (GB o Num)", min_value=2, max_value=256, value=ram_val)
           hw_tipo_hd = st.selectbox(
-              "Tipo HD",
-              ["SSD", "HDD", "NVMe"],
+              "Tipo Memoria / Extra",
+              ["SSD", "HDD", "NVMe", "Altro"],
               index=(
-                  ["SSD", "HDD", "NVMe"].index(
+                  ["SSD", "HDD", "NVMe", "Altro"].index(
                       dettagli_esistenti.get("Tipo HD", "SSD")
                   )
                   if dettagli_esistenti.get("Tipo HD", "SSD")
-                  in ["SSD", "HDD", "NVMe"]
+                  in ["SSD", "HDD", "NVMe", "Altro"]
                   else 0
               ),
           )
           hw_cap_hd = st.text_input(
-              "Capienza HD", value=dettagli_esistenti.get("Capienza HD", "")
+              "Capienza / Note", value=dettagli_esistenti.get("Capienza HD", "")
           )
           hw_garanzia = st.text_input(
               "Scadenza Garanzia",
@@ -300,9 +324,8 @@ with tab_hardware:
 
   with st.expander("📁 Importa inventario da file (CSV o Excel)"):
     st.info(
-        "Il file deve contenere almeno una colonna 'Indirizzo IP' e, se"
-        " desideri, le colonne: 'Nome Macchina', 'Marca', 'Modello',"
-        " 'Processore', 'RAM', 'Tipo HD', 'Capienza HD', 'Garanzia'."
+        "Il file deve contenere almeno una colonna 'Indirizzo IP' e opzionalmente:"
+        " 'Nome Macchina', 'Tipologia', 'Marca', 'Modello', ecc."
     )
     uploaded_file = st.file_uploader(
         "Carica file CSV o XLSX", type=["csv", "xlsx"]
@@ -335,6 +358,10 @@ with tab_hardware:
 
               if ip_file_completo.startswith(base_ip_sede):
                 nome_mac_file = str(row.get("Nome Macchina", "")).strip()
+                tipo_file = str(row.get("Tipologia", "PC / Macchina")).strip()
+                if tipo_file not in ["PC / Macchina", "Stampante", "Switch"]:
+                  tipo_file = "PC / Macchina"
+
                 if (
                     nome_mac_file
                     and nome_mac_file != "nan"
@@ -345,6 +372,7 @@ with tab_hardware:
                   ].index
                   if not idx_r.empty:
                     df_rete_sede.loc[idx_r, "Nome Macchina"] = nome_mac_file
+                    df_rete_sede.loc[idx_r, "Tipologia"] = tipo_file
                     df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
 
                 st.session_state.hardware_dettagli[ip_file_completo] = {
@@ -378,6 +406,7 @@ with tab_hardware:
         "Indirizzo IP": m["Indirizzo IP"],
         "_ip_completo": ip_comp,
         "Nome Macchina": m["Nome Macchina"],
+        "Tipologia": m["Tipologia"],
         "Marca": dettagli.get("Marca", "-"),
         "Modello": dettagli.get("Modello", "-"),
         "Processore": dettagli.get("Processore", "-"),
@@ -398,7 +427,10 @@ with tab_hardware:
           "Indirizzo IP": st.column_config.TextColumn(
               "Indirizzo IP", disabled=True
           ),
-          "Nome Macchina": st.column_config.TextColumn("Nome Macchina"),
+          "Nome Macchina": st.column_config.TextColumn("Nome Dispositivo"),
+          "Tipologia": st.column_config.SelectboxColumn(
+              "Tipologia", options=["PC / Macchina", "Stampante", "Switch"]
+          ),
           "Marca": st.column_config.TextColumn("Marca"),
           "Modello": st.column_config.TextColumn("Modello"),
           "Processore": st.column_config.TextColumn("Processore"),
@@ -416,6 +448,7 @@ with tab_hardware:
   for i in range(len(df_inventario_modificato)):
     ip_comp = df_inventario_corrente.loc[i, "_ip_completo"]
     nuovo_nome = str(df_inventario_modificato.loc[i, "Nome Macchina"]).strip()
+    nuova_tipologia = str(df_inventario_modificato.loc[i, "Tipologia"])
 
     if (
         nuovo_nome == "None"
@@ -439,8 +472,10 @@ with tab_hardware:
     idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_comp].index
     if not idx_r.empty:
       vecchio_nome = str(df_rete_sede.loc[idx_r[0], "Nome Macchina"])
-      if vecchio_nome != nuovo_nome:
+      vecchia_tipologia = str(df_rete_sede.loc[idx_r[0], "Tipologia"])
+      if vecchio_nome != nuovo_nome or vecchia_tipologia != nuova_tipologia:
         df_rete_sede.loc[idx_r, "Nome Macchina"] = nuovo_nome
+        df_rete_sede.loc[idx_r, "Tipologia"] = nuova_tipologia
         if nuovo_nome:
           df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
         else:
