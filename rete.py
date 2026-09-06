@@ -157,7 +157,7 @@ with tab_rete:
   st.markdown(f"### 🌐 Gestione IP: {sede_scelta['nome']}")
   st.info(
       f"Subnet Mask associata: {subnet_ultimi_due} | Digita il nome dispositivo"
-      " per occupare l'IP e sbloccare la tipologia."
+      " per occupare l'IP e inserisci la tipologia."
   )
 
   df_corrente = st.session_state.dataframes_rete[idx_selezionato]
@@ -206,11 +206,8 @@ with tab_rete:
           "Nome Macchina": st.column_config.TextColumn(
               "Nome / Identificativo Dispositivo"
           ),
-          "Tipologia": st.column_config.SelectboxColumn(
-              "Tipologia (Richiede Nome)",
-              options=["", "PC / Macchina", "Stampante", "Switch"],
-              required=False,
-              format_func=lambda x: "" if pd.isna(x) or str(x).lower() in ["none", "nan", ""] else str(x),
+          "Tipologia": st.column_config.TextColumn(
+              "Tipologia (es. PC / Macchina, Stampante, Switch)"
           ),
           "Stato": st.column_config.SelectboxColumn(
               "Stato", options=["🟢 Libero", "🔴 Occupato"], required=True
@@ -372,8 +369,6 @@ with tab_hardware:
               if ip_file_completo.startswith(base_ip_sede):
                 nome_mac_file = pulisci_valore(row.get("Nome Macchina", ""))
                 tipo_file = pulisci_valore(row.get("Tipologia", ""))
-                if tipo_file not in ["PC / Macchina", "Stampante", "Switch"] or not nome_mac_file:
-                  tipo_file = ""
 
                 if nome_mac_file:
                   idx_r = df_rete_sede[
@@ -446,12 +441,7 @@ with tab_hardware:
               "Indirizzo IP", disabled=True
           ),
           "Nome Macchina": st.column_config.TextColumn("Nome Dispositivo"),
-          "Tipologia": st.column_config.SelectboxColumn(
-              "Tipologia (Richiede Nome)",
-              options=["", "PC / Macchina", "Stampante", "Switch"],
-              required=False,
-              format_func=lambda x: "" if pd.isna(x) or str(x).lower() in ["none", "nan", ""] else str(x),
-          ),
+          "Tipologia": st.column_config.TextColumn("Tipologia"),
           "Marca": st.column_config.TextColumn("Marca"),
           "Modello": st.column_config.TextColumn("Modello"),
           "Processore": st.column_config.TextColumn("Processore"),
