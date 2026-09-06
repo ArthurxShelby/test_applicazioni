@@ -10,48 +10,56 @@ sedi_config = [
         "nome": "Trieste",
         "blocco": "38.0",
         "subnet": "254.0",
+        "range_custom": range(1, 256),
     },
     {
         "id": 2,
         "nome": "Sede Centrale",
         "blocco": "39.0",
         "subnet": "254.0",
+        "range_custom": range(1, 256),
     },
     {
         "id": 3,
         "nome": "Monfalcone",
         "blocco": "86.0",
         "subnet": "255.0",
+        "range_custom": range(1, 256),
     },
     {
         "id": 4,
         "nome": "Grado",
         "blocco": "168.0",
         "subnet": "255.0",
+        "range_custom": range(1, 256),
     },
     {
         "id": 5,
         "nome": "Nogaro",
         "blocco": "61.0",
         "subnet": "255.0",
+        "range_custom": range(1, 256),
     },
     {
         "id": 6,
         "nome": "Lignao",
         "blocco": "26.0",
         "subnet": "255.0",
+        "range_custom": range(1, 256),
     },
     {
         "id": 7,
         "nome": "Marano",
         "blocco": "29.0",
         "subnet": "255.0",
+        "range_custom": range(1, 256),
     },
     {
         "id": 8,
         "nome": "MMnn",
         "blocco": "66.0",
         "subnet": "255.0",
+        "range_custom": range(1, 256),
     },
     {
         "id": 9,
@@ -66,37 +74,8 @@ if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
   for idx, item in enumerate(sedi_config):
     righe_ip = []
-    if idx == 0:
-      base_ip = "38"
-      range_ip = range(1, 256)
-    elif idx == 1:
-      base_ip = "39"
-      range_ip = range(1, 256)
-    elif idx == 2:
-      base_ip = "86"
-      range_ip = range(1, 256)
-    elif idx == 3:
-      base_ip = "168"
-      range_ip = range(1, 256)
-    elif idx == 4:
-      base_ip = "61"
-      range_ip = range(1, 256)
-    elif idx == 5:
-      base_ip = "26"
-      range_ip = range(1, 256)
-    elif idx == 6:
-      base_ip = "29"
-      range_ip = range(1, 256)
-    elif idx == 7:
-      base_ip = "66"
-      range_ip = range(1, 256)
-    elif idx == 8:
-      base_ip = "77"
-      range_ip = item["range_custom"]
-    else:
-      third_oct = item["blocco"].split(".")[0]
-      base_ip = f"192.168.{third_oct}"
-      range_ip = range(256)
+    base_ip = item["blocco"].split(".")[0]
+    range_ip = item["range_custom"]
 
     for i in range_ip:
       ip_completo = f"{base_ip}.{i}"
@@ -113,76 +92,17 @@ else:
   for idx, item in enumerate(sedi_config):
     if idx in st.session_state.dataframes_rete:
       df = st.session_state.dataframes_rete[idx]
-      if idx == 0:
-        base_ip = "38"
-      elif idx == 1:
-        base_ip = "39"
-      elif idx == 2:
-        base_ip = "86"
-      elif idx == 3:
-        base_ip = "168"
-      elif idx == 4:
-        base_ip = "61"
-      elif idx == 5:
-        base_ip = "26"
-      elif idx == 6:
-        base_ip = "29"
-      elif idx == 7:
-        base_ip = "66"
-      elif idx == 8:
-        base_ip = "77"
-      else:
-        third_oct = item["blocco"].split(".")[0]
-        base_ip = f"192.168.{third_oct}"
+      base_ip = item["blocco"].split(".")[0]
+      range_ip = item["range_custom"]
+      val_custom_list = list(range_ip)
 
       righe_ip = []
       for i, row in df.iterrows():
-        if idx == 0:
-          ip_num = i + 1
-          ip_completo = f"38.{ip_num}"
-          ultimi_due_ip = f"38.{ip_num}"
-        elif idx == 1:
-          ip_num = i + 1
-          ip_completo = f"39.{ip_num}"
-          ultimi_due_ip = f"39.{ip_num}"
-        elif idx == 2:
-          ip_num = i + 1
-          ip_completo = f"86.{ip_num}"
-          ultimi_due_ip = f"86.{ip_num}"
-        elif idx == 3:
-          ip_num = i + 1
-          ip_completo = f"168.{ip_num}"
-          ultimi_due_ip = f"168.{ip_num}"
-        elif idx == 4:
-          ip_num = i + 1
-          ip_completo = f"61.{ip_num}"
-          ultimi_due_ip = f"61.{ip_num}"
-        elif idx == 5:
-          ip_num = i + 1
-          ip_completo = f"26.{ip_num}"
-          ultimi_due_ip = f"26.{ip_num}"
-        elif idx == 6:
-          ip_num = i + 1
-          ip_completo = f"29.{ip_num}"
-          ultimi_due_ip = f"29.{ip_num}"
-        elif idx == 7:
-          ip_num = i + 1
-          ip_completo = f"66.{ip_num}"
-          ultimi_due_ip = f"66.{ip_num}"
-        elif idx == 8:
-          val_custom_list = list(item["range_custom"])
-          ip_num = val_custom_list[i] if i < len(val_custom_list) else 65 + i
-          ip_completo = f"77.{ip_num}"
-          ultimi_due_ip = f"77.{ip_num}"
-        else:
-          ip_parz = str(row.get("Indirizzo IP", f"1.{i}"))
-          if ip_parz.count(".") == 1:
-            ultimi_due_ip = ip_parz
-            ip_completo = f"{base_ip}.{ip_parz.split('.')[-1]}"
-          else:
-            ip_completo = f"{base_ip}.{i}"
-            parti = ip_completo.split(".")
-            ultimi_due_ip = f"{parti[-2]}.{parti[-1]}"
+        ip_num = (
+            val_custom_list[i] if i < len(val_custom_list) else val_custom_list[-1]
+        )
+        ip_completo = f"{base_ip}.{ip_num}"
+        ultimi_due_ip = f"{base_ip}.{ip_num}"
 
         righe_ip.append({
             "Indirizzo IP": ultimi_due_ip,
@@ -192,11 +112,9 @@ else:
         })
       st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
     else:
-      # Gestisce nuove sedi aggiunte successivamente se non presenti nello stato
       righe_ip = []
-      if idx == 8:
-        base_ip = "77"
-        range_ip = item["range_custom"]
+      base_ip = item["blocco"].split(".")[0]
+      range_ip = item["range_custom"]
       for i in range_ip:
         ip_completo = f"{base_ip}.{i}"
         parti = ip_completo.split(".")
@@ -222,28 +140,7 @@ idx_selezionato = st.selectbox(
 )
 
 sede_scelta = sedi_config[idx_selezionato]
-if idx_selezionato == 0:
-  blocco_completo_ip = "38"
-elif idx_selezionato == 1:
-  blocco_completo_ip = "39"
-elif idx_selezionato == 2:
-  blocco_completo_ip = "86"
-elif idx_selezionato == 3:
-  blocco_completo_ip = "168"
-elif idx_selezionato == 4:
-  blocco_completo_ip = "61"
-elif idx_selezionato == 5:
-  blocco_completo_ip = "26"
-elif idx_selezionato == 6:
-  blocco_completo_ip = "29"
-elif idx_selezionato == 7:
-  blocco_completo_ip = "66"
-elif idx_selezionato == 8:
-  blocco_completo_ip = "77"
-else:
-  third_oct_scelto = sede_scelta["blocco"].split(".")[0]
-  blocco_completo_ip = f"192.168.{third_oct_scelto}"
-
+blocco_completo_ip = sede_scelta["blocco"].split(".")[0]
 subnet_ultimi_due = sede_scelta["subnet"]
 
 tab_rete, tab_hardware = st.tabs(
@@ -393,29 +290,9 @@ with tab_hardware:
           if st.button("Conferma e Importa Dati"):
             count_importati = 0
             base_ip_sede = blocco_completo_ip
+            prefix = f"{base_ip_sede}."
             for _, row in df_import.iterrows():
               ip_file = str(row.get("Indirizzo IP", "")).strip()
-
-              if idx_selezionato == 0:
-                prefix = "38."
-              elif idx_selezionato == 1:
-                prefix = "39."
-              elif idx_selezionato == 2:
-                prefix = "86."
-              elif idx_selezionato == 3:
-                prefix = "168."
-              elif idx_selezionato == 4:
-                prefix = "61."
-              elif idx_selezionato == 5:
-                prefix = "26."
-              elif idx_selezionato == 6:
-                prefix = "29."
-              elif idx_selezionato == 7:
-                prefix = "66."
-              elif idx_selezionato == 8:
-                prefix = "77."
-              else:
-                prefix = f"{base_ip_sede}."
 
               if not ip_file.startswith(prefix):
                 ip_file_completo = f"{prefix}{ip_file}"
