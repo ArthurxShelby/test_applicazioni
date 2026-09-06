@@ -133,7 +133,6 @@ with tab_rete:
       modificato = True
     elif (not nome_mac or nome_mac == "nan") and stato_attuale == "🔴 Occupato":
       df_modificato.loc[i, "Stato"] = "🟢 Libero"
-      # Pulisce i vecchi dati hardware se l'IP viene liberato
       if ip_corr in st.session_state.hardware_dettagli:
         del st.session_state.hardware_dettagli[ip_corr]
       modificato = True
@@ -154,50 +153,47 @@ with tab_hardware:
       df_rete_sede["Stato"] == "🔴 Occupato"
   ].to_dict("records")
 
-  st.markdown("---")
-  st.markdown(
-      "🛠️ **Aggiungi dettagli tecnici avanzati per le macchine della sede:**"
-  )
+  # Modulo inserito all'interno di un menu a tendina (expander)
+  with st.expander("🛠️ Aggiungi dettagli tecnici avanzati per le macchine della sede"):
+    with st.form(key=f"form_hw_{idx_selezionato}"):
+      ip_disponibili = [
+          m["Indirizzo IP"]
+          for m in macchine_occupate
+          if m["Nome Macchina"].strip()
+      ]
 
-  with st.form(key=f"form_hw_{idx_selezionato}"):
-    ip_disponibili = [
-        m["Indirizzo IP"]
-        for m in macchine_occupate
-        if m["Nome Macchina"].strip()
-    ]
+      if ip_disponibili:
+        ip_scelto = st.selectbox("Seleziona IP Macchina", ip_disponibili)
+        col1, col2 = st.columns(2)
+        with col1:
+          hw_marca = st.text_input("Marca (es. Dell, HP)")
+          hw_modello = st.text_input("Modello")
+          hw_cpu = st.text_input("Processore")
+        with col2:
+          hw_ram = st.number_input("RAM (GB)", min_value=2, max_value=256, value=16)
+          hw_tipo_hd = st.selectbox("Tipo HD", ["SSD", "HDD", "NVMe"])
+          hw_cap_hd = st.text_input("Capienza HD")
+          hw_garanzia = st.date_input("Scadenza Garanzia")
 
-    if ip_disponibili:
-      ip_scelto = st.selectbox("Seleziona IP Macchina", ip_disponibili)
-      col1, col2 = st.columns(2)
-      with col1:
-        hw_marca = st.text_input("Marca (es. Dell, HP)")
-        hw_modello = st.text_input("Modello")
-        hw_cpu = st.text_input("Processore")
-      with col2:
-        hw_ram = st.number_input("RAM (GB)", min_value=2, max_value=256, value=16)
-        hw_tipo_hd = st.selectbox("Tipo HD", ["SSD", "HDD", "NVMe"])
-        hw_cap_hd = st.text_input("Capienza HD")
-        hw_garanzia = st.date_input("Scadenza Garanzia")
-
-      btn_salva = st.form_submit_button("Salva Specifiche Tecniche")
-      if btn_salva:
-        st.session_state.hardware_dettagli[ip_scelto] = {
-            "Marca": hw_marca,
-            "Modello": hw_modello,
-            "Processore": hw_cpu,
-            "RAM": f"{hw_ram} GB",
-            "Tipo HD": hw_tipo_hd,
-            "Capienza HD": hw_cap_hd,
-            "Garanzia": str(hw_garanzia),
-        }
-        st.success(
-            f"Specifiche salvate con successo per l'IP {ip_scelto}!"
+        btn_salva = st.form_submit_button("Salva Specifiche Tecniche")
+        if btn_salva:
+          st.session_state.hardware_dettagli[ip_scelto] = {
+              "Marca": hw_marca,
+              "Modello": hw_modello,
+              "Processore": hw_cpu,
+              "RAM": f"{hw_ram} GB",
+              "Tipo HD": hw_tipo_hd,
+              "Capienza HD": hw_cap_hd,
+              "Garanzia": str(hw_garanzia),
+          }
+          st.success(
+              f"Specifiche salvate con successo per l'IP {ip_scelto}!"
+          )
+      else:
+        st.info(
+            "Prima inserisci almeno un nome macchina nella tab 'Blocco IP &"
+            " Occupazione' per associargli i componenti hardware."
         )
-    else:
-      st.info(
-          "Prima inserisci almeno un nome macchina nella tab 'Blocco IP &"
-          " Occupazione' per associargli i componenti hardware."
-      )
 
   st.markdown("---")
   st.write("📋 **Inventario Completo della Sede:**")
