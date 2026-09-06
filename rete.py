@@ -422,6 +422,7 @@ with tab_hardware:
         "_ip_completo": ip_comp,
         "Nome Macchina": nome_m,
         "Tipologia": tipo_m,
+        "Stato": m["Stato"],
         "Marca": pulisci_valore(dettagli.get("Marca", "-")),
         "Modello": pulisci_valore(dettagli.get("Modello", "-")),
         "Processore": pulisci_valore(dettagli.get("Processore", "-")),
@@ -453,6 +454,9 @@ with tab_hardware:
               "Tipologia",
               options=opzioni_tipologia,
               required=False
+          ),
+          "Stato": st.column_config.SelectboxColumn(
+              "Stato", options=["🟢 Libero", "🔴 Occupato"], required=True
           ),
           "Marca": st.column_config.TextColumn("Marca"),
           "Modello": st.column_config.TextColumn("Modello"),
@@ -505,40 +509,44 @@ with tab_hardware:
 
   # --- PULSANTI DI ESPORTAZIONE SOTTO LA TABELLA INVENTARIO ---
   st.markdown("---")
-  st.markdown(f"##### 📥 Esporta Inventario - {sede_scelta['nome']}")
+  st.markdown(f"##### 📥 Esporta Inventario (Solo Dispositivi Occupati) - {sede_scelta['nome']}")
 
   col_btn1, col_btn2 = st.columns(2)
 
-  # Prepariamo il DataFrame per l'export
+  # Prepariamo il DataFrame per l'export filtrando SOLO i dispositivi Occupati (con Nome Macchina valorizzato)
   lista_export_finale = []
   for m in df_rete_sede.to_dict("records"):
     ip_comp = m["_ip_completo"]
-    dettagli = st.session_state.hardware_dettagli.get(ip_comp, {})
-    lista_export_finale.append({
-        "Indirizzo IP": m["Indirizzo IP"],
-        "Nome Macchina": pulisci_valore(m["Nome Macchina"]),
-        "Tipologia": pulisci_valore(m["Tipologia"]),
-        "Stato": m["Stato"],
-        "Marca": pulisci_valore(dettagli.get("Marca", "")),
-        "Modello": pulisci_valore(dettagli.get("Modello", "")),
-        "Processore": pulisci_valore(dettagli.get("Processore", "")),
-        "RAM": pulisci_valore(dettagli.get("RAM", "")),
-        "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "")),
-        "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "")),
-        "Garanzia": pulisci_valore(dettagli.get("Garanzia", "")),
-    })
+    nome_mac = pulisci_valore(m["Nome Macchina"])
+    
+    # Filtriamo limitandoci alle posizioni occupate
+    if nome_mac:
+      dettagli = st.session_state.hardware_dettagli.get(ip_comp, {})
+      lista_export_finale.append({
+          "Indirizzo IP": m["Indirizzo IP"],
+          "Nome Macchina": nome_mac,
+          "Tipologia": pulisci_valore(m["Tipologia"]),
+          "Marca": pulisci_valore(dettagli.get("Marca", "")),
+          "Modello": pulisci_valore(dettagli.get("Modello", "")),
+          "Processore": pulisci_valore(dettagli.get("Processore", "")),
+          "RAM": pulisci_valore(dettagli.get("RAM", "")),
+          "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "")),
+          "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "")),
+          "Garanzia": pulisci_valore(dettagli.get("Garanzia", "")),
+      })
+      
   df_export_finale = pd.DataFrame(lista_export_finale)
 
   with col_btn1:
     # Esportazione Excel
     output_excel_tab = io.BytesIO()
     with pd.ExcelWriter(output_excel_tab, engine="openpyxl") as writer:
-      df_export_finale.to_excel(writer, index=False, sheet_name="Inventario")
+      df_export_finale.to_excel(writer, index=False, sheet_name="Inventario Occupati")
     
     st.download_button(
-        label="📊 Scarica Inventario in Excel (.xlsx)",
+        label="📊 Scarica Occupati in Excel (.xlsx)",
         data=output_excel_tab.getvalue(),
-        file_name=f"Inventario_{sede_scelta['nome'].replace(' ', '_')}.xlsx",
+        file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True,
     )
@@ -548,7 +556,7 @@ with tab_hardware:
     class PDFReportTab(FPDF):
       def header(self):
         self.set_font("helvetica", "B", 10)
-        self.cell(0, 10, f"Inventario Hardware - Sede: {sede_scelta['nome']}", 0, 1, "C")
+        self.cell(0, 10, f"Inventario Hardware Occupati - Sede: {sede_scelta['nome']}", 0, 1, "C")
         self.ln(3)
 
       def footer(self):
@@ -561,8 +569,9 @@ with tab_hardware:
       pdf.add_page()
       pdf.set_font("helvetica", "", 8)
       
-      headers = ["IP", "Nome", "Tipologia", "Stato", "Marca", "Modello", "CPU", "RAM", "HD", "Capienza", "Garanzia"]
-      col_widths = [22, 30, 25, 20, 25, 25, 25, 15, 18, 22, 25]
+      # Colonne senza lo stato
+      headers = ["IP", "Nome", "Tipologia", "Marca", "Modello", "CPU", "RAM", "HD", "Capienza", "Garanzia"]
+      col_widths = [25, 35, 30, 25, 25, 25, 18, 20, 25, 27]
       
       pdf.set_font("helvetica", "B", 8)
       for i, h in enumerate(headers):
@@ -572,31 +581,32 @@ with tab_hardware:
       pdf.set_font("helvetica", "", 7)
       for _, row in df_data.iterrows():
         pdf.cell(col_widths[0], 6, str(row["Indirizzo IP"]), 1, 0, "C")
-        pdf.cell(col_widths[1], 6, str(row["Nome Macchina"])[:18], 1, 0, "L")
-        pdf.cell(col_widths[2], 6, str(row["Tipologia"])[:15], 1, 0, "L")
-        pdf.cell(col_widths[3], 6, str(row["Stato"]).replace("🟢 ", "").replace("🔴 ", ""), 1, 0, "C")
-        pdf.cell(col_widths[4], 6, str(row["Marca"])[:15], 1, 0, "L")
-        pdf.cell(col_widths[5], 6, str(row["Modello"])[:15], 1, 0, "L")
-        pdf.cell(col_widths[6], 6, str(row["Processore"])[:15], 1, 0, "L")
-        pdf.cell(col_widths[7], 6, str(row["RAM"])[:10], 1, 0, "C")
-        pdf.cell(col_widths[8], 6, str(row["Tipo HD"])[:10], 1, 0, "C")
-        pdf.cell(col_widths[9], 6, str(row["Capienza HD"])[:12], 1, 0, "C")
-        pdf.cell(col_widths[10], 6, str(row["Garanzia"])[:15], 1, 1, "C")
+        pdf.cell(col_widths[1], 6, str(row["Nome Macchina"])[:20], 1, 0, "L")
+        pdf.cell(col_widths[2], 6, str(row["Tipologia"])[:18], 1, 0, "L")
+        pdf.cell(col_widths[3], 6, str(row["Marca"])[:15], 1, 0, "L")
+        pdf.cell(col_widths[4], 6, str(row["Modello"])[:15], 1, 0, "L")
+        pdf.cell(col_widths[5], 6, str(row["Processore"])[:15], 1, 0, "L")
+        pdf.cell(col_widths[6], 6, str(row["RAM"])[:10], 1, 0, "C")
+        pdf.cell(col_widths[7], 6, str(row["Tipo HD"])[:10], 1, 0, "C")
+        pdf.cell(col_widths[8], 6, str(row["Capienza HD"])[:12], 1, 0, "C")
+        pdf.cell(col_widths[9], 6, str(row["Garanzia"])[:15], 1, 1, "C")
         
-      # Conversione corretta in bytes per evitare l'errore bytearray
       raw_pdf = pdf.output()
       if isinstance(raw_pdf, (bytearray, bytes)):
         return bytes(raw_pdf)
       return str(raw_pdf).encode("latin1")
 
     try:
-      pdf_bytes_tab = genera_pdf_tab(df_export_finale)
-      st.download_button(
-          label="📄 Scarica Inventario in PDF (.pdf)",
-          data=pdf_bytes_tab,
-          file_name=f"Inventario_{sede_scelta['nome'].replace(' ', '_')}.pdf",
-          mime="application/pdf",
-          use_container_width=True,
-      )
+      if df_export_finale.empty:
+        st.warning("Nessun dispositivo occupato da esportare per questa sede.")
+      else:
+        pdf_bytes_tab = genera_pdf_tab(df_export_finale)
+        st.download_button(
+            label="📄 Scarica Occupati in PDF (.pdf)",
+            data=pdf_bytes_tab,
+            file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
     except Exception as e:
       st.error(f"Errore nella generazione del PDF: {e}")
