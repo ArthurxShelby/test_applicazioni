@@ -1,5 +1,6 @@
 import ipaddress
 import io
+import re
 import pandas as pd
 from fpdf import FPDF
 import streamlit as st
@@ -97,6 +98,15 @@ def pulisci_valore(val):
   if s.lower() in ["none", "nan", "", "-"]:
     return ""
   return s
+
+def estrai_anno(testo):
+  """Cerca un anno a 4 cifre (es. 2018, 2022) all'interno della stringa del processore."""
+  if not testo:
+    return 0
+  match = re.search(r'\b(19\d{2}|20\d{2})\b', str(testo))
+  if match:
+    return int(match.group(1))
+  return 0
 
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
@@ -293,7 +303,7 @@ with tab_hardware:
               "Modello", value=pulisci_valore(dettagli_esistenti.get("Modello", ""))
           )
           hw_cpu = st.text_input(
-              "Processore / Dettaglio", value=pulisci_valore(dettagli_esistenti.get("Processore", ""))
+              "Processore e Anno (es. Intel i5 2020)", value=pulisci_valore(dettagli_esistenti.get("Processore", ""))
           )
         with col2:
           ram_salvata = dettagli_esistenti.get("RAM", "16 GB")
@@ -407,7 +417,17 @@ with tab_hardware:
         st.error(f"Errore nella lettura del file: {e}")
 
   st.markdown("---")
-  st.write("📋 **Inventario Completo della Sede (Modificabile):**")
+  
+  # --- OPZIONE DI ORDINAMENTO PER ANNO ---
+  col_ord1, col_ord2 = st.columns([2, 2])
+  with col_ord1:
+    st.write("📋 **Inventario Completo della Sede (Modificabile):**")
+  with col_ord2:
+    ordinamento_scelto = st.selectbox(
+        "🔄 Ordina inventario per anno",
+        options=["Nessun ordinamento", "Anno: dal più vecchio al più recente (Crescente)", "Anno: dal più recente al più vecchio (Decrescente)"],
+        label_visibility="collapsed"
+    )
 
   lista_completa = []
   for m in df_rete_sede.to_dict("records"):
@@ -416,6 +436,7 @@ with tab_hardware:
 
     nome_m = pulisci_valore(m["Nome Macchina"])
     tipo_m = pulisci_valore(m["Tipologia"])
+    proc_val = pulisci_valore(dettagli.get("Processore", "-"))
 
     lista_completa.append({
         "Indirizzo IP": m["Indirizzo IP"],
@@ -425,7 +446,7 @@ with tab_hardware:
         "Stato": m["Stato"],
         "Marca": pulisci_valore(dettagli.get("Marca", "-")),
         "Modello": pulisci_valore(dettagli.get("Modello", "-")),
-        "Processore": pulisci_valore(dettagli.get("Processore", "-")),
+        "Processore": proc_val,
         "RAM": pulisci_valore(dettagli.get("RAM", "-")),
         "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "-")),
         "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "-")),
@@ -433,6 +454,15 @@ with tab_hardware:
     })
 
   df_inventario_corrente = pd.DataFrame(lista_completa)
+
+  # Applicazione dell'ordinamento basato sull'anno estratto dal processore
+  if "Crescente" in ordinamento_scelto:
+    df_inventario_corrente["_anno_temp"] = df_inventario_corrente["Processore"].apply(estrai_anno)
+    df_inventario_corrente = df_inventario_corrente.sort_values(by="_anno_temp", ascending=True).drop(columns=["_anno_temp"])
+  elif "Decrescente" in ordinamento_scelto:
+    df_inventario_corrente["_anno_temp"] = df_inventario_corrente["Processore"].apply(estrai_anno)
+    df_inventario_corrente = df_inventario_corrente.sort_values(by="_anno_temp", ascending=False).drop(columns=["_anno_temp"])
+
   df_inv_per_editor = df_inventario_corrente.drop(
       columns=["_ip_completo"], errors="ignore"
   ).copy()
@@ -460,7 +490,7 @@ with tab_hardware:
           ),
           "Marca": st.column_config.TextColumn("Marca"),
           "Modello": st.column_config.TextColumn("Modello"),
-          "Processore": st.column_config.TextColumn("Processore"),
+          "Processore": st.column_config.TextColumn("Processore e Anno"),
           "RAM": st.column_config.TextColumn("RAM"),
           "Tipo HD": st.column_config.TextColumn("Tipo HD"),
           "Capienza HD": st.column_config.TextColumn("Capienza HD"),
@@ -513,13 +543,12 @@ with tab_hardware:
 
   col_btn1, col_btn2 = st.columns(2)
 
-  # Prepariamo il DataFrame per l'export filtrando SOLO i dispositivi Occupati (con Nome Macchina valorizzato)
+  # Prepariamo il DataFrame per l'export filtrando SOLO i dispositivi Occupati
   lista_export_finale = []
   for m in df_rete_sede.to_dict("records"):
     ip_comp = m["_ip_completo"]
     nome_mac = pulisci_valore(m["Nome Macchina"])
     
-    # Filtriamo limitandoci alle posizioni occupate
     if nome_mac:
       dettagli = st.session_state.hardware_dettagli.get(ip_comp, {})
       lista_export_finale.append({
@@ -569,8 +598,7 @@ with tab_hardware:
       pdf.add_page()
       pdf.set_font("helvetica", "", 8)
       
-      # Colonne senza lo stato
-      headers = ["IP", "Nome", "Tipologia", "Marca", "Modello", "CPU", "RAM", "HD", "Capienza", "Garanzia"]
+      headers = ["IP", "Nome", "Tipologia", "Marca", "Modello", "CPU & Anno", "RAM", "HD", "Capienza", "Garanzia"]
       col_widths = [25, 35, 30, 25, 25, 25, 18, 20, 25, 27]
       
       pdf.set_font("helvetica", "B", 8)
