@@ -55,7 +55,6 @@ sedi_config = [
     },
 ]
 
-# Inizializza lo stato di sessione per rendere persistenti le modifiche
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
   for idx, item in enumerate(sedi_config):
@@ -75,7 +74,6 @@ for idx, item in enumerate(sedi_config):
   with st.expander(label):
     df_corrente = st.session_state.dataframes_rete[idx]
 
-    # Tabella editabile con st.data_editor
     df_modificato = st.data_editor(
         df_corrente,
         column_config={
@@ -83,7 +81,7 @@ for idx, item in enumerate(sedi_config):
                 "Indirizzo IP", disabled=True
             ),
             "Nome Macchina": st.column_config.TextColumn(
-                "Nome Macchina (Digita per occupare)"
+                "Nome Macchina (Digita e premi Invio)"
             ),
             "Stato": st.column_config.SelectboxColumn(
                 "Stato", options=["🟢 Libero", "🔴 Occupato"], required=True
@@ -94,12 +92,21 @@ for idx, item in enumerate(sedi_config):
         hide_index=True,
     )
 
-    # Logica automatica: se inserisci un nome macchina, lo stato diventa rosso (Occupato)
+    # Verifica se ci sono modifiche da applicare sullo stato
+    modificato = False
     for i in range(len(df_modificato)):
       nome_mac = str(df_modificato.loc[i, "Nome Macchina"]).strip()
-      if nome_mac and nome_mac != "nan":
+      stato_attuale = df_modificato.loc[i, "Stato"]
+
+      if nome_mac and nome_mac != "nan" and stato_attuale != "🔴 Occupato":
         df_modificato.loc[i, "Stato"] = "🔴 Occupato"
-      elif df_modificato.loc[i, "Stato"] == "🟢 Libero":
-        df_modificato.loc[i, "Nome Macchina"] = ""
+        modificato = True
+      elif (not nome_mac or nome_mac == "nan") and stato_attuale == "🔴 Occupato":
+        df_modificato.loc[i, "Stato"] = "🟢 Libero"
+        modificato = True
 
     st.session_state.dataframes_rete[idx] = df_modificato
+
+    # Se lo stato è cambiato, forza il ricaricamento visivo immediato
+    if modificato:
+      st.rerun()
