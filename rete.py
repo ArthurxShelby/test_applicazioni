@@ -70,7 +70,8 @@ if "dataframes_rete" not in st.session_state:
     righe_ip = []
     for i in range(256):
       ip_completo = f"{base_ip}.{i}"
-      ultimi_due_ip = ".".join(ip_completo.split(".")[2:])
+      parti = ip_completo.split(".")
+      ultimi_due_ip = f"{parti[-2]}.{parti[-1]}"
       righe_ip.append({
           "Indirizzo IP": ultimi_due_ip,
           "_ip_completo": ip_completo,
@@ -79,23 +80,28 @@ if "dataframes_rete" not in st.session_state:
       })
     st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
 else:
-  # Controllo di sicurezza per aggiornare sessioni esistenti prive di _ip_completo
   for idx, item in enumerate(sedi_config):
     if idx in st.session_state.dataframes_rete:
       df = st.session_state.dataframes_rete[idx]
-      if "_ip_completo" not in df.columns:
-        base_ip = item["blocco"].rsplit(".", 1)[0]
-        righe_ip = []
-        for i, row in df.iterrows():
-          ip_parz = str(row.get("Indirizzo IP", f"1.{i}"))
-          ip_completo = f"{base_ip}.{ip_parz.split('.')[-1]}" if "." in ip_parz else f"{base_ip}.{i}"
-          righe_ip.append({
-              "Indirizzo IP": ip_parz,
-              "_ip_completo": ip_completo,
-              "Nome Macchina": row.get("Nome Macchina", ""),
-              "Stato": row.get("Stato", "🟢 Libero"),
-          })
-        st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
+      base_ip = item["blocco"].rsplit(".", 1)[0]
+      righe_ip = []
+      for i, row in df.iterrows():
+        ip_parz = str(row.get("Indirizzo IP", f"1.{i}"))
+        if ip_parz.count(".") == 1:
+          ultimi_due_ip = ip_parz
+          ip_completo = f"{base_ip}.{ip_parz.split('.')[-1]}"
+        else:
+          ip_completo = f"{base_ip}.{i}"
+          parti = ip_completo.split(".")
+          ultimi_due_ip = f"{parti[-2]}.{parti[-1]}"
+          
+        righe_ip.append({
+            "Indirizzo IP": ultimi_due_ip,
+            "_ip_completo": ip_completo,
+            "Nome Macchina": row.get("Nome Macchina", ""),
+            "Stato": row.get("Stato", "🟢 Libero"),
+        })
+      st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
 
 if "hardware_dettagli" not in st.session_state:
   st.session_state.hardware_dettagli = {}
@@ -111,8 +117,8 @@ idx_selezionato = st.selectbox(
 
 sede_scelta = sedi_config[idx_selezionato]
 
-# Mostra solo gli ultimi due blocchi della subnet mask
-subnet_ultimi_due = ".".join(sede_scelta["subnet"].split(".")[2:])
+subnet_parti = sede_scelta["subnet"].split(".")
+subnet_ultimi_due = f"{subnet_parti[-2]}.{subnet_parti[-1]}"
 
 tab_rete, tab_hardware = st.tabs(
     ["🌐 Blocco IP & Occupazione", "💻 Inventario Hardware Dettagliato"]
@@ -269,7 +275,7 @@ with tab_hardware:
             for _, row in df_import.iterrows():
               ip_file = str(row.get("Indirizzo IP", "")).strip()
 
-              if len(ip_file.split(".")) == 2:
+              if ip_file.count(".") == 1:
                 ip_file_completo = f"{base_ip_sede}.{ip_file.split('.')[-1]}"
               else:
                 ip_file_completo = ip_file
