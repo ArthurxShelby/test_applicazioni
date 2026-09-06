@@ -101,7 +101,7 @@ for idx, item in enumerate(sedi_config):
     for _, r in old_df.iterrows():
       old_data_map[r["_ip_completo"]] = {
           "Nome Macchina": r.get("Nome Macchina", ""),
-          "Tipologia": r.get("Tipologia", ""),
+          "Tipologia": r.get("Tipologia", "PC / Macchina"),
           "Stato": r.get("Stato", "🟢 Libero"),
       }
 
@@ -112,7 +112,7 @@ for idx, item in enumerate(sedi_config):
         ip_completo,
         {
             "Nome Macchina": "",
-            "Tipologia": "",
+            "Tipologia": "PC / Macchina",
             "Stato": "🟢 Libero",
         },
     )
@@ -154,7 +154,7 @@ with tab_rete:
 
   df_corrente = st.session_state.dataframes_rete[idx_selezionato]
 
-  # Calcolo statistiche e conteggi per tipologia
+  # Calcolo statistiche e conteggi in evidenza per tipologia
   totale_ip = len(df_corrente)
   df_occupati = df_corrente[
       df_corrente["Stato"].astype(str).str.contains("Occupato")
@@ -166,11 +166,13 @@ with tab_rete:
   n_stampanti = len(df_occupati[df_occupati["Tipologia"] == "Stampante"])
   n_switch = len(df_occupati[df_occupati["Tipologia"] == "Switch"])
 
+  # Pannello Metriche Principali
   col_m1, col_m2, col_m3 = st.columns(3)
   col_m1.metric("Totale IP", totale_ip)
   col_m2.metric("🟢 Liberi", liberi)
   col_m3.metric("🔴 Occupati", occupati)
 
+  st.markdown("##### 📊 Riepilogo Tipologie Dispositivi")
   col_t1, col_t2, col_t3 = st.columns(3)
   col_t1.metric("🖥️ PC / Macchine", n_pc)
   col_t2.metric("🖨️ Stampanti", n_stampanti)
@@ -191,8 +193,8 @@ with tab_rete:
           ),
           "Tipologia": st.column_config.SelectboxColumn(
               "Tipologia",
-              options=["", "PC / Macchina", "Stampante", "Switch"],
-              required=False,
+              options=["PC / Macchina", "Stampante", "Switch"],
+              required=True,
           ),
           "Stato": st.column_config.SelectboxColumn(
               "Stato", options=["🟢 Libero", "🔴 Occupato"], required=True
@@ -219,8 +221,8 @@ with tab_rete:
     else:
       nome_mac = str(val_grezzo).strip()
 
-    if tipo_scelto is None or pd.isna(tipo_scelto):
-      tipo_scelto = ""
+    if tipo_scelto is None or pd.isna(tipo_scelto) or str(tipo_scelto).strip() == "":
+      tipo_scelto = "PC / Macchina"
 
     stato_attuale = df_modificato.loc[i, "Stato"]
 
@@ -361,9 +363,9 @@ with tab_hardware:
 
               if ip_file_completo.startswith(base_ip_sede):
                 nome_mac_file = str(row.get("Nome Macchina", "")).strip()
-                tipo_file = str(row.get("Tipologia", "")).strip()
+                tipo_file = str(row.get("Tipologia", "PC / Macchina")).strip()
                 if tipo_file not in ["PC / Macchina", "Stampante", "Switch"]:
-                  tipo_file = ""
+                  tipo_file = "PC / Macchina"
 
                 if (
                     nome_mac_file
@@ -432,7 +434,7 @@ with tab_hardware:
           ),
           "Nome Macchina": st.column_config.TextColumn("Nome Dispositivo"),
           "Tipologia": st.column_config.SelectboxColumn(
-              "Tipologia", options=["", "PC / Macchina", "Stampante", "Switch"]
+              "Tipologia", options=["PC / Macchina", "Stampante", "Switch"]
           ),
           "Marca": st.column_config.TextColumn("Marca"),
           "Modello": st.column_config.TextColumn("Modello"),
@@ -462,8 +464,13 @@ with tab_hardware:
       nuovo_nome = ""
       df_inventario_modificato.loc[i, "Nome Macchina"] = ""
 
-    if nuova_tipologia == "None" or nuova_tipologia == "nan" or nuova_tipologia is None:
-      nuova_tipologia = ""
+    if (
+        nuova_tipologia == "None"
+        or nuova_tipologia == "nan"
+        or nuova_tipologia == ""
+        or nuova_tipologia is None
+    ):
+      nuova_tipologia = "PC / Macchina"
 
     st.session_state.hardware_dettagli[ip_comp] = {
         "Marca": str(df_inventario_modificato.loc[i, "Marca"]),
