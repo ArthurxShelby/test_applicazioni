@@ -1,10 +1,8 @@
-import ipaddress
 import pandas as pd
 import streamlit as st
 
 st.subheader("Gestione Reti e Hardware per Sede")
 
-# Definizione delle sedi e dei relativi blocchi di rete
 sedi_config = [
     {
         "id": 1,
@@ -64,7 +62,7 @@ sedi_config = [
     },
 ]
 
-# Inizializzazione della memoria di sessione per i dataframe delle reti
+# Inizializzazione della memoria di sessione per le reti
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
   for idx, item in enumerate(sedi_config):
@@ -78,7 +76,10 @@ if "dataframes_rete" not in st.session_state:
       })
     st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
 
-# Selezione della sede dal menu a tendina principale
+# Inizializzazione della memoria di sessione per l'hardware dettagliato
+if "inventario_hardware" not in st.session_state:
+  st.session_state.inventario_hardware = []
+
 sede_scelta = st.selectbox(
     "📍 Seleziona la Sede da Gestire",
     sedi_config,
@@ -87,10 +88,8 @@ sede_scelta = st.selectbox(
     ),
 )
 
-# Trova l'indice corrispondente alla sede selezionata
 idx_selezionato = sedi_config.index(sede_scelta)
 
-# Layout a tab per dividere la visualizzazione della rete e dell'hardware dettagliato
 tab_rete, tab_hardware = st.tabs(
     ["🌐 Blocco IP & Occupazione", "💻 Inventario Hardware Dettagliato"]
 )
@@ -124,7 +123,6 @@ with tab_rete:
       hide_index=True,
   )
 
-  # Logica di aggiornamento automatico stato (Verde / Rosso)
   modificato = False
   for i in range(len(df_modificato)):
     nome_mac = str(df_modificato.loc[i, "Nome Macchina"]).strip()
@@ -148,40 +146,65 @@ with tab_hardware:
       f" {sede_scelta['gruppo']}"
   )
 
-  # Form per registrare i dettagli hardware legati a questa sede
-  with st.form(key=f"form_hw_{idx_selezionato}"):
-    col1, col2 = st.columns(2)
-    with col1:
-      hw_nome = st.text_input("Nome Macchina")
-      hw_ip = st.text_input("Indirizzo IP Assegnato")
-      hw_marca = st.text_input("Marca")
-      hw_modello = st.text_input("Modello")
-      hw_cpu = st.text_input("Processore")
-    with col2:
-      hw_ram = st.number_input("RAM (GB)", min_value=2, max_value=256, value=16)
-      hw_tipo_hd = st.selectbox("Tipo HD", ["SSD", "HDD", "NVMe"])
-      hw_cap_hd = st.text_input("Capienza HD")
-      hw_garanzia = st.date_input("Scadenza Garanzia")
+  # 1. Estrae in automatico le macchine che hanno un IP occupato nella tabella sopra per questa sede
+  df_rete_sede = st.session_state.dataframes_rete[idx_selezionato]
+  macchine_occupate = df_rete_sede[
+      df_rete_sede["Stato"] == "🔴 Occupato"
+  ].to_dict("records")
 
-    btn_salva = st.form_submit_button("Salva Componente Hardware")
-    if btn_salva:
-      st.success(
-          f"Scheda hardware per '{hw_nome}' salvata correttamente per la"
-          f" {sede_scelta['nome']}!"
-      )
+  st.write("📋 **Dispositivi registrati in questa sede (da Tabella IP):**")
 
-  # Qui in seguito collegherai la query a Supabase filtrando per sede_id == sede_scelta['id']
+  if macchine_occupate:
+    lista_esterna = []
+    for m in macchine_occupate:
+      lista_esterna.append({
+          "Sede": sede_scelta["nome"],
+          "Blocco": sede_scelta["gruppo"],
+          "Indirizzo IP": m["Indirizzo IP"],
+          "Nome Macchina": m["Nome Macchina"],
+      })
+    st.dataframe(
+        pd.DataFrame(lista_esterna), use_container_width=True, hide_index=True
+    )
+  else:
+    st.warning(
+        "Nessun dispositivo registrato in questo blocco. Assegna un nome"
+        " macchina nella tab 'Blocco IP & Occupazione'."
+    )
+
   st.markdown("---")
-  st.write("📋 **Elenco macchine registrate con specifiche complete:**")
-  # Esempio di tabella vuota o popolata dai dati del DB
-  df_hw_vuoto = pd.DataFrame(columns=[
-      "IP",
-      "Nome",
-      "Marca",
-      "Modello",
-      "CPU",
-      "RAM",
-      "HD",
-      "Garanzia",
-  ])
-  st.dataframe(df_hw_vuoto, use_container_width=True, hide_index=True)
+  st.markdown(
+      "🛠️ **Aggiungi dettagli tecnici avanzati per le macchine della sede:**"
+  )
+
+  # Form per aggiungere marca, modello, ram, ecc. collegati alla macchina
+  with st.form(key=f"form_hw_{idx_selezionato}"):
+    ip_disponibili = [
+        m["Indirizzo IP"]
+        for m in macchine_occupate
+        if m["Nome Macchina"].strip()
+    ]
+
+    if ip_disponibili:
+      ip_scelto = st.selectbox("Seleziona IP Macchina", ip_disponibili)
+      col1, col2 = st.columns(2)
+      with col1:
+        hw_marca = st.text_input("Marca (es. Dell, HP)")
+        hw_modello = st.text_input("Modello")
+        hw_cpu = st.text_input("Processore")
+      with col2:
+        hw_ram = st.number_input("RAM (GB)", min_value=2, max_value=256, value=16)
+        hw_tipo_hd = st.selectbox("Tipo HD", ["SSD", "HDD", "NVMe"])
+        hw_cap_hd = st.text_input("Capienza HD")
+        hw_garanzia = st.date_input("Scadenza Garanzia")
+
+      btn_salva = st.form_submit_button("Salva Specifiche Tecniche")
+      if btn_salva:
+        st.success(
+            f"Specifiche salvate con successo per l'IP {ip_scelto}!"
+        )
+    else:
+      st.info(
+          "Prima inserisci almeno un nome macchina nella tab 'Blocco IP &"
+          " Occupazione' per associargli i componenti hardware."
+      )
