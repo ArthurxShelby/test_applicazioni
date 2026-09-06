@@ -72,60 +72,33 @@ sedi_config = [
 
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
-  for idx, item in enumerate(sedi_config):
-    righe_ip = []
-    base_ip = item["blocco"].split(".")[0]
-    range_ip = item["range_custom"]
 
-    for i in range_ip:
-      ip_completo = f"{base_ip}.{i}"
-      parti = ip_completo.split(".")
-      ultimi_due_ip = f"{parti[-2]}.{parti[-1]}"
-      righe_ip.append({
-          "Indirizzo IP": ultimi_due_ip,
-          "_ip_completo": ip_completo,
-          "Nome Macchina": "",
-          "Stato": "🟢 Libero",
-      })
-    st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
-else:
-  for idx, item in enumerate(sedi_config):
-    if idx in st.session_state.dataframes_rete:
-      df = st.session_state.dataframes_rete[idx]
-      base_ip = item["blocco"].split(".")[0]
-      range_ip = item["range_custom"]
-      val_custom_list = list(range_ip)
+for idx, item in enumerate(sedi_config):
+  base_ip = item["blocco"].split(".")[0]
+  range_ip = item["range_custom"]
 
-      righe_ip = []
-      for i, row in df.iterrows():
-        ip_num = (
-            val_custom_list[i] if i < len(val_custom_list) else val_custom_list[-1]
-        )
-        ip_completo = f"{base_ip}.{ip_num}"
-        ultimi_due_ip = f"{base_ip}.{ip_num}"
+  old_df = st.session_state.dataframes_rete.get(idx, pd.DataFrame())
+  old_data_map = {}
+  if not old_df.empty and "_ip_completo" in old_df.columns:
+    for _, r in old_df.iterrows():
+      old_data_map[r["_ip_completo"]] = {
+          "Nome Macchina": r.get("Nome Macchina", ""),
+          "Stato": r.get("Stato", "🟢 Libero"),
+      }
 
-        righe_ip.append({
-            "Indirizzo IP": ultimi_due_ip,
-            "_ip_completo": ip_completo,
-            "Nome Macchina": row.get("Nome Macchina", ""),
-            "Stato": row.get("Stato", "🟢 Libero"),
-        })
-      st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
-    else:
-      righe_ip = []
-      base_ip = item["blocco"].split(".")[0]
-      range_ip = item["range_custom"]
-      for i in range_ip:
-        ip_completo = f"{base_ip}.{i}"
-        parti = ip_completo.split(".")
-        ultimi_due_ip = f"{parti[-2]}.{parti[-1]}"
-        righe_ip.append({
-            "Indirizzo IP": ultimi_due_ip,
-            "_ip_completo": ip_completo,
-            "Nome Macchina": "",
-            "Stato": "🟢 Libero",
-        })
-      st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
+  righe_ip = []
+  for i in range_ip:
+    ip_completo = f"{base_ip}.{i}"
+    existing = old_data_map.get(
+        ip_completo, {"Nome Macchina": "", "Stato": "🟢 Libero"}
+    )
+    righe_ip.append({
+        "Indirizzo IP": ip_completo,
+        "_ip_completo": ip_completo,
+        "Nome Macchina": existing["Nome Macchina"],
+        "Stato": existing["Stato"],
+    })
+  st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
 
 if "hardware_dettagli" not in st.session_state:
   st.session_state.hardware_dettagli = {}
