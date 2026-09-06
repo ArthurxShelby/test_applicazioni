@@ -1,68 +1,75 @@
 import ipaddress
-import tkinter as tk
-from tkinter import messagebox, scrolledtext
 
 
-class AppGestioneRete:
+class GestioneReteAziendale:
 
-  def __init__(self, root):
-    self.root = root
-    self.root.title("Gestione Rete Aziendale")
-    self.root.geometry("600x500")
-
+  def __init__(self):
     self.sedi = {}
     self.dispositivi = {}
     self._configura_infrastruttura()
 
-    # Layout Grafico
-    tk.Label(
-        root, text="Nome Dispositivo:", font=("Arial", 10, "bold")
-    ).pack(pady=5)
-    self.entry_nome = tk.Entry(root, width=30)
-    self.entry_nome.pack(pady=5)
-
-    tk.Label(
-        root, text="Indirizzo IP (es. 192.168.1.10):", font=("Arial", 10, "bold")
-    ).pack(pady=5)
-    self.entry_ip = tk.Entry(root, width=30)
-    self.entry_ip.pack(pady=5)
-
-    tk.Button(
-        root,
-        text="Registra Dispositivo",
-        command=self.registra_dispositivo,
-        bg="#4CAF50",
-        fg="white",
-        font=("Arial", 10, "bold"),
-    ).pack(pady=10)
-
-    tk.Button(
-        root,
-        text="Aggiorna Report Rete",
-        command=self.mostra_report,
-        bg="#2196F3",
-        fg="white",
-        font=("Arial", 10, "bold"),
-    ).pack(pady=5)
-
-    tk.Label(
-        root, text="Stato Rete / Log:", font=("Arial", 10, "bold")
-    ).pack(pady=5)
-    self.text_report = scrolledtext.ScrolledText(root, width=70, height=15)
-    self.text_report.pack(pady=5)
-
-    self.mostra_report()
-
   def _configura_infrastruttura(self):
+    # Sede centrale: gestisce 2 blocchi IP da 256 indirizzi ciascuno (/24 -> 0 a 255)
     self.sedi["Sede_Centrale"] = [
         ipaddress.ip_network("192.168.1.0/24"),
         ipaddress.ip_network("192.168.2.0/24"),
     ]
+
+    # Le restanti 6 sedi: gestiscono 1 blocco IP ciascuna da 0 a 255
     for i in range(2, 8):
       self.sedi[f"Sede_{i}"] = [ipaddress.ip_network(f"192.168.{i+1}.0/24")]
 
-  .def_registra_dispositivo(self):
-    pass  # Placeholder per brevità, usa il blocco completo sotto
+  def assegna_ip(self, nome_macchina, indirizzo_ip):
+    try:
+      ip = ipaddress.ip_address(indirizzo_ip)
+    except ValueError:
+      return f"Errore: '{indirizzo_ip}' non è un indirizzo IP valido."
+
+    # Verifica la corrispondenza con le reti delle sedi
+    for sede, reti in self.sedi.items():
+      for rete in reti:
+        if ip in rete:
+          if ip in (rete.network_address, rete.broadcast_address):
+            return f"Errore: {ip} è un indirizzo di rete o broadcast."
+
+          self.dispositivi[str(ip)] = {
+              "nome": nome_macchina,
+              "sede": sede,
+              "subnet": str(rete),
+          }
+          return (
+              f"Registrato: {nome_macchina} ({ip}) associato correttamente alla"
+              f" {sede}."
+          )
+
+    return "Errore: Indirizzo IP non appartenente ad alcuna sede configurata."
+
+  def report_rete(self):
+    report = []
+    for sede, reti in self.sedi.items():
+      report.append(f"\n--- {sede.upper()} ---")
+      for rete in reti:
+        attivi = sum(
+            1 for d in self.dispositivi.values() if d["subnet"] == str(rete)
+        )
+        report.append(
+            f"  Subnet: {rete} | Dispositivi registrati: {attivi}/254"
+        )
+    return "\n".join(report)
 
 
-# Versione completa del blocco di registrazione e report per la GUI:
+# Esempio di utilizzo pratico
+if __name__ == "__main__":
+  rete = GestioneReteAziendale()
+
+  # Test di registrazione macchine
+  print(rete.assegna_ip("Server-Database-01", "192.168.1.10"))
+  print(rete.assegna_ip("Server-Backup-02", "192.168.2.50"))
+  print(rete.assegna_ip("Workstation-Sede2-PC1", "192.168.4.15"))
+  print(rete.assegna_ip("Workstation-Sede7-PC1", "192.168.9.22"))
+
+  # Visualizzazione dello stato della rete
+  print(rete.report_rete())
+
+  # Mantiene la finestra aperta
+  input("\nPremi un tasto per chiudere il programma...")
