@@ -99,9 +99,12 @@ for idx, item in enumerate(sedi_config):
   old_data_map = {}
   if not old_df.empty and "_ip_completo" in old_df.columns:
     for _, r in old_df.iterrows():
+      nome_mac = r.get("Nome Macchina", "")
+      if pd.isna(nome_mac) or str(nome_mac).strip().lower() in ["none", "nan", ""]:
+        nome_mac = ""
       old_data_map[r["_ip_completo"]] = {
-          "Nome Macchina": r.get("Nome Macchina", ""),
-          "Tipologia": "",  # Azzera forzatamente la tipologia al reset/avvio
+          "Nome Macchina": nome_mac,
+          "Tipologia": "",
           "Stato": r.get("Stato", "🟢 Libero"),
       }
 
@@ -120,7 +123,7 @@ for idx, item in enumerate(sedi_config):
         "Indirizzo IP": ip_completo,
         "_ip_completo": ip_completo,
         "Nome Macchina": existing["Nome Macchina"],
-        "Tipologia": "",  # Vuoto di default per ogni riga
+        "Tipologia": "",
         "Stato": existing["Stato"],
     })
   st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
@@ -153,6 +156,11 @@ with tab_rete:
   )
 
   df_corrente = st.session_state.dataframes_rete[idx_selezionato]
+
+  # Pulisci eventuali "None" residui nel DataFrame prima di visualizzarlo
+  df_corrente["Nome Macchina"] = df_corrente["Nome Macchina"].apply(
+      lambda x: "" if pd.isna(x) or str(x).strip().lower() in ["none", "nan"] else str(x)
+  )
 
   # Calcolo statistiche e conteggi in evidenza per tipologia
   totale_ip = len(df_corrente)
@@ -217,7 +225,6 @@ with tab_rete:
         or str(val_grezzo).strip().lower() in ["none", "nan", ""]
     ):
       nome_mac = ""
-      df_modificato.loc[i, "Nome Macchina"] = ""
     else:
       nome_mac = str(val_grezzo).strip()
 
@@ -235,10 +242,10 @@ with tab_rete:
         del st.session_state.hardware_dettagli[ip_corr]
       modificato = True
 
-    if df_corrente.loc[i, "Tipologia"] != tipo_scelto:
+    if df_corrente.loc[i, "Tipologia"] != tipo_scelto or df_corrente.loc[i, "Nome Macchina"] != nome_mac:
       modificato = True
 
-    df_corrente.loc[i, "Nome Macchina"] = df_modificato.loc[i, "Nome Macchina"]
+    df_corrente.loc[i, "Nome Macchina"] = nome_mac
     df_corrente.loc[i, "Tipologia"] = tipo_scelto
     df_corrente.loc[i, "Stato"] = df_modificato.loc[i, "Stato"]
 
@@ -366,15 +373,14 @@ with tab_hardware:
 
               if ip_file_completo.startswith(base_ip_sede):
                 nome_mac_file = str(row.get("Nome Macchina", "")).strip()
+                if nome_mac_file.lower() in ["none", "nan"]:
+                  nome_mac_file = ""
+
                 tipo_file = str(row.get("Tipologia", "")).strip()
                 if tipo_file not in ["PC / Macchina", "Stampante", "Switch"]:
                   tipo_file = ""
 
-                if (
-                    nome_mac_file
-                    and nome_mac_file != "nan"
-                    and nome_mac_file != "None"
-                ):
+                if nome_mac_file:
                   idx_r = df_rete_sede[
                       df_rete_sede["_ip_completo"] == ip_file_completo
                   ].index
@@ -410,10 +416,14 @@ with tab_hardware:
     ip_comp = m["_ip_completo"]
     dettagli = st.session_state.hardware_dettagli.get(ip_comp, {})
 
+    nome_m = m["Nome Macchina"]
+    if pd.isna(nome_m) or str(nome_m).strip().lower() in ["none", "nan"]:
+      nome_m = ""
+
     lista_completa.append({
         "Indirizzo IP": m["Indirizzo IP"],
         "_ip_completo": ip_comp,
-        "Nome Macchina": m["Nome Macchina"],
+        "Nome Macchina": nome_m,
         "Tipologia": m["Tipologia"],
         "Marca": dettagli.get("Marca", "-"),
         "Modello": dettagli.get("Modello", "-"),
@@ -459,17 +469,13 @@ with tab_hardware:
     nuova_tipologia = str(df_inventario_modificato.loc[i, "Tipologia"])
 
     if (
-        nuovo_nome == "None"
-        or nuovo_nome == "nan"
-        or nuovo_nome == ""
+        nuovo_nome.lower() in ["none", "nan", ""]
         or nuovo_nome is None
     ):
       nuovo_nome = ""
-      df_inventario_modificato.loc[i, "Nome Macchina"] = ""
 
     if (
-        nuova_tipologia == "None"
-        or nuova_tipologia == "nan"
+        nuova_tipologia.lower() in ["none", "nan", ""]
         or nuova_tipologia is None
     ):
       nuova_tipologia = ""
