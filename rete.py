@@ -53,6 +53,13 @@ sedi_config = [
         "blocco": "66.0",
         "subnet": "255.0",
     },
+    {
+        "id": 9,
+        "nome": "P.nuovo",
+        "blocco": "77.0",
+        "subnet": "255.192",
+        "range_custom": range(65, 127),
+    },
 ]
 
 if "dataframes_rete" not in st.session_state:
@@ -83,6 +90,9 @@ if "dataframes_rete" not in st.session_state:
     elif idx == 7:
       base_ip = "66"
       range_ip = range(1, 256)
+    elif idx == 8:
+      base_ip = "77"
+      range_ip = item["range_custom"]
     else:
       third_oct = item["blocco"].split(".")[0]
       base_ip = f"192.168.{third_oct}"
@@ -119,6 +129,8 @@ else:
         base_ip = "29"
       elif idx == 7:
         base_ip = "66"
+      elif idx == 8:
+        base_ip = "77"
       else:
         third_oct = item["blocco"].split(".")[0]
         base_ip = f"192.168.{third_oct}"
@@ -157,6 +169,11 @@ else:
           ip_num = i + 1
           ip_completo = f"66.{ip_num}"
           ultimi_due_ip = f"66.{ip_num}"
+        elif idx == 8:
+          val_custom_list = list(item["range_custom"])
+          ip_num = val_custom_list[i] if i < len(val_custom_list) else 65 + i
+          ip_completo = f"77.{ip_num}"
+          ultimi_due_ip = f"77.{ip_num}"
         else:
           ip_parz = str(row.get("Indirizzo IP", f"1.{i}"))
           if ip_parz.count(".") == 1:
@@ -172,6 +189,23 @@ else:
             "_ip_completo": ip_completo,
             "Nome Macchina": row.get("Nome Macchina", ""),
             "Stato": row.get("Stato", "🟢 Libero"),
+        })
+      st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
+    else:
+      # Gestisce nuove sedi aggiunte successivamente se non presenti nello stato
+      righe_ip = []
+      if idx == 8:
+        base_ip = "77"
+        range_ip = item["range_custom"]
+      for i in range_ip:
+        ip_completo = f"{base_ip}.{i}"
+        parti = ip_completo.split(".")
+        ultimi_due_ip = f"{parti[-2]}.{parti[-1]}"
+        righe_ip.append({
+            "Indirizzo IP": ultimi_due_ip,
+            "_ip_completo": ip_completo,
+            "Nome Macchina": "",
+            "Stato": "🟢 Libero",
         })
       st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
 
@@ -204,6 +238,8 @@ elif idx_selezionato == 6:
   blocco_completo_ip = "29"
 elif idx_selezionato == 7:
   blocco_completo_ip = "66"
+elif idx_selezionato == 8:
+  blocco_completo_ip = "77"
 else:
   third_oct_scelto = sede_scelta["blocco"].split(".")[0]
   blocco_completo_ip = f"192.168.{third_oct_scelto}"
@@ -376,6 +412,8 @@ with tab_hardware:
                 prefix = "29."
               elif idx_selezionato == 7:
                 prefix = "66."
+              elif idx_selezionato == 8:
+                prefix = "77."
               else:
                 prefix = f"{base_ip_sede}."
 
