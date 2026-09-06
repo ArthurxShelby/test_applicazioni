@@ -192,8 +192,10 @@ with tab_rete:
   df_per_editor = df_corrente.drop(columns=["_ip_completo"], errors="ignore").copy()
   
   for i in range(len(df_per_editor)):
-    if not df_per_editor.loc[i, "Nome Macchina"] or not df_per_editor.loc[i, "Tipologia"]:
-      df_per_editor.loc[i, "Tipologia"] = "-"
+    if not df_per_editor.loc[i, "Nome Macchina"]:
+      df_per_editor.loc[i, "Tipologia"] = ""
+
+  df_per_editor = df_per_editor.fillna("")
 
   df_modificato = st.data_editor(
       df_per_editor,
@@ -206,8 +208,8 @@ with tab_rete:
           ),
           "Tipologia": st.column_config.SelectboxColumn(
               "Tipologia (Richiede Nome)",
-              options=["-", "PC / Macchina", "Stampante", "Switch"],
-              required=True,
+              options=["", "PC / Macchina", "Stampante", "Switch"],
+              required=False,
           ),
           "Stato": st.column_config.SelectboxColumn(
               "Stato", options=["🟢 Libero", "🔴 Occupato"], required=True
@@ -224,7 +226,7 @@ with tab_rete:
     nome_mac = pulisci_valore(df_modificato.loc[i, "Nome Macchina"])
     tipo_scelto = pulisci_valore(df_modificato.loc[i, "Tipologia"])
 
-    if not nome_mac or tipo_scelto == "-":
+    if not nome_mac:
       tipo_scelto = ""
 
     stato_attuale = df_modificato.loc[i, "Stato"]
@@ -415,7 +417,7 @@ with tab_hardware:
         "Indirizzo IP": m["Indirizzo IP"],
         "_ip_completo": ip_comp,
         "Nome Macchina": nome_m,
-        "Tipologia": tipo_m if tipo_m else "-",
+        "Tipologia": tipo_m,
         "Marca": pulisci_valore(dettagli.get("Marca", "-")),
         "Modello": pulisci_valore(dettagli.get("Modello", "-")),
         "Processore": pulisci_valore(dettagli.get("Processore", "-")),
@@ -431,8 +433,10 @@ with tab_hardware:
   ).copy()
 
   for i in range(len(df_inv_per_editor)):
-    if not df_inv_per_editor.loc[i, "Nome Macchina"] or not df_inv_per_editor.loc[i, "Tipologia"]:
-      df_inv_per_editor.loc[i, "Tipologia"] = "-"
+    if not df_inv_per_editor.loc[i, "Nome Macchina"]:
+      df_inv_per_editor.loc[i, "Tipologia"] = ""
+
+  df_inv_per_editor = df_inv_per_editor.fillna("")
 
   df_inventario_modificato = st.data_editor(
       df_inv_per_editor,
@@ -442,7 +446,7 @@ with tab_hardware:
           ),
           "Nome Macchina": st.column_config.TextColumn("Nome Dispositivo"),
           "Tipologia": st.column_config.SelectboxColumn(
-              "Tipologia (Richiede Nome)", options=["-", "PC / Macchina", "Stampante", "Switch"]
+              "Tipologia (Richiede Nome)", options=["", "PC / Macchina", "Stampante", "Switch"]
           ),
           "Marca": st.column_config.TextColumn("Marca"),
           "Modello": st.column_config.TextColumn("Modello"),
@@ -463,7 +467,7 @@ with tab_hardware:
     nuovo_nome = pulisci_valore(df_inventario_modificato.loc[i, "Nome Macchina"])
     nuova_tipologia = pulisci_valore(df_inventario_modificato.loc[i, "Tipologia"])
 
-    if not nuovo_nome or nuova_tipologia == "-":
+    if not nuovo_nome:
       nuova_tipologia = ""
 
     st.session_state.hardware_dettagli[ip_comp] = {
