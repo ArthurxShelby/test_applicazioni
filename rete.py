@@ -7,14 +7,14 @@ st.subheader("Gestione Reti e Hardware per Sede")
 sedi_config = [
     {
         "id": 1,
-        "nome": "Sede Centrale",
+        "nome": "Trieste",
         "blocco": "38.0",
         "subnet": "254.0",
         "gruppo": "Blocco 1",
     },
     {
         "id": 2,
-        "nome": "Sede Centrale",
+        "nome": "trieste",
         "blocco": "39.0",
         "subnet": "254.0",
         "gruppo": "Blocco 2",
