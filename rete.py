@@ -195,6 +195,9 @@ with tab_rete:
     if not df_per_editor.loc[i, "Nome Macchina"]:
       df_per_editor.loc[i, "Tipologia"] = ""
 
+  # Forza la sostituzione di qualsiasi NaN o None residuo con stringa vuota per l'editor
+  df_per_editor = df_per_editor.fillna("")
+
   df_modificato = st.data_editor(
       df_per_editor,
       column_config={
@@ -433,6 +436,8 @@ with tab_hardware:
   for i in range(len(df_inv_per_editor)):
     if not df_inv_per_editor.loc[i, "Nome Macchina"]:
       df_inv_per_editor.loc[i, "Tipologia"] = ""
+
+  df_inv_per_editor = df_inv_per_editor.fillna("")
 
   df_inventario_modificato = st.data_editor(
       df_inv_per_editor,
