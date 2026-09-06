@@ -10,6 +10,8 @@ sedi_config = [
         "nome": "Trieste",
         "blocco": "38.0",
         "subnet": "254.0",
+        "gruppo": "Blocco 1",
+
     },
     {
         "id": 2,
