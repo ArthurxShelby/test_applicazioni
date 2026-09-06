@@ -79,15 +79,17 @@ if "dataframes_rete" not in st.session_state:
 if "hardware_dettagli" not in st.session_state:
   st.session_state.hardware_dettagli = {}
 
-sede_scelta = st.selectbox(
+# Selezione basata sugli indici per evitare errori di matching dei dizionari
+idx_selezionato = st.selectbox(
     "📍 Seleziona la Sede da Gestire",
-    sedi_config,
-    format_func=lambda x: (
-        f"{x['nome']} ({x['gruppo']}) — Rete: {x['blocco']}/24"
+    options=range(len(sedi_config)),
+    format_func=lambda i: (
+        f"{sedi_config[i]['nome']} ({sedi_config[i]['gruppo']}) — Rete:"
+        f" {sedi_config[i]['blocco']}/24"
     ),
 )
 
-idx_selezionato = sedi_config.index(sede_scelta)
+sede_scelta = sedi_config[idx_selezionato]
 
 tab_rete, tab_hardware = st.tabs(
     ["🌐 Blocco IP & Occupazione", "💻 Inventario Hardware Dettagliato"]
