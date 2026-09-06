@@ -10,57 +10,48 @@ sedi_config = [
         "nome": "Trieste",
         "blocco": "38.0",
         "subnet": "254.0",
-        "gruppo": "Blocco 1",
-
     },
     {
         "id": 2,
-        "nome": "trieste",
+        "nome": "Sede Centrale",
         "blocco": "39.0",
         "subnet": "254.0",
-        "gruppo": "Blocco 2",
     },
     {
         "id": 3,
         "nome": "Sede 2",
         "blocco": "3.0",
         "subnet": "255.0",
-        "gruppo": "Blocco Unico",
     },
     {
         "id": 4,
         "nome": "Sede 3",
         "blocco": "4.0",
         "subnet": "255.0",
-        "gruppo": "Blocco Unico",
     },
     {
         "id": 5,
         "nome": "Sede 4",
         "blocco": "5.0",
         "subnet": "255.0",
-        "gruppo": "Blocco Unico",
     },
     {
         "id": 6,
         "nome": "Sede 5",
         "blocco": "6.0",
         "subnet": "255.0",
-        "gruppo": "Blocco Unico",
     },
     {
         "id": 7,
         "nome": "Sede 6",
         "blocco": "7.0",
         "subnet": "255.0",
-        "gruppo": "Blocco Unico",
     },
     {
         "id": 8,
         "nome": "Sede 7",
         "blocco": "8.0",
         "subnet": "255.0",
-        "gruppo": "Blocco Unico",
     },
 ]
 
@@ -137,8 +128,8 @@ idx_selezionato = st.selectbox(
     "📍 Seleziona la Sede da Gestire",
     options=range(len(sedi_config)),
     format_func=lambda i: (
-        f"{sedi_config[i]['nome']} ({sedi_config[i]['gruppo']}) — Rete:"
-        f" {sedi_config[i]['blocco']} / {sedi_config[i]['subnet']}"
+        f"{sedi_config[i]['nome']} — Rete: {sedi_config[i]['blocco']}"
+        f" / {sedi_config[i]['subnet']}"
     ),
 )
 
@@ -158,9 +149,7 @@ tab_rete, tab_hardware = st.tabs(
 )
 
 with tab_rete:
-  st.markdown(
-      f"### 🌐 Gestione IP: {sede_scelta['nome']} - {sede_scelta['gruppo']}"
-  )
+  st.markdown(f"### 🌐 Gestione IP: {sede_scelta['nome']}")
   st.info(
       f"Subnet Mask associata: {subnet_ultimi_due} | Digita il nome macchina"
       " per occupare l'IP."
@@ -223,10 +212,7 @@ with tab_rete:
     st.rerun()
 
 with tab_hardware:
-  st.markdown(
-      f"### 💻 Specifiche Hardware: {sede_scelta['nome']} -"
-      f" {sede_scelta['gruppo']}"
-  )
+  st.markdown(f"### 💻 Specifiche Hardware: {sede_scelta['nome']}")
 
   df_rete_sede = st.session_state.dataframes_rete[idx_selezionato]
 
