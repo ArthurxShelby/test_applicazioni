@@ -9,14 +9,14 @@ sedi_config = [
         "id": 1,
         "nome": "Sede Centrale",
         "blocco": "192.168.1.0",
-        "subnet": "255.255.255.0",
+        "subnet": "255.255.254.0",
         "gruppo": "Blocco 1",
     },
     {
         "id": 2,
         "nome": "Sede Centrale",
         "blocco": "192.168.2.0",
-        "subnet": "255.255.255.0",
+        "subnet": "255.255.254.0",
         "gruppo": "Blocco 2",
     },
     {
@@ -295,7 +295,6 @@ with tab_hardware:
 
     df_inventario_corrente = pd.DataFrame(lista_completa)
 
-    # Tabella modificabile per l'inventario
     df_inventario_modificato = st.data_editor(
         df_inventario_corrente,
         column_config={
@@ -316,7 +315,6 @@ with tab_hardware:
         hide_index=True,
     )
 
-    # Sincronizza le modifiche manuali apportate nella tabella inventario
     inv_modificato = False
     for i in range(len(df_inventario_modificato)):
       ip = df_inventario_modificato.loc[i, "Indirizzo IP"]
@@ -333,7 +331,6 @@ with tab_hardware:
         nuovo_nome = ""
         df_inventario_modificato.loc[i, "Nome Macchina"] = ""
 
-      # Aggiorna i dettagli hardware salvati in sessione
       st.session_state.hardware_dettagli[ip] = {
           "Marca": str(df_inventario_modificato.loc[i, "Marca"]),
           "Modello": str(df_inventario_modificato.loc[i, "Modello"]),
@@ -344,7 +341,6 @@ with tab_hardware:
           "Garanzia": str(df_inventario_modificato.loc[i, "Garanzia"]),
       }
 
-      # Sincronizza anche il nome macchina e lo stato nella tab di rete principale
       idx_r = df_rete_sede[df_rete_sede["Indirizzo IP"] == ip].index
       if not idx_r.empty:
         vecchio_nome = str(df_rete_sede.loc[idx_r[0], "Nome Macchina"])
