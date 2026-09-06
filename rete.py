@@ -8,57 +8,57 @@ sedi_config = [
     {
         "id": 1,
         "nome": "Sede Centrale",
-        "blocco": "192.168.1.0",
-        "subnet": "255.255.254.0",
+        "blocco": "1.0",
+        "subnet": "254.0",
         "gruppo": "Blocco 1",
     },
     {
         "id": 2,
         "nome": "Sede Centrale",
-        "blocco": "192.168.2.0",
-        "subnet": "255.255.254.0",
+        "blocco": "2.0",
+        "subnet": "254.0",
         "gruppo": "Blocco 2",
     },
     {
         "id": 3,
         "nome": "Sede 2",
-        "blocco": "192.168.3.0",
-        "subnet": "255.255.255.0",
+        "blocco": "3.0",
+        "subnet": "255.0",
         "gruppo": "Blocco Unico",
     },
     {
         "id": 4,
         "nome": "Sede 3",
-        "blocco": "192.168.4.0",
-        "subnet": "255.255.255.0",
+        "blocco": "4.0",
+        "subnet": "255.0",
         "gruppo": "Blocco Unico",
     },
     {
         "id": 5,
         "nome": "Sede 4",
-        "blocco": "192.168.5.0",
-        "subnet": "255.255.255.0",
+        "blocco": "5.0",
+        "subnet": "255.0",
         "gruppo": "Blocco Unico",
     },
     {
         "id": 6,
         "nome": "Sede 5",
-        "blocco": "192.168.6.0",
-        "subnet": "255.255.255.0",
+        "blocco": "6.0",
+        "subnet": "255.0",
         "gruppo": "Blocco Unico",
     },
     {
         "id": 7,
         "nome": "Sede 6",
-        "blocco": "192.168.7.0",
-        "subnet": "255.255.255.0",
+        "blocco": "7.0",
+        "subnet": "255.0",
         "gruppo": "Blocco Unico",
     },
     {
         "id": 8,
         "nome": "Sede 7",
-        "blocco": "192.168.8.0",
-        "subnet": "255.255.255.0",
+        "blocco": "8.0",
+        "subnet": "255.0",
         "gruppo": "Blocco Unico",
     },
 ]
@@ -66,7 +66,7 @@ sedi_config = [
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
   for idx, item in enumerate(sedi_config):
-    base_ip = item["blocco"].rsplit(".", 1)[0]
+    base_ip = f"192.168.{item['blocco'].rsplit('.', 1)[0]}"
     righe_ip = []
     for i in range(256):
       ip_completo = f"{base_ip}.{i}"
@@ -83,7 +83,7 @@ else:
   for idx, item in enumerate(sedi_config):
     if idx in st.session_state.dataframes_rete:
       df = st.session_state.dataframes_rete[idx]
-      base_ip = item["blocco"].rsplit(".", 1)[0]
+      base_ip = f"192.168.{item['blocco'].rsplit('.', 1)[0]}"
       righe_ip = []
       for i, row in df.iterrows():
         ip_parz = str(row.get("Indirizzo IP", f"1.{i}"))
@@ -111,15 +111,13 @@ idx_selezionato = st.selectbox(
     options=range(len(sedi_config)),
     format_func=lambda i: (
         f"{sedi_config[i]['nome']} ({sedi_config[i]['gruppo']}) — Rete:"
-        f" {'.'.join(sedi_config[i]['blocco'].split('.')[-2:])} / "
-        f"{'.'.join(sedi_config[i]['subnet'].split('.')[-2:])}"
+        f" {sedi_config[i]['blocco']} / {sedi_config[i]['subnet']}"
     ),
 )
 
 sede_scelta = sedi_config[idx_selezionato]
-
-subnet_parti = sede_scelta["subnet"].split(".")
-subnet_ultimi_due = f"{subnet_parti[-2]}.{subnet_parti[-1]}"
+blocco_completo_ip = f"192.168.{sede_scelta['blocco']}"
+subnet_ultimi_due = sede_scelta["subnet"]
 
 tab_rete, tab_hardware = st.tabs(
     ["🌐 Blocco IP & Occupazione", "💻 Inventario Hardware Dettagliato"]
@@ -272,7 +270,7 @@ with tab_hardware:
         else:
           if st.button("Conferma e Importa Dati"):
             count_importati = 0
-            base_ip_sede = sede_scelta["blocco"].rsplit(".", 1)[0]
+            base_ip_sede = blocco_completo_ip.rsplit(".", 1)[0]
             for _, row in df_import.iterrows():
               ip_file = str(row.get("Indirizzo IP", "")).strip()
 
