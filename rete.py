@@ -32,7 +32,7 @@ sedi_config = [
     },
     {
         "id": 2,
-        "nome": "Trieste",
+        "nome": "Sede Centrale",
         "blocco": "39.0",
         "subnet": "254.0",
         "range_custom": range(1, 256),
@@ -146,6 +146,20 @@ with tab_rete:
   )
 
   df_corrente = st.session_state.dataframes_rete[idx_selezionato]
+
+  # Calcolo rapido degli stati liberi e occupati
+  totale_ip = len(df_corrente)
+  occupati = len(
+      df_corrente[df_corrente["Stato"].astype(str).str.contains("Occupato")]
+  )
+  liberi = totale_ip - occupati
+
+  col_m1, col_m2, col_m3 = st.columns(3)
+  col_m1.metric("Totale IP", totale_ip)
+  col_m2.metric("🟢 Liberi", liberi)
+  col_m3.metric("🔴 Occupati", occupati)
+
+  st.markdown("---")
 
   df_per_editor = df_corrente.drop(columns=["_ip_completo"], errors="ignore")
 
