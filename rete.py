@@ -99,9 +99,12 @@ for idx, item in enumerate(sedi_config):
   old_data_map = {}
   if not old_df.empty and "_ip_completo" in old_df.columns:
     for _, r in old_df.iterrows():
+      tipologia_salvata = r.get("Tipologia", "")
+      if pd.isna(tipologia_salvata):
+        tipologia_salvata = ""
       old_data_map[r["_ip_completo"]] = {
           "Nome Macchina": r.get("Nome Macchina", ""),
-          "Tipologia": r.get("Tipologia", ""),
+          "Tipologia": tipologia_salvata,
           "Stato": r.get("Stato", "🟢 Libero"),
       }
 
