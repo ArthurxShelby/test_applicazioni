@@ -1,5 +1,5 @@
 import ipaddress
-import io
+import ioimport io
 import re
 import pandas as pd
 from fpdf import FPDF
@@ -224,7 +224,6 @@ with tab_rete:
   pc_count = len(df_corrente[df_corrente["Tipologia"] == "PC / Macchina"])
   stampanti_count = len(df_corrente[df_corrente["Tipologia"] == "Stampante"])
   switch_count = len(df_corrente[df_corrente["Tipologia"] == "Switch"])
-  altro_count = len(df_corrente[df_corrente["Tipologia"] == "Altro"])
 
   # 1. Prima riga di metriche: Totale, Liberi, Occupati
   col_m1, col_m2, col_m3 = st.columns(3)
@@ -234,17 +233,16 @@ with tab_rete:
 
   st.markdown("<br>", unsafe_allow_html=True)
 
-  # 2. Sotto, la riga con le tipologie di dispositivi
-  col_t1, col_t2, col_t3, col_t4 = st.columns(4)
+  # 2. Sotto, la riga con le tipologie di dispositivi (senza Altro)
+  col_t1, col_t2, col_t3 = st.columns(3)
   col_t1.metric("💻 PC / Macchina", pc_count)
   col_t2.metric("🖨️ Stampanti", stampanti_count)
   col_t3.metric("🖲️ Switch", switch_count)
-  col_t4.metric("📦 Altro", altro_count)
 
   st.markdown("---")
 
   df_per_editor = df_corrente.drop(columns=["_ip_completo"], errors="ignore").copy()
-  opzioni_tipologia = ["PC / Macchina", "Stampante", "Switch", "Altro"]
+  opzioni_tipologia = ["PC / Macchina", "Stampante", "Switch"]
   
   for i in range(len(df_per_editor)):
     if not df_per_editor.loc[i, "Nome Macchina"]:
@@ -334,9 +332,9 @@ with tab_hardware:
           hw_ram = st.number_input("RAM / Porte (GB)", min_value=2, max_value=256, value=ram_val)
           
           tipo_hd_esistente = pulisci_valore(dettagli_esistenti.get("Tipo HD", "SSD"))
-          if tipo_hd_esistente not in ["SSD", "HDD", "NVMe", "Altro"]:
+          if tipo_hd_esistente not in ["SSD", "HDD", "NVMe"]:
             tipo_hd_esistente = "SSD"
-          hw_tipo_hd = st.selectbox("Tipo Memoria", ["SSD", "HDD", "NVMe", "Altro"], index=["SSD", "HDD", "NVMe", "Altro"].index(tipo_hd_esistente))
+          hw_tipo_hd = st.selectbox("Tipo Memoria", ["SSD", "HDD", "NVMe"], index=["SSD", "HDD", "NVMe"].index(tipo_hd_esistente))
           hw_cap_hd = st.text_input("Capienza / Note", value=pulisci_valore(dettagli_esistenti.get("Capienza HD", "")))
           hw_garanzia = st.text_input("Scadenza Garanzia", value=pulisci_valore(dettagli_esistenti.get("Garanzia", "")))
         else:
@@ -354,9 +352,9 @@ with tab_hardware:
             hw_ram = st.number_input("RAM / Porte (GB o Num)", min_value=2, max_value=256, value=ram_val)
             
             tipo_hd_esistente = pulisci_valore(dettagli_esistenti.get("Tipo HD", "SSD"))
-            if tipo_hd_esistente not in ["SSD", "HDD", "NVMe", "Altro"]:
+            if tipo_hd_esistente not in ["SSD", "HDD", "NVMe"]:
               tipo_hd_esistente = "SSD"
-            hw_tipo_hd = st.selectbox("Tipo Memoria / Extra", ["SSD", "HDD", "NVMe", "Altro"], index=["SSD", "HDD", "NVMe", "Altro"].index(tipo_hd_esistente))
+            hw_tipo_hd = st.selectbox("Tipo Memoria / Extra", ["SSD", "HDD", "NVMe"], index=["SSD", "HDD", "NVMe"].index(tipo_hd_esistente))
             hw_cap_hd = st.text_input("Capienza / Note", value=pulisci_valore(dettagli_esistenti.get("Capienza HD", "")))
             hw_garanzia = st.text_input("Scadenza Garanzia", value=pulisci_valore(dettagli_esistenti.get("Garanzia", "")))
 
