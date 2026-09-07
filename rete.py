@@ -74,7 +74,7 @@ sedi_config = [
     },
     {
         "id": 2,
-        "nome": "Trieste",
+        "nome": "Sede Centrale",
         "blocco": "39.0",
         "subnet": "254.0",
         "range_custom": range(1, 256),
@@ -307,7 +307,6 @@ with tab_hardware:
     ip_disponibili_mostrati = [m["Indirizzo IP"] for m in lista_tutti_ip]
     
     if ip_disponibili_mostrati:
-      # IMPORTANTE: Il selectbox è fuori dal form per aggiornare dinamicamente il contenuto
       scelta_mostrata = st.selectbox(
           "1. Seleziona IP Dispositivo", 
           ip_disponibili_mostrati, 
@@ -374,7 +373,6 @@ with tab_hardware:
         btn_salva = st.form_submit_button("Salva Specifiche Tecniche e Dispositivo")
         
         if btn_salva:
-          # Salvo i dettagli hardware 
           st.session_state.hardware_dettagli[ip_scelto] = {
               "Marca": hw_marca,
               "Modello": hw_modello,
@@ -385,7 +383,6 @@ with tab_hardware:
               "Garanzia": hw_garanzia,
           }
 
-          # Aggiornamento nel dataframe della rete
           idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_scelto].index
           if not idx_r.empty:
             df_rete_sede.loc[idx_r, "Nome Macchina"] = pulisci_valore(hw_nome_macchina)
@@ -413,16 +410,23 @@ with tab_hardware:
         else:
           if st.button("Conferma e Importa Dati"):
             count_importati = 0
-            base_ip_sede = blocco_completo_ip
-            prefix = f"{base_ip_sede}."
+            base_ip_sede = blocco_completo_ip # es. "38"
+            
             for _, row in df_import.iterrows():
-              ip_file = str(row.get("Indirizzo IP", "")).strip()
-              if not ip_file.startswith(prefix):
-                ip_file_completo = f"{prefix}{ip_file}"
-              else:
-                ip_file_completo = ip_file
+              ip_raw = str(row.get("Indirizzo IP", "")).strip()
+              if not ip_raw:
+                continue
 
-              if ip_file_completo.startswith(base_ip_sede):
+              # Gestione intelligente dell'IP completo o parziale
+              # Estraiamo gli ultimi due segmenti dell'indirizzo IP (es. da "192.168.38.45" o "38.45" ricaviamo "38.45")
+              parti_ip = ip_raw.split(".")
+              if len(parti_ip) >= 2:
+                ip_file_completo = f"{parti_ip[-2]}.{parti_ip[-1]}"
+              else:
+                ip_file_completo = f"{base_ip_sede}.{ip_raw}"
+
+              # Verifichiamo se l'IP appartiene effettivamente a questo blocco di sede
+              if ip_file_completo.startswith(f"{base_ip_sede}."):
                 nome_mac_file = pulisci_valore(row.get("Nome Macchina", ""))
                 tipo_file = pulisci_valore(row.get("Tipologia", ""))
 
@@ -445,7 +449,7 @@ with tab_hardware:
                 count_importati += 1
 
             st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
-            st.success(f"Importati con successo {count_importati} dispositivi!")
+            st.success(f"Importati con successo {count_importati} dispositivi per questa sede!")
             st.rerun()
       except Exception as e:
         st.error(f"Errore nella lettura del file: {e}")
