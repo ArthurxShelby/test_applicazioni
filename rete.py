@@ -74,7 +74,7 @@ sedi_config = [
     },
     {
         "id": 2,
-        "nome": "Sede Centrale",
+        "nome": "Trieste",
         "blocco": "39.0",
         "subnet": "254.0",
         "range_custom": range(1, 256),
