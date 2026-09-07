@@ -225,7 +225,6 @@ with tab_rete:
   stampanti_count = len(df_corrente[df_corrente["Tipologia"] == "Stampante"])
   switch_count = len(df_corrente[df_corrente["Tipologia"] == "Switch"])
 
-  # 1. Prima riga di metriche: Totale, Liberi, Occupati
   col_m1, col_m2, col_m3 = st.columns(3)
   col_m1.metric("Totale IP", totale_ip)
   col_m2.metric("🟢 Liberi", liberi)
@@ -233,7 +232,6 @@ with tab_rete:
 
   st.markdown("<br>", unsafe_allow_html=True)
 
-  # 2. Sotto, la riga con le tipologie di dispositivi (senza Altro)
   col_t1, col_t2, col_t3 = st.columns(3)
   col_t1.metric("💻 PC / Macchina", pc_count)
   col_t2.metric("🖨️ Stampanti", stampanti_count)
@@ -306,21 +304,23 @@ with tab_hardware:
 
   with st.expander("🛠️ Aggiungi dettagli tecnici avanzati (Manuale)", expanded=True):
     lista_tutti_ip = df_rete_sede.to_dict("records")
-    with st.form(key=f"form_hw_{idx_selezionato}"):
-      ip_disponibili_mostrati = [m["Indirizzo IP"] for m in lista_tutti_ip]
+    ip_disponibili_mostrati = [m["Indirizzo IP"] for m in lista_tutti_ip]
+    
+    if ip_disponibili_mostrati:
+      # IMPORTANTE: Il selectbox è fuori dal form per aggiornare dinamicamente il contenuto
+      scelta_mostrata = st.selectbox(
+          "1. Seleziona IP Dispositivo", 
+          ip_disponibili_mostrati, 
+          key=f"selettore_ip_{idx_selezionato}"
+      )
+      
+      ip_scelto = [m["_ip_completo"] for m in lista_tutti_ip if m["Indirizzo IP"] == scelta_mostrata][0]
+      riga_corrente_ip = [m for m in lista_tutti_ip if m["_ip_completo"] == ip_scelto][0]
+      dettagli_esistenti = st.session_state.hardware_dettagli.get(ip_scelto, {})
 
-      if ip_disponibili_mostrati:
-        scelta_mostrata = st.selectbox("Seleziona IP Dispositivo", ip_disponibili_mostrati)
-        ip_scelto = [
-            m["_ip_completo"]
-            for m in lista_tutti_ip
-            if m["Indirizzo IP"] == scelta_mostrata
-        ][0]
-
-        riga_corrente_ip = [m for m in lista_tutti_ip if m["_ip_completo"] == ip_scelto][0]
-        dettagli_esistenti = st.session_state.hardware_dettagli.get(ip_scelto, {})
-
-        # Campi essenziali sincronizzati direttamente nel form
+      st.markdown("2. Inserisci e salva le specifiche")
+      with st.form(key=f"form_hw_{idx_selezionato}"):
+        
         col_f1, col_f2 = st.columns(2)
         with col_f1:
           hw_nome_macchina = st.text_input("Nome Dispositivo", value=pulisci_valore(riga_corrente_ip.get("Nome Macchina", "")))
@@ -353,9 +353,9 @@ with tab_hardware:
         else:
           col1, col2 = st.columns(2)
           with col1:
-            hw_marca = st.text_input("Marca (es. Dell, HP, Cisco)", value=pulisci_valore(dettagli_esistenti.get("Marca", "")))
+            hw_marca = st.text_input("Marca (es. Dell, HP)", value=pulisci_valore(dettagli_esistenti.get("Marca", "")))
             hw_modello = st.text_input("Modello", value=pulisci_valore(dettagli_esistenti.get("Modello", "")))
-            hw_cpu = st.text_input("Processore e anno (es. Intel i5 2020)", value=pulisci_valore(dettagli_esistenti.get("Processore", "")))
+            hw_cpu = st.text_input("Processore e anno (es. i5 2020)", value=pulisci_valore(dettagli_esistenti.get("Processore", "")))
           with col2:
             ram_salvata = dettagli_esistenti.get("RAM", "16 GB")
             try:
@@ -372,8 +372,9 @@ with tab_hardware:
             hw_garanzia = st.text_input("Scadenza Garanzia", value=pulisci_valore(dettagli_esistenti.get("Garanzia", "")))
 
         btn_salva = st.form_submit_button("Salva Specifiche Tecniche e Dispositivo")
+        
         if btn_salva:
-          # Salvataggio dettagli hardware
+          # Salvo i dettagli hardware 
           st.session_state.hardware_dettagli[ip_scelto] = {
               "Marca": hw_marca,
               "Modello": hw_modello,
@@ -384,7 +385,7 @@ with tab_hardware:
               "Garanzia": hw_garanzia,
           }
 
-          # Aggiornamento immediato del dataframe della rete per sincronizzare nome, tipologia e stato
+          # Aggiornamento nel dataframe della rete
           idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_scelto].index
           if not idx_r.empty:
             df_rete_sede.loc[idx_r, "Nome Macchina"] = pulisci_valore(hw_nome_macchina)
@@ -395,7 +396,7 @@ with tab_hardware:
               df_rete_sede.loc[idx_r, "Stato"] = "🟢 Libero"
             st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
 
-          st.success(f"Specifiche e dati salvati con successo per l'IP {scelta_mostrata}!")
+          st.success(f"Dati di {scelta_mostrata} salvati con successo!")
           st.rerun()
 
   with st.expander("📁 Importa inventario da file (CSV o Excel)"):
