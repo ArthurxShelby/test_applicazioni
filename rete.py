@@ -621,7 +621,7 @@ with tab_hardware:
 
   try:
     pdf_bytes_tab = genera_pdf_tab(df_export_finale)
-  export: Exception as e:
+  except Exception as e:
     pdf_bytes_tab = b""
 
   if tipo_dispositivo == "Smartphone":
