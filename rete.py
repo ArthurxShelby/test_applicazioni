@@ -5,8 +5,30 @@ import pandas as pd
 from fpdf import FPDF
 import streamlit as st
 
-# (Opzionale ma consigliato per rilevamento mobile avanzato)
-# Assicurati di installare tramite terminale se vuoi il rilevamento preciso: pip install streamlit-javascript
+# 1. Configurazione della pagina a tutto schermo per PC e dispositivi larghi
+st.set_page_config(
+    page_title="Gestione Reti e Hardware per Sede",
+    page_icon="💻",
+    layout="wide"  # <--- Espande la pagina a tutto schermo
+)
+
+# 2. CSS personalizzato per eliminare i limiti di larghezza del contenitore e allargare le tabelle
+st.markdown("""
+    <style>
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        padding-left: 3rem;
+        padding-right: 3rem;
+        max-width: 100% !important;
+    }
+    div[data-testid="stDataEditor"] {
+        width: 100% !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# (Opzionale per rilevamento mobile avanzato)
 try:
   from streamlit_javascript import st_javascript
   is_mobile_env = True
@@ -31,11 +53,10 @@ if not st.session_state.autenticato:
       st.error("Password errata.")
   st.stop()
 
-# Rilevamento automatico del tipo di dispositivo basato su larghezza schermo o User-Agent
+# Rilevamento automatico del tipo di dispositivo basato su larghezza schermo
 tipo_dispositivo = "PC / Desktop"
 if is_mobile_env:
   try:
-    # Esegue un controllo JS sulla larghezza dello schermo del client
     screen_width = st_javascript("window.innerWidth")
     if screen_width and isinstance(screen_width, (int, float)):
       if screen_width < 768:
@@ -46,8 +67,6 @@ if is_mobile_env:
     pass
 
 st.subheader("Gestione Reti e Hardware per Sede")
-
-# Mostriamo un piccolo indicatore discreto del tipo di dispositivo rilevato (utile per debug o conferma)
 st.caption(f"💻 Dispositivo rilevato: **{tipo_dispositivo}**")
 
 sedi_config = [
@@ -207,7 +226,6 @@ with tab_rete:
   occupati = len(df_corrente[df_corrente["Stato"].astype(str).str.contains("Occupato")])
   liberi = totale_ip - occupati
 
-  # Adattiamo le metriche a seconda dello spazio dello schermo (su smartphone le mettiamo a colonna singola o doppie per evitare compressioni)
   if tipo_dispositivo == "Smartphone":
     col_m1, col_m2 = st.columns(2)
     col_m1.metric("Totale IP", totale_ip)
@@ -299,7 +317,6 @@ with tab_hardware:
 
         dettagli_esistenti = st.session_state.hardware_dettagli.get(ip_scelto, {})
 
-        # Se siamo da smartphone disponiamo i campi in un'unica colonna per evitare campi troppo compressi
         if tipo_dispositivo == "Smartphone":
           hw_marca = st.text_input("Marca", value=pulisci_valore(dettagli_esistenti.get("Marca", "")))
           hw_modello = st.text_input("Modello", value=pulisci_valore(dettagli_esistenti.get("Modello", "")))
@@ -410,7 +427,6 @@ with tab_hardware:
 
   st.markdown("---")
   
-  # Intestazione e Pulsante a 2 cicli per l'ordinamento
   if tipo_dispositivo == "Smartphone":
     st.markdown(f"📋 **Inventario Sede**")
     ordinato_attivo = st.session_state.stato_ordinamento_anno.get(idx_selezionato, False)
@@ -528,7 +544,7 @@ with tab_hardware:
 
   # --- PULSANTI DI ESPORTAZIONE ---
   st.markdown("---")
-  st.markdown(f"##### 📥 Esporta Inventario - {sede_scelta['nome']}")
+  st.markdown(f"##### 📥 Esporta Inventario (Solo Dispositivi Occupati) - {sede_scelta['nome']}")
 
   lista_export_finale = []
   for m in df_rete_sede.to_dict("records"):
@@ -551,7 +567,6 @@ with tab_hardware:
       
   df_export_finale = pd.DataFrame(lista_export_finale)
 
-  # Su smartphone i pulsanti di download vengono impilati verticalmente per comodità d'uso tattile
   if tipo_dispositivo == "Smartphone":
     output_excel_tab = io.BytesIO()
     with pd.ExcelWriter(output_excel_tab, engine="openpyxl") as writer:
@@ -564,49 +579,6 @@ with tab_hardware:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True,
     )
-    
-    # Generazione PDF semplificata per mobile
-    try:
-      if not df_export_finale.empty:
-        # Codice PDF compatto
-        class PDFReportTab(FPDF):
-          def header(self):
-            self.set_font("helvetica", "B", 9)
-            self.cell(0, 8, f"Inventario Sede: {sede_scelta['nome']}", 0, 1, "C")
-            self.ln(2)
-          def footer(self):
-            self.set_y(-12)
-            self.set_font("helvetica", "I", 8)
-            self.cell(0, 8, f"Pagina {self.page_no()}", 0, 0, "C")
-
-        pdf = PDFReportTab(orientation="L", unit="mm", format="A4")
-        pdf.add_page()
-        pdf.set_font("helvetica", "", 7)
-        headers = ["IP", "Nome", "Tipologia", "CPU & Anno"]
-        col_widths = [30, 45, 40, 40]
-        pdf.set_font("helvetica", "B", 7)
-        for i, h in enumerate(headers):
-          pdf.cell(col_widths[i], 6, h, 1, 0, "C")
-        pdf.ln()
-        pdf.set_font("helvetica", "", 7)
-        for _, row in df_export_finale.iterrows():
-          pdf.cell(col_widths[0], 5, str(row["Indirizzo IP"]), 1, 0, "C")
-          pdf.cell(col_widths[1], 5, str(row["Nome Macchina"])[:25], 1, 0, "L")
-          pdf.cell(col_widths[2], 5, str(row["Tipologia"])[:22], 1, 0, "L")
-          pdf.cell(col_widths[3], 5, str(row["Processore"])[:25], 1, 1, "L")
-        
-        raw_pdf = pdf.output()
-        pdf_bytes_tab = bytes(raw_pdf) if isinstance(raw_pdf, (bytearray, bytes)) else str(raw_pdf).encode("latin1")
-        
-        st.download_button(
-            label="📄 Scarica PDF (.pdf)",
-            data=pdf_bytes_tab,
-            file_name=f"Inventario_{sede_scelta['nome'].replace(' ', '_')}.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
-    except Exception as e:
-      pass
   else:
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
@@ -621,5 +593,57 @@ with tab_hardware:
           use_container_width=True,
       )
     with col_btn2:
-      # Logica PDF Desktop già presente nei passaggi precedenti
-      pass
+      class PDFReportTab(FPDF):
+        def header(self):
+          self.set_font("helvetica", "B", 10)
+          self.cell(0, 10, f"Inventario Hardware Occupati - Sede: {sede_scelta['nome']}", 0, 1, "C")
+          self.ln(3)
+
+        def footer(self):
+          self.set_y(-15)
+          self.set_font("helvetica", "I", 8)
+          self.cell(0, 10, f"Pagina {self.page_no()}", 0, 0, "C")
+
+      def genera_pdf_tab(df_data):
+        pdf = PDFReportTab(orientation="L", unit="mm", format="A4")
+        pdf.add_page()
+        pdf.set_font("helvetica", "", 8)
+        
+        headers = ["IP", "Nome", "Tipologia", "Marca", "Modello", "CPU & Anno", "RAM", "HD", "Capienza", "Garanzia"]
+        col_widths = [25, 35, 30, 25, 25, 25, 18, 20, 25, 27]
+        
+        pdf.set_font("helvetica", "B", 8)
+        for i, h in enumerate(headers):
+          pdf.cell(col_widths[i], 7, h, 1, 0, "C")
+        pdf.ln()
+        
+        pdf.set_font("helvetica", "", 7)
+        for _, row in df_data.iterrows():
+          pdf.cell(col_widths[0], 6, str(row["Indirizzo IP"]), 1, 0, "C")
+          pdf.cell(col_widths[1], 6, str(row["Nome Macchina"])[:20], 1, 0, "L")
+          pdf.cell(col_widths[2], 6, str(row["Tipologia"])[:18], 1, 0, "L")
+          pdf.cell(col_widths[3], 6, str(row["Marca"])[:15], 1, 0, "L")
+          pdf.cell(col_widths[4], 6, str(row["Modello"])[:15], 1, 0, "L")
+          pdf.cell(col_widths[5], 6, str(row["Processore"])[:15], 1, 0, "L")
+          pdf.cell(col_widths[6], 6, str(row["RAM"])[:10], 1, 0, "C")
+          pdf.cell(col_widths[7], 6, str(row["Tipo HD"])[:10], 1, 0, "C")
+          pdf.cell(col_widths[8], 6, str(row["Capienza HD"])[:12], 1, 0, "C")
+          pdf.cell(col_widths[9], 6, str(row["Garanzia"])[:15], 1, 1, "C")
+          
+        raw_pdf = pdf.output()
+        if isinstance(raw_pdf, (bytearray, bytes)):
+          return bytes(raw_pdf)
+        return str(raw_pdf).encode("latin1")
+
+      try:
+        if not df_export_finale.empty:
+          pdf_bytes_tab = genera_pdf_tab(df_export_finale)
+          st.download_button(
+              label="📄 Scarica Occupati in PDF (.pdf)",
+              data=pdf_bytes_tab,
+              file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.pdf",
+              mime="application/pdf",
+              use_container_width=True,
+          )
+      except Exception as e:
+        st.error(f"Errore nella generazione del PDF: {e}")
