@@ -304,20 +304,33 @@ with tab_hardware:
   st.markdown(f"### 💻 Specifiche Hardware: {sede_scelta['nome']}")
   df_rete_sede = st.session_state.dataframes_rete[idx_selezionato]
 
-  with st.expander("🛠️ Aggiungi dettagli tecnici avanzati (Manuale)", expanded=(tipo_dispositivo == "PC / Desktop")):
-    macchine_occupate = df_rete_sede.to_dict("records")
+  with st.expander("🛠️ Aggiungi dettagli tecnici avanzati (Manuale)", expanded=True):
+    lista_tutti_ip = df_rete_sede.to_dict("records")
     with st.form(key=f"form_hw_{idx_selezionato}"):
-      ip_disponibili_mostrati = [m["Indirizzo IP"] for m in macchine_occupate]
+      ip_disponibili_mostrati = [m["Indirizzo IP"] for m in lista_tutti_ip]
 
       if ip_disponibili_mostrati:
         scelta_mostrata = st.selectbox("Seleziona IP Dispositivo", ip_disponibili_mostrati)
         ip_scelto = [
             m["_ip_completo"]
-            for m in macchine_occupate
+            for m in lista_tutti_ip
             if m["Indirizzo IP"] == scelta_mostrata
         ][0]
 
+        riga_corrente_ip = [m for m in lista_tutti_ip if m["_ip_completo"] == ip_scelto][0]
         dettagli_esistenti = st.session_state.hardware_dettagli.get(ip_scelto, {})
+
+        # Campi essenziali sincronizzati direttamente nel form
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+          hw_nome_macchina = st.text_input("Nome Dispositivo", value=pulisci_valore(riga_corrente_ip.get("Nome Macchina", "")))
+        with col_f2:
+          tipologia_esistente = pulisci_valore(riga_corrente_ip.get("Tipologia", "PC / Macchina"))
+          if tipologia_esistente not in ["PC / Macchina", "Stampante", "Switch"]:
+            tipologia_esistente = "PC / Macchina"
+          hw_tipologia = st.selectbox("Tipologia", ["PC / Macchina", "Stampante", "Switch"], index=["PC / Macchina", "Stampante", "Switch"].index(tipologia_esistente))
+
+        st.markdown("---")
 
         if tipo_dispositivo == "Smartphone":
           hw_marca = st.text_input("Marca", value=pulisci_valore(dettagli_esistenti.get("Marca", "")))
@@ -358,8 +371,9 @@ with tab_hardware:
             hw_cap_hd = st.text_input("Capienza / Note", value=pulisci_valore(dettagli_esistenti.get("Capienza HD", "")))
             hw_garanzia = st.text_input("Scadenza Garanzia", value=pulisci_valore(dettagli_esistenti.get("Garanzia", "")))
 
-        btn_salva = st.form_submit_button("Salva Specifiche Tecniche")
+        btn_salva = st.form_submit_button("Salva Specifiche Tecniche e Dispositivo")
         if btn_salva:
+          # Salvataggio dettagli hardware
           st.session_state.hardware_dettagli[ip_scelto] = {
               "Marca": hw_marca,
               "Modello": hw_modello,
@@ -369,11 +383,19 @@ with tab_hardware:
               "Capienza HD": hw_cap_hd,
               "Garanzia": hw_garanzia,
           }
+
+          # Aggiornamento immediato del dataframe della rete per sincronizzare nome, tipologia e stato
           idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_scelto].index
-          if not idx_r.empty and df_rete_sede.loc[idx_r[0], "Stato"] != "🔴 Occupato":
-            df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
+          if not idx_r.empty:
+            df_rete_sede.loc[idx_r, "Nome Macchina"] = pulisci_valore(hw_nome_macchina)
+            df_rete_sede.loc[idx_r, "Tipologia"] = hw_tipologia if pulisci_valore(hw_nome_macchina) else ""
+            if pulisci_valore(hw_nome_macchina):
+              df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
+            else:
+              df_rete_sede.loc[idx_r, "Stato"] = "🟢 Libero"
             st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
-          st.success(f"Specifiche salvate con successo per l'IP {scelta_mostrata}!")
+
+          st.success(f"Specifiche e dati salvati con successo per l'IP {scelta_mostrata}!")
           st.rerun()
 
   with st.expander("📁 Importa inventario da file (CSV o Excel)"):
