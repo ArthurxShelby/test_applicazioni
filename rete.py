@@ -1,5 +1,5 @@
 import ipaddress
-import ioimport io
+import io
 import re
 import pandas as pd
 from fpdf import FPDF
