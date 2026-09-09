@@ -410,31 +410,27 @@ with tab_hardware:
         else:
           if st.button("Conferma e Importa Dati"):
             count_importati = 0
-            base_ip_sede = blocco_completo_ip # es. "38"
+            base_ip_sede = blocco_completo_ip
             
             for _, row in df_import.iterrows():
               ip_raw = str(row.get("Indirizzo IP", "")).strip()
               if not ip_raw:
                 continue
 
-              # Gestione intelligente dell'IP completo o parziale
-              # Estraiamo gli ultimi due segmenti dell'indirizzo IP (es. da "192.168.38.45" o "38.45" ricaviamo "38.45")
               parti_ip = ip_raw.split(".")
               if len(parti_ip) >= 2:
                 ip_file_completo = f"{parti_ip[-2]}.{parti_ip[-1]}"
               else:
                 ip_file_completo = f"{base_ip_sede}.{ip_raw}"
 
-              # Verifichiamo se l'IP appartiene effettivamente a questo blocco di sede
               if ip_file_completo.startswith(f"{base_ip_sede}."):
-                nome_mac_file = pulisci_valore(row.get("Nome Macchina", ""))
-                tipo_file = pulisci_valore(row.get("Tipologia", ""))
-
+                # Corretto: legge esattamente la colonna 'Nome Dispositivo' dal file Excel
+                nome_mac_file = pulisci_valore(row.get("Nome Dispositivo", ""))
+                
                 if nome_mac_file:
                   idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_file_completo].index
                   if not idx_r.empty:
                     df_rete_sede.loc[idx_r, "Nome Macchina"] = nome_mac_file
-                    df_rete_sede.loc[idx_r, "Tipologia"] = tipo_file
                     df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
 
                 st.session_state.hardware_dettagli[ip_file_completo] = {
@@ -582,7 +578,7 @@ with tab_hardware:
       dettagli = st.session_state.hardware_dettagli.get(ip_comp, {})
       lista_export_finale.append({
           "Indirizzo IP": m["Indirizzo IP"],
-          "Nome Macchina": nome_mac,
+          "Nome Dispositivo": nome_mac,
           "Tipologia": pulisci_valore(m["Tipologia"]),
           "Marca": pulisci_valore(dettagli.get("Marca", "")),
           "Modello": pulisci_valore(dettagli.get("Modello", "")),
@@ -611,7 +607,7 @@ with tab_hardware:
     pdf.add_page()
     pdf.set_font("helvetica", "", 8)
     
-    headers = ["IP", "Nome", "Tipologia", "Marca", "Modello", "CPU & Anno", "RAM", "HD", "Capienza", "Garanzia"]
+    headers = ["IP", "Nome Dispositivo", "Tipologia", "Marca", "Modello", "CPU & Anno", "RAM", "HD", "Capienza", "Garanzia"]
     col_widths = [25, 35, 30, 25, 25, 25, 18, 20, 25, 27]
     
     pdf.set_font("helvetica", "B", 8)
@@ -625,7 +621,7 @@ with tab_hardware:
     else:
       for _, row in df_data.iterrows():
         pdf.cell(col_widths[0], 6, str(row["Indirizzo IP"]), 1, 0, "C")
-        pdf.cell(col_widths[1], 6, str(row["Nome Macchina"])[:20], 1, 0, "L")
+        pdf.cell(col_widths[1], 6, str(row["Nome Dispositivo"])[:20], 1, 0, "L")
         pdf.cell(col_widths[2], 6, str(row["Tipologia"])[:18], 1, 0, "L")
         pdf.cell(col_widths[3], 6, str(row["Marca"])[:15], 1, 0, "L")
         pdf.cell(col_widths[4], 6, str(row["Modello"])[:15], 1, 0, "L")
