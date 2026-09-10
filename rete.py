@@ -148,6 +148,10 @@ for idx, item in enumerate(sedi_config):
 if "hardware_dettagli" not in st.session_state:
   st.session_state.hardware_dettagli = {}
 
+# Inizializziamo lo stato del toggle di ordinamento per sede se non esiste
+if "stato_ordinamento_anno" not in st.session_state:
+  st.session_state.stato_ordinamento_anno = {}
+
 idx_selezionato = st.selectbox(
     "📍 Seleziona la Sede da Gestire",
     options=range(len(sedi_config)),
@@ -417,7 +421,18 @@ with tab_hardware:
         st.error(f"Errore nella lettura del file: {e}")
 
   st.markdown("---")
-  st.markdown("📋 **Inventario Completo della Sede (Modificabile):** *Fai clic sull'intestazione della colonna 'Processore e Anno' per ordinare per anno.*")
+  
+  # Header e Pulsante interattivo a 2 cicli esatti associato al nome della colonna/funzionalità
+  col_tit_inv, col_btn_ord = st.columns([3, 1])
+  with col_tit_inv:
+    st.markdown(f"📋 **Inventario Completo della Sede (Modificabile)**")
+  with col_btn_ord:
+    # Stato attuale dell'ordinamento per questa sede
+    ordinato_attivo = st.session_state.stato_ordinamento_anno.get(idx_selezionato, False)
+    label_btn = "🔄 Riordina per Anno (Attivo)" if ordinato_attivo else "📅 Ordina per Anno"
+    if st.button(label_btn, use_container_width=True):
+      st.session_state.stato_ordinamento_anno[idx_selezionato] = not ordinato_attivo
+      st.rerun()
 
   lista_completa = []
   for m in df_rete_sede.to_dict("records"):
@@ -444,6 +459,13 @@ with tab_hardware:
     })
 
   df_inventario_corrente = pd.DataFrame(lista_completa)
+
+  # Applicazione del ciclo di ordinamento a 2 stati:
+  # 1° clic -> Ordina in modo crescente in base all'anno estratto dal processore.
+  # 2° clic -> Riporta all'ordine naturale (per indirizzo IP).
+  if st.session_state.stato_ordinamento_anno.get(idx_selezionato, False):
+    df_inventario_corrente["_anno_temp"] = df_inventario_corrente["Processore"].apply(estrai_anno)
+    df_inventario_corrente = df_inventario_corrente.sort_values(by="_anno_temp", ascending=True).drop(columns=["_anno_temp"])
 
   df_inv_per_editor = df_inventario_corrente.drop(
       columns=["_ip_completo"], errors="ignore"
@@ -483,33 +505,9 @@ with tab_hardware:
       hide_index=True,
   )
 
-  # Intercettiamo se l'utente ha fatto clic sull'ordinamento della colonna Processore
-  editor_state_key = f"editor_inventario_{idx_selezionato}"
-  if editor_state_key in st.session_state:
-    editor_info = st.session_state[editor_state_key]
-    # Controllo se Streamlit ha restituito informazioni sull'ordinamento attivo della tabella
-    sort_info = editor_info.get("editing", {}).get("sort", None) if isinstance(editor_info, dict) else None
-    
-    # Metodo alternativo per catturare l'ordinamento nativo dell'interfaccia Streamlit
-    # Verifichiamo se l'utente ha cliccato sull'intestazione tramite gli eventi della tabella se disponibili o riorganizziamo al volo
-    # In Streamlit, possiamo leggere la configurazione di ordinamento attiva se presente nel dataframe state o gestirla tramite un piccolo trucco:
-    # Se l'utente clicca sulla colonna, Streamlit ricarica la pagina. Possiamo memorizzare lo stato del click sulla colonna tramite session_state.
-
-  # Per gestire in modo nativo e affidabile il clic sulla colonna di Streamlit, usiamo un piccolo controllo di stato associato alla tabella:
-  # Poiché le colonne di st.data_editor mostrano le freccette di ordinamento al click, possiamo tracciare il cambio di ordinamento:
-  
-  # Ricostruiamo la mappatura degli indici per mantenere sincronizzati i dati modificati
-  # Sincronizziamo prima le modifiche correnti salvate dall'utente sul dataframe originale basato su IP
-  for i in range(len(df_inventario_modificato)):
-    # Troviamo l'IP corrispondente alla riga corrente (considerando se c'è stato un ordinamento visivo)
-    # Se l'utente ha ordinato la tabella visivamente, la riga i corrisponde all'elemento ordinato
-    pass
-
   inv_modificato = False
   for i in range(len(df_inventario_modificato)):
-    # Troviamo l'indice originario tramite l'IP
     ip_corr_riga = df_inventario_modificato.loc[i, "Indirizzo IP"]
-    # Cerchiamo la riga corrispondente in df_inventario_corrente
     riga_orig = df_inventario_corrente[df_inventario_corrente["Indirizzo IP"] == ip_corr_riga]
     if not riga_orig.empty:
       ip_comp = riga_orig.iloc[0]["_ip_completo"]
@@ -552,7 +550,6 @@ with tab_hardware:
 
   col_btn1, col_btn2 = st.columns(2)
 
-  # Prepariamo il DataFrame per l'export filtrando SOLO i dispositivi Occupati
   lista_export_finale = []
   for m in df_rete_sede.to_dict("records"):
     ip_comp = m["_ip_completo"]
@@ -576,7 +573,6 @@ with tab_hardware:
   df_export_finale = pd.DataFrame(lista_export_finale)
 
   with col_btn1:
-    # Esportazione Excel
     output_excel_tab = io.BytesIO()
     with pd.ExcelWriter(output_excel_tab, engine="openpyxl") as writer:
       df_export_finale.to_excel(writer, index=False, sheet_name="Inventario Occupati")
@@ -590,7 +586,6 @@ with tab_hardware:
     )
 
   with col_btn2:
-    # Esportazione PDF
     class PDFReportTab(FPDF):
       def header(self):
         self.set_font("helvetica", "B", 10)
