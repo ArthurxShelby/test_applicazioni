@@ -168,8 +168,9 @@ def carica_dati_da_supabase():
   return []
 
 def salva_o_aggiorna_su_supabase(ip_completo, sede_nome, dati_hw, dati_rete):
-  """Salva o aggiorna un record su Supabase includendo la colonna S.O."""
+  """Salva o aggiorna un record su Supabase includendo la gestione errori visibile."""
   if not supabase:
+    st.error("⚠️ Client Supabase non disponibile! Controlla i secrets.")
     return
   try:
     payload = {
@@ -183,14 +184,14 @@ def salva_o_aggiorna_su_supabase(ip_completo, sede_nome, dati_hw, dati_rete):
         "s_o": dati_hw.get("S.O.", ""),
         "processore": dati_hw.get("Processore", ""),
         "ram": dati_hw.get("RAM", ""),
-        "tipo_hd": dati_hw.get("Tipo HD", ""),
+        "tipo_hd": dati_hw.get("Tipo HD", "SSD"),
         "capienza_hd": dati_hw.get("Capienza HD", ""),
         "garanzia": dati_hw.get("Garanzia", "")
     }
     
     supabase.table(NOME_TABELLA_SUPABASE).upsert(payload, on_conflict="ip_completo").execute()
   except Exception as e:
-    print("Errore nel salvataggio su Supabase:", e)
+    st.error(f"❌ Errore critico salvataggio Supabase: {e}")
 
 def elimina_da_supabase(ip_completo):
   """Elimina o ripulisce il record su Supabase quando l'IP viene liberato."""
@@ -233,20 +234,19 @@ def processa_stringa_hd(testo_capienza, tipo_hd_attuale):
   cap_str = pulisci_valore(testo_capienza)
   tipo_str = pulisci_valore(tipo_hd_attuale)
   
-  # Cerca la sigla dentro la capienza se il tipo è vuoto o generico
   match_tipo = re.search(r'\b(SSD|HDD|NVMe)\b', cap_str, re.IGNORECASE)
   if match_tipo:
     trovato = match_tipo.group(1).upper()
-    # Se il tipo attuale non era definito o era un trattino, prendiamo quello trovato
     if not tipo_str or tipo_str == "-":
       tipo_str = trovato
-    # Rimuoviamo la dicitura trovata dalla stringa della capienza per pulirla
     cap_str = re.sub(r'\b(SSD|HDD|NVMe)\b', '', cap_str, flags=re.IGNORECASE)
     cap_str = re.sub(r'[,;\s]+', ' ', cap_str).strip()
     cap_str = cap_str.strip(',').strip('-').strip()
 
-  if not tipo_str or tipo_str == "-":
-    tipo_str = "SSD" # Valore di default predefinito se proprio manca
+  if (not tipo_str or tipo_str == "-") and cap_str:
+    tipo_str = "SSD"
+  elif not tipo_str or tipo_str == "-":
+    tipo_str = "SSD"
 
   return tipo_str, cap_str
 
@@ -272,7 +272,6 @@ if "dataframes_rete" not in st.session_state:
             "Stato": pulisci_valore(match_db.get("stato", "🔴 Occupato")),
         })
         
-        # Gestisce l'ereditarietà immediata della tipologia HD dalla capienza salvata
         db_capienza = pulisci_valore(match_db.get("capienza_hd", ""))
         db_tipo_hd = pulisci_valore(match_db.get("tipo_hd", ""))
         tipo_hd_corretto, cap_hd_corretta = processa_stringa_hd(db_capienza, db_tipo_hd)
@@ -377,7 +376,6 @@ with tab_rete:
       hide_index=True,
   )
 
-  modificato = False
   for i in range(len(df_modificato)):
     ip_corr = df_corrente.loc[i, "_ip_completo"]
     nome_mac = pulisci_valore(df_modificato.loc[i, "Nome Macchina"])
@@ -390,17 +388,12 @@ with tab_rete:
 
     if nome_mac and stato_attuale != "🔴 Occupato":
       df_modificato.loc[i, "Stato"] = "🔴 Occupato"
-      modificato = True
     elif not nome_mac and stato_attuale == "🔴 Occupato":
       df_modificato.loc[i, "Stato"] = "🟢 Libero"
       tipo_scelto = ""
       if ip_corr in st.session_state.hardware_dettagli:
         del st.session_state.hardware_dettagli[ip_corr]
       elimina_da_supabase(ip_corr)
-      modificato = True
-
-    if df_corrente.loc[i, "Tipologia"] != tipo_scelto or df_corrente.loc[i, "Nome Macchina"] != nome_mac or df_corrente.loc[i, "Stato"] != df_modificato.loc[i, "Stato"]:
-      modificato = True
 
     df_corrente.loc[i, "Nome Macchina"] = nome_mac
     df_corrente.loc[i, "Tipologia"] = tipo_scelto
@@ -620,7 +613,6 @@ with tab_hardware:
 
     so_val = pulisci_valore(dettagli.get("S.O.", "-"))
     
-    # Processa ed estrae la sigla se era ancora rimasta attaccata nella capienza
     cap_hd_grezza = pulisci_valore(dettagli.get("Capienza HD", "-"))
     tipo_hd_grezzo = pulisci_valore(dettagli.get("Tipo HD", "-"))
     tipo_hd_val, cap_hd_val = processa_stringa_hd(cap_hd_grezza, tipo_hd_grezzo)
@@ -680,7 +672,6 @@ with tab_hardware:
       hide_index=True,
   )
 
-  inv_modificato = False
   for i in range(len(df_inventario_modificato)):
     ip_corr_riga = df_inventario_modificato.loc[i, "Indirizzo IP"]
     riga_orig = df_inventario_corrente[df_inventario_corrente["Indirizzo IP"] == ip_corr_riga]
@@ -719,7 +710,6 @@ with tab_hardware:
             df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
           else:
             df_rete_sede.loc[idx_r, "Stato"] = "🟢 Libero"
-          inv_modificato = True
 
         riga_inf_att = df_rete_sede.loc[idx_r[0]].to_dict()
         salva_o_aggiorna_su_supabase(ip_comp, sede_scelta["nome"], dettagli_agg, riga_inf_att)
