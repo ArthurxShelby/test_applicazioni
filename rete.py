@@ -567,11 +567,60 @@ with tab_hardware:
       
   df_export_finale = pd.DataFrame(lista_export_finale)
 
-  if tipo_dispositivo == "Smartphone":
-    output_excel_tab = io.BytesIO()
-    with pd.ExcelWriter(output_excel_tab, engine="openpyxl") as writer:
-      df_export_finale.to_excel(writer, index=False, sheet_name="Inventario Occupati")
+  class PDFReportTab(FPDF):
+    def header(self):
+      self.set_font("helvetica", "B", 10)
+      self.cell(0, 10, f"Inventario Hardware Occupati - Sede: {sede_scelta['nome']}", 0, 1, "C")
+      self.ln(3)
+
+    def footer(self):
+      self.set_y(-15)
+      self.set_font("helvetica", "I", 8)
+      self.cell(0, 10, f"Pagina {self.page_no()}", 0, 0, "C")
+
+  def genera_pdf_tab(df_data):
+    pdf = PDFReportTab(orientation="L", unit="mm", format="A4")
+    pdf.add_page()
+    pdf.set_font("helvetica", "", 8)
     
+    headers = ["IP", "Nome", "Tipologia", "Marca", "Modello", "CPU & Anno", "RAM", "HD", "Capienza", "Garanzia"]
+    col_widths = [25, 35, 30, 25, 25, 25, 18, 20, 25, 27]
+    
+    pdf.set_font("helvetica", "B", 8)
+    for i, h in enumerate(headers):
+      pdf.cell(col_widths[i], 7, h, 1, 0, "C")
+    pdf.ln()
+    
+    pdf.set_font("helvetica", "", 7)
+    for _, row in df_data.iterrows():
+      pdf.cell(col_widths[0], 6, str(row["Indirizzo IP"]), 1, 0, "C")
+      pdf.cell(col_widths[1], 6, str(row["Nome Macchina"])[:20], 1, 0, "L")
+      pdf.cell(col_widths[2], 6, str(row["Tipologia"])[:18], 1, 0, "L")
+      pdf.cell(col_widths[3], 6, str(row["Marca"])[:15], 1, 0, "L")
+      pdf.cell(col_widths[4], 6, str(row["Modello"])[:15], 1, 0, "L")
+      pdf.cell(col_widths[5], 6, str(row["Processore"])[:15], 1, 0, "L")
+      pdf.cell(col_widths[6], 6, str(row["RAM"])[:10], 1, 0, "C")
+      pdf.cell(col_widths[7], 6, str(row["Tipo HD"])[:10], 1, 0, "C")
+      pdf.cell(col_widths[8], 6, str(row["Capienza HD"])[:12], 1, 0, "C")
+      pdf.cell(col_widths[9], 6, str(row["Garanzia"])[:15], 1, 1, "C")
+      
+    raw_pdf = pdf.output()
+    if isinstance(raw_pdf, (bytearray, bytes)):
+      return bytes(raw_pdf)
+    return str(raw_pdf).encode("latin1")
+
+  # Generazione dati Excel in memoria
+  output_excel_tab = io.BytesIO()
+  with pd.ExcelWriter(output_excel_tab, engine="openpyxl") as writer:
+    df_export_finale.to_excel(writer, index=False, sheet_name="Inventario Occupati")
+
+  # Generazione dati PDF in memoria (funziona anche con dataframe vuoto)
+  try:
+    pdf_bytes_tab = genera_pdf_tab(df_export_finale)
+  except Exception as e:
+    pdf_bytes_tab = b""
+
+  if tipo_dispositivo == "Smartphone":
     st.download_button(
         label="📊 Scarica Excel (.xlsx)",
         data=output_excel_tab.getvalue(),
@@ -579,13 +628,17 @@ with tab_hardware:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True,
     )
+    st.download_button(
+        label="📄 Scarica PDF (.pdf)",
+        data=pdf_bytes_tab,
+        file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.pdf",
+        mime="application/pdf",
+        use_container_width=True,
+    )
   else:
-    # Ripristinati entrambi i pulsanti (Excel e PDF affiancati su PC)
+    # Pulsanti Excel e PDF affiancati anche se non ci sono elementi
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
-      output_excel_tab = io.BytesIO()
-      with pd.ExcelWriter(output_excel_tab, engine="openpyxl") as writer:
-        df_export_finale.to_excel(writer, index=False, sheet_name="Inventario Occupati")
       st.download_button(
           label="📊 Scarica Occupati in Excel (.xlsx)",
           data=output_excel_tab.getvalue(),
@@ -594,57 +647,10 @@ with tab_hardware:
           use_container_width=True,
       )
     with col_btn2:
-      class PDFReportTab(FPDF):
-        def header(self):
-          self.set_font("helvetica", "B", 10)
-          self.cell(0, 10, f"Inventario Hardware Occupati - Sede: {sede_scelta['nome']}", 0, 1, "C")
-          self.ln(3)
-
-        def footer(self):
-          self.set_y(-15)
-          self.set_font("helvetica", "I", 8)
-          self.cell(0, 10, f"Pagina {self.page_no()}", 0, 0, "C")
-
-      def genera_pdf_tab(df_data):
-        pdf = PDFReportTab(orientation="L", unit="mm", format="A4")
-        pdf.add_page()
-        pdf.set_font("helvetica", "", 8)
-        
-        headers = ["IP", "Nome", "Tipologia", "Marca", "Modello", "CPU & Anno", "RAM", "HD", "Capienza", "Garanzia"]
-        col_widths = [25, 35, 30, 25, 25, 25, 18, 20, 25, 27]
-        
-        pdf.set_font("helvetica", "B", 8)
-        for i, h in enumerate(headers):
-          pdf.cell(col_widths[i], 7, h, 1, 0, "C")
-        pdf.ln()
-        
-        pdf.set_font("helvetica", "", 7)
-        for _, row in df_data.iterrows():
-          pdf.cell(col_widths[0], 6, str(row["Indirizzo IP"]), 1, 0, "C")
-          pdf.cell(col_widths[1], 6, str(row["Nome Macchina"])[:20], 1, 0, "L")
-          pdf.cell(col_widths[2], 6, str(row["Tipologia"])[:18], 1, 0, "L")
-          pdf.cell(col_widths[3], 6, str(row["Marca"])[:15], 1, 0, "L")
-          pdf.cell(col_widths[4], 6, str(row["Modello"])[:15], 1, 0, "L")
-          pdf.cell(col_widths[5], 6, str(row["Processore"])[:15], 1, 0, "L")
-          pdf.cell(col_widths[6], 6, str(row["RAM"])[:10], 1, 0, "C")
-          pdf.cell(col_widths[7], 6, str(row["Tipo HD"])[:10], 1, 0, "C")
-          pdf.cell(col_widths[8], 6, str(row["Capienza HD"])[:12], 1, 0, "C")
-          pdf.cell(col_widths[9], 6, str(row["Garanzia"])[:15], 1, 1, "C")
-          
-        raw_pdf = pdf.output()
-        if isinstance(raw_pdf, (bytearray, bytes)):
-          return bytes(raw_pdf)
-        return str(raw_pdf).encode("latin1")
-
-      try:
-        if not df_export_finale.empty:
-          pdf_bytes_tab = genera_pdf_tab(df_export_finale)
-          st.download_button(
-              label="📄 Scarica Occupati in PDF (.pdf)",
-              data=pdf_bytes_tab,
-              file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.pdf",
-              mime="application/pdf",
-              use_container_width=True,
-          )
-      except Exception as e:
-        st.error(f"Errore nella generazione del PDF: {e}")
+      st.download_button(
+          label="📄 Scarica Occupati in PDF (.pdf)",
+          data=pdf_bytes_tab,
+          file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.pdf",
+          mime="application/pdf",
+          use_container_width=True,
+      )
