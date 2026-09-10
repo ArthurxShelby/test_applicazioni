@@ -5,14 +5,12 @@ import pandas as pd
 from fpdf import FPDF
 import streamlit as st
 
-# 1. Configurazione della pagina a tutto schermo per PC e dispositivi larghi
 st.set_page_config(
     page_title="Gestione Reti e Hardware per Sede",
     page_icon="💻",
-    layout="wide"  # <--- Espande la pagina a tutto schermo
+    layout="wide"
 )
 
-# 2. CSS personalizzato per eliminare i limiti di larghezza del contenitore e allargare le tabelle
 st.markdown("""
     <style>
     .block-container {
@@ -28,14 +26,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# (Opzionale per rilevamento mobile avanzato)
 try:
   from streamlit_javascript import st_javascript
   is_mobile_env = True
 except ImportError:
   is_mobile_env = False
 
-# Controllo autenticazione tramite st.secrets
 if "autenticato" not in st.session_state:
   st.session_state.autenticato = False
 
@@ -53,7 +49,6 @@ if not st.session_state.autenticato:
       st.error("Password errata.")
   st.stop()
 
-# Rilevamento automatico del tipo di dispositivo basato su larghezza schermo
 tipo_dispositivo = "PC / Desktop"
 if is_mobile_env:
   try:
@@ -226,16 +221,31 @@ with tab_rete:
   occupati = len(df_corrente[df_corrente["Stato"].astype(str).str.contains("Occupato")])
   liberi = totale_ip - occupati
 
+  pc_count = len(df_corrente[df_corrente["Tipologia"] == "PC / Macchina"])
+  stampanti_count = len(df_corrente[df_corrente["Tipologia"] == "Stampante"])
+  switch_count = len(df_corrente[df_corrente["Tipologia"] == "Switch"])
+  altro_count = len(df_corrente[df_corrente["Tipologia"] == "Altro"])
+
   if tipo_dispositivo == "Smartphone":
-    col_m1, col_m2 = st.columns(2)
-    col_m1.metric("Totale IP", totale_ip)
-    col_m2.metric("🟢 Liberi", liberi)
-    st.metric("🔴 Occupati", occupati)
-  else:
     col_m1, col_m2, col_m3 = st.columns(3)
+    col_m1.metric("Totale", totale_ip)
+    col_m2.metric("🟢 Liberi", liberi)
+    col_m3.metric("🔴 Occupati", occupati)
+    
+    col_t1, col_t2, col_t3, col_t4 = st.columns(4)
+    col_t1.metric("💻 PC", pc_count)
+    col_t2.metric("🖨️ Stamp.", stampanti_count)
+    col_t3.metric("🖲️ Switch", switch_count)
+    col_t4.metric("📦 Altro", altro_count)
+  else:
+    col_m1, col_m2, col_m3, col_m4, col_m5, col_m6, col_m7 = st.columns(7)
     col_m1.metric("Totale IP", totale_ip)
     col_m2.metric("🟢 Liberi", liberi)
     col_m3.metric("🔴 Occupati", occupati)
+    col_m4.metric("💻 PC", pc_count)
+    col_m5.metric("🖨️ Stampanti", stampanti_count)
+    col_m6.metric("🖲️ Switch", switch_count)
+    col_m7.metric("📦 Altro", altro_count)
 
   st.markdown("---")
 
@@ -320,7 +330,7 @@ with tab_hardware:
         if tipo_dispositivo == "Smartphone":
           hw_marca = st.text_input("Marca", value=pulisci_valore(dettagli_esistenti.get("Marca", "")))
           hw_modello = st.text_input("Modello", value=pulisci_valore(dettagli_esistenti.get("Modello", "")))
-          hw_cpu = st.text_input("Processore e Anno", value=pulisci_valore(dettagli_esistenti.get("Processore", "")))
+          hw_cpu = st.text_input("Processore e anno", value=pulisci_valore(dettagli_esistenti.get("Processore", "")))
           
           ram_salvata = dettagli_esistenti.get("RAM", "16 GB")
           try:
@@ -340,7 +350,7 @@ with tab_hardware:
           with col1:
             hw_marca = st.text_input("Marca (es. Dell, HP, Cisco)", value=pulisci_valore(dettagli_esistenti.get("Marca", "")))
             hw_modello = st.text_input("Modello", value=pulisci_valore(dettagli_esistenti.get("Modello", "")))
-            hw_cpu = st.text_input("Processore e Anno (es. Intel i5 2020)", value=pulisci_valore(dettagli_esistenti.get("Processore", "")))
+            hw_cpu = st.text_input("Processore e anno (es. Intel i5 2020)", value=pulisci_valore(dettagli_esistenti.get("Processore", "")))
           with col2:
             ram_salvata = dettagli_esistenti.get("RAM", "16 GB")
             try:
@@ -411,7 +421,7 @@ with tab_hardware:
                 st.session_state.hardware_dettagli[ip_file_completo] = {
                     "Marca": pulisci_valore(row.get("Marca", "-")),
                     "Modello": pulisci_valore(row.get("Modello", "-")),
-                    "Processore": pulisci_valore(row.get("Processore", "-")),
+                    "Processore": pulisci_valore(row.get("Processore e anno", "-")),
                     "RAM": pulisci_valore(row.get("RAM", "-")),
                     "Tipo HD": pulisci_valore(row.get("Tipo HD", "-")),
                     "Capienza HD": pulisci_valore(row.get("Capienza HD", "-")),
@@ -462,7 +472,7 @@ with tab_hardware:
         "Stato": m["Stato"],
         "Marca": pulisci_valore(dettagli.get("Marca", "-")),
         "Modello": pulisci_valore(dettagli.get("Modello", "-")),
-        "Processore": proc_val,
+        "Processore e anno": proc_val,
         "RAM": pulisci_valore(dettagli.get("RAM", "-")),
         "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "-")),
         "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "-")),
@@ -472,7 +482,7 @@ with tab_hardware:
   df_inventario_corrente = pd.DataFrame(lista_completa)
 
   if st.session_state.stato_ordinamento_anno.get(idx_selezionato, False):
-    df_inventario_corrente["_anno_temp"] = df_inventario_corrente["Processore"].apply(estrai_anno)
+    df_inventario_corrente["_anno_temp"] = df_inventario_corrente["Processore e anno"].apply(estrai_anno)
     df_inventario_corrente = df_inventario_corrente.sort_values(by="_anno_temp", ascending=True).drop(columns=["_anno_temp"])
 
   df_inv_per_editor = df_inventario_corrente.drop(columns=["_ip_completo"], errors="ignore").copy()
@@ -492,7 +502,7 @@ with tab_hardware:
           "Stato": st.column_config.SelectboxColumn("Stato", options=["🟢 Libero", "🔴 Occupato"], required=True),
           "Marca": st.column_config.TextColumn("Marca"),
           "Modello": st.column_config.TextColumn("Modello"),
-          "Processore": st.column_config.TextColumn("Processore e Anno"),
+          "Processore e anno": st.column_config.TextColumn("Processore e anno"),
           "RAM": st.column_config.TextColumn("RAM"),
           "Tipo HD": st.column_config.TextColumn("Tipo HD"),
           "Capienza HD": st.column_config.TextColumn("Capienza HD"),
@@ -518,7 +528,7 @@ with tab_hardware:
       st.session_state.hardware_dettagli[ip_comp] = {
           "Marca": pulisci_valore(df_inventario_modificato.loc[i, "Marca"]),
           "Modello": pulisci_valore(df_inventario_modificato.loc[i, "Modello"]),
-          "Processore": pulisci_valore(df_inventario_modificato.loc[i, "Processore"]),
+          "Processore": pulisci_valore(df_inventario_modificato.loc[i, "Processore e anno"]),
           "RAM": pulisci_valore(df_inventario_modificato.loc[i, "RAM"]),
           "Tipo HD": pulisci_valore(df_inventario_modificato.loc[i, "Tipo HD"]),
           "Capienza HD": pulisci_valore(df_inventario_modificato.loc[i, "Capienza HD"]),
@@ -542,7 +552,6 @@ with tab_hardware:
   if inv_modificato:
     st.rerun()
 
-  # --- PULSANTI DI ESPORTAZIONE ---
   st.markdown("---")
   st.markdown(f"##### 📥 Esporta Inventario (Solo Dispositivi Occupati) - {sede_scelta['nome']}")
 
@@ -558,7 +567,7 @@ with tab_hardware:
           "Tipologia": pulisci_valore(m["Tipologia"]),
           "Marca": pulisci_valore(dettagli.get("Marca", "")),
           "Modello": pulisci_valore(dettagli.get("Modello", "")),
-          "Processore": pulisci_valore(dettagli.get("Processore", "")),
+          "Processore e anno": pulisci_valore(dettagli.get("Processore", "")),
           "RAM": pulisci_valore(dettagli.get("RAM", "")),
           "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "")),
           "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "")),
@@ -592,29 +601,30 @@ with tab_hardware:
     pdf.ln()
     
     pdf.set_font("helvetica", "", 7)
-    for _, row in df_data.iterrows():
-      pdf.cell(col_widths[0], 6, str(row["Indirizzo IP"]), 1, 0, "C")
-      pdf.cell(col_widths[1], 6, str(row["Nome Macchina"])[:20], 1, 0, "L")
-      pdf.cell(col_widths[2], 6, str(row["Tipologia"])[:18], 1, 0, "L")
-      pdf.cell(col_widths[3], 6, str(row["Marca"])[:15], 1, 0, "L")
-      pdf.cell(col_widths[4], 6, str(row["Modello"])[:15], 1, 0, "L")
-      pdf.cell(col_widths[5], 6, str(row["Processore"])[:15], 1, 0, "L")
-      pdf.cell(col_widths[6], 6, str(row["RAM"])[:10], 1, 0, "C")
-      pdf.cell(col_widths[7], 6, str(row["Tipo HD"])[:10], 1, 0, "C")
-      pdf.cell(col_widths[8], 6, str(row["Capienza HD"])[:12], 1, 0, "C")
-      pdf.cell(col_widths[9], 6, str(row["Garanzia"])[:15], 1, 1, "C")
+    if df_data.empty:
+      pdf.cell(sum(col_widths), 10, "Nessun dispositivo occupato presente in questa sede.", 1, 1, "C")
+    else:
+      for _, row in df_data.iterrows():
+        pdf.cell(col_widths[0], 6, str(row["Indirizzo IP"]), 1, 0, "C")
+        pdf.cell(col_widths[1], 6, str(row["Nome Macchina"])[:20], 1, 0, "L")
+        pdf.cell(col_widths[2], 6, str(row["Tipologia"])[:18], 1, 0, "L")
+        pdf.cell(col_widths[3], 6, str(row["Marca"])[:15], 1, 0, "L")
+        pdf.cell(col_widths[4], 6, str(row["Modello"])[:15], 1, 0, "L")
+        pdf.cell(col_widths[5], 6, str(row["Processore e anno"])[:15], 1, 0, "L")
+        pdf.cell(col_widths[6], 6, str(row["RAM"])[:10], 1, 0, "C")
+        pdf.cell(col_widths[7], 6, str(row["Tipo HD"])[:10], 1, 0, "C")
+        pdf.cell(col_widths[8], 6, str(row["Capienza HD"])[:12], 1, 0, "C")
+        pdf.cell(col_widths[9], 6, str(row["Garanzia"])[:15], 1, 1, "C")
       
     raw_pdf = pdf.output()
     if isinstance(raw_pdf, (bytearray, bytes)):
       return bytes(raw_pdf)
     return str(raw_pdf).encode("latin1")
 
-  # Generazione dati Excel in memoria
   output_excel_tab = io.BytesIO()
   with pd.ExcelWriter(output_excel_tab, engine="openpyxl") as writer:
     df_export_finale.to_excel(writer, index=False, sheet_name="Inventario Occupati")
 
-  # Generazione dati PDF in memoria (funziona anche con dataframe vuoto)
   try:
     pdf_bytes_tab = genera_pdf_tab(df_export_finale)
   except Exception as e:
@@ -636,7 +646,6 @@ with tab_hardware:
         use_container_width=True,
     )
   else:
-    # Pulsanti Excel e PDF affiancati anche se non ci sono elementi
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
       st.download_button(
