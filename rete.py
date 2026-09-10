@@ -180,7 +180,7 @@ def salva_o_aggiorna_su_supabase(ip_completo, sede_nome, dati_hw, dati_rete):
         "stato": dati_rete.get("Stato", "🟢 Libero"),
         "marca": dati_hw.get("Marca", ""),
         "modello": dati_hw.get("Modello", ""),
-        "s_o": dati_hw.get("S.O.", ""),  # <-- Nome della colonna S.O. su Supabase
+        "s_o": dati_hw.get("S.O.", ""),
         "processore": dati_hw.get("Processore", ""),
         "ram": dati_hw.get("RAM", ""),
         "tipo_hd": dati_hw.get("Tipo HD", ""),
@@ -233,16 +233,20 @@ def processa_stringa_hd(testo_capienza, tipo_hd_attuale):
   cap_str = pulisci_valore(testo_capienza)
   tipo_str = pulisci_valore(tipo_hd_attuale)
   
-  if not cap_str:
-    return tipo_str, ""
-
+  # Cerca la sigla dentro la capienza se il tipo è vuoto o generico
   match_tipo = re.search(r'\b(SSD|HDD|NVMe)\b', cap_str, re.IGNORECASE)
   if match_tipo:
     trovato = match_tipo.group(1).upper()
-    tipo_str = trovato
+    # Se il tipo attuale non era definito o era un trattino, prendiamo quello trovato
+    if not tipo_str or tipo_str == "-":
+      tipo_str = trovato
+    # Rimuoviamo la dicitura trovata dalla stringa della capienza per pulirla
     cap_str = re.sub(r'\b(SSD|HDD|NVMe)\b', '', cap_str, flags=re.IGNORECASE)
     cap_str = re.sub(r'[,;\s]+', ' ', cap_str).strip()
     cap_str = cap_str.strip(',').strip('-').strip()
+
+  if not tipo_str or tipo_str == "-":
+    tipo_str = "SSD" # Valore di default predefinito se proprio manca
 
   return tipo_str, cap_str
 
@@ -267,14 +271,20 @@ if "dataframes_rete" not in st.session_state:
             "Tipologia": pulisci_valore(match_db.get("tipologia", "")),
             "Stato": pulisci_valore(match_db.get("stato", "🔴 Occupato")),
         })
+        
+        # Gestisce l'ereditarietà immediata della tipologia HD dalla capienza salvata
+        db_capienza = pulisci_valore(match_db.get("capienza_hd", ""))
+        db_tipo_hd = pulisci_valore(match_db.get("tipo_hd", ""))
+        tipo_hd_corretto, cap_hd_corretta = processa_stringa_hd(db_capienza, db_tipo_hd)
+
         st.session_state.hardware_dettagli[ip_completo] = {
             "Marca": pulisci_valore(match_db.get("marca", "")),
             "Modello": pulisci_valore(match_db.get("modello", "")),
-            "S.O.": pulisci_valore(match_db.get("s_o", "")), # <-- Legge S.O. da Supabase
+            "S.O.": pulisci_valore(match_db.get("s_o", "")),
             "Processore": pulisci_valore(match_db.get("processore", "")),
             "RAM": pulisci_valore(match_db.get("ram", "")),
-            "Tipo HD": pulisci_valore(match_db.get("tipo_hd", "")),
-            "Capienza HD": pulisci_valore(match_db.get("capienza_hd", "")),
+            "Tipo HD": tipo_hd_corretto,
+            "Capienza HD": cap_hd_corretta,
             "Garanzia": pulisci_valore(match_db.get("garanzia", "")),
         }
       else:
@@ -609,14 +619,15 @@ with tab_hardware:
       marca_val, modello_val = estrai_marca_e_modello(modello_val)
 
     so_val = pulisci_valore(dettagli.get("S.O.", "-"))
-    tipo_hd_val = pulisci_valore(dettagli.get("Tipo HD", "-"))
-    cap_hd_val = pulisci_valore(dettagli.get("Capienza HD", "-"))
-
-    if cap_hd_val and re.search(r'\b(SSD|HDD|NVMe)\b', cap_hd_val, re.IGNORECASE):
-      tipo_hd_val, cap_hd_val = processa_stringa_hd(cap_hd_val, tipo_hd_val)
-      dettagli["Tipo HD"] = tipo_hd_val
-      dettagli["Capienza HD"] = cap_hd_val
-      st.session_state.hardware_dettagli[ip_comp] = dettagli
+    
+    # Processa ed estrae la sigla se era ancora rimasta attaccata nella capienza
+    cap_hd_grezza = pulisci_valore(dettagli.get("Capienza HD", "-"))
+    tipo_hd_grezzo = pulisci_valore(dettagli.get("Tipo HD", "-"))
+    tipo_hd_val, cap_hd_val = processa_stringa_hd(cap_hd_grezza, tipo_hd_grezzo)
+    
+    dettagli["Tipo HD"] = tipo_hd_val
+    dettagli["Capienza HD"] = cap_hd_val
+    st.session_state.hardware_dettagli[ip_comp] = dettagli
 
     lista_completa.append({
         "Indirizzo IP": m["Indirizzo IP"],
