@@ -139,7 +139,6 @@ def pulisci_valore(val):
   return s
 
 def estrai_marca_e_modello(testo_modello):
-  """Estrae la prima parola come Marca e pulisce il Modello rimuovendola."""
   testo = pulisci_valore(testo_modello)
   if not testo:
     return "", ""
@@ -155,6 +154,27 @@ def estrai_anno(testo):
   if match:
     return int(match.group(1))
   return 9999
+
+def processa_stringa_hd(testo_capienza, tipo_hd_attuale):
+  """Estrae HDD/SSD/NVMe dalla capienza se presenti e pulisce il testo."""
+  cap_str = pulisci_valore(testo_capienza)
+  tipo_str = pulisci_valore(tipo_hd_attuale)
+  
+  if not cap_str:
+    return tipo_str, ""
+
+  # Cerca parole chiave nel campo capienza (es. SSD, HDD, NVMe)
+  match_tipo = re.search(r'\b(SSD|HDD|NVMe)\b', cap_str, re.IGNORECASE)
+  if match_tipo:
+    trovato = match_tipo.group(1).upper()
+    if not tipo_str or tipo_str == "-":
+      tipo_str = trovato
+    # Rimuove la parola trovata e pulisce eventuali virgole/spazi residui
+    cap_str = re.sub(r'\b(SSD|HDD|NVMe)\b', '', cap_str, flags=re.IGNORECASE)
+    cap_str = re.sub(r'[,;\s]+', ' ', cap_str).strip()
+    cap_str = cap_str.strip(',').strip()
+
+  return tipo_str, cap_str
 
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
@@ -344,7 +364,7 @@ with tab_hardware:
         if tipo_dispositivo == "Smartphone":
           hw_marca = st.text_input("Marca", value=pulisci_valore(dettagli_esistenti.get("Marca", "")))
           hw_modello = st.text_input("Modello", value=pulisci_valore(dettagli_esistenti.get("Modello", "")))
-          hw_so = st.text_input("S.O. (Sistema Operativo)", value=pulisci_valore(dettagli_esistenti.get("S.O.", dettagli_esistenti.get("Tipo HD", ""))))
+          hw_so = st.text_input("S.O. (Sistema Operativo)", value=pulisci_valore(dettagli_esistenti.get("S.O.", "")))
           hw_cpu = st.text_input("Processore e anno", value=pulisci_valore(dettagli_esistenti.get("Processore", "")))
           
           ram_salvata = dettagli_esistenti.get("RAM", "16 GB")
@@ -365,7 +385,7 @@ with tab_hardware:
           with col1:
             hw_marca = st.text_input("Marca (es. Dell, HP)", value=pulisci_valore(dettagli_esistenti.get("Marca", "")))
             hw_modello = st.text_input("Modello", value=pulisci_valore(dettagli_esistenti.get("Modello", "")))
-            hw_so = st.text_input("S.O. (Sistema Operativo)", value=pulisci_valore(dettagli_esistenti.get("S.O.", dettagli_esistenti.get("Tipo HD", ""))))
+            hw_so = st.text_input("S.O. (Sistema Operativo)", value=pulisci_valore(dettagli_esistenti.get("S.O.", "")))
             hw_cpu = st.text_input("Processore e anno (es. i5 2020)", value=pulisci_valore(dettagli_esistenti.get("Processore", "")))
           with col2:
             ram_salvata = dettagli_esistenti.get("RAM", "16 GB")
@@ -445,21 +465,22 @@ with tab_hardware:
                     df_rete_sede.loc[idx_r, "Nome Macchina"] = nome_mac_file
                     df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
 
-                # Estrazione automatica della prima parola del modello per metterla in Marca
                 modello_grezzo = row.get("Modello", "")
                 marca_estratta, modello_pulito = estrai_marca_e_modello(modello_grezzo)
 
-                # Preleva il contenuto della colonna Tipo HD e copialo in S.O.
-                tipo_hd_valore = pulisci_valore(row.get("Tipo HD", "-"))
+                # Gestione pulizia capienza HD e estrazione automatica di HDD/SSD/NVMe
+                capienza_grezza = row.get("Capienza HD", "")
+                tipo_hd_grezzo = row.get("Tipo HD", "-")
+                tipo_hd_finale, capienza_finale = processa_stringa_hd(capienza_grezza, tipo_hd_grezzo)
 
                 st.session_state.hardware_dettagli[ip_file_completo] = {
                     "Marca": marca_estratta,
                     "Modello": modello_pulito,
-                    "S.O.": tipo_hd_valore,
+                    "S.O.": pulisci_valore(row.get("S.O.", "-")),
                     "Processore": pulisci_valore(row.get("Processore e anno", "-")),
                     "RAM": pulisci_valore(row.get("RAM", "-")),
-                    "Tipo HD": tipo_hd_valore,
-                    "Capienza HD": pulisci_valore(row.get("Capienza HD", "-")),
+                    "Tipo HD": tipo_hd_finale,
+                    "Capienza HD": capienza_finale,
                     "Garanzia": pulisci_valore(row.get("Garanzia", "-")),
                 }
                 count_importati += 1
@@ -504,13 +525,16 @@ with tab_hardware:
     if not marca_val and modello_val and modello_val != "-":
       marca_val, modello_val = estrai_marca_e_modello(modello_val)
 
-    # Gestione S.O. (se non presente, recupera Tipo HD per compatibilità con i dati vecchi)
+    so_val = pulisci_valore(dettagli.get("S.O.", "-"))
     tipo_hd_val = pulisci_valore(dettagli.get("Tipo HD", "-"))
-    so_val = pulisci_valore(dettagli.get("S.O.", ""))
-    if not so_val and tipo_hd_val and tipo_hd_val != "-":
-      so_val = tipo_hd_val
-    elif not so_val:
-      so_val = "-"
+    cap_hd_val = pulisci_valore(dettagli.get("Capienza HD", "-"))
+
+    # Applica in tempo reale il controllo se l'utente ha scritto HDD/SSD dentro la capienza
+    if cap_hd_val and re.search(r'\b(SSD|HDD|NVMe)\b', cap_hd_val, re.IGNORECASE):
+      tipo_hd_val, cap_hd_val = processa_stringa_hd(cap_hd_val, tipo_hd_val)
+      dettagli["Tipo HD"] = tipo_hd_val
+      dettagli["Capienza HD"] = cap_hd_val
+      st.session_state.hardware_dettagli[ip_comp] = dettagli
 
     lista_completa.append({
         "Indirizzo IP": m["Indirizzo IP"],
@@ -524,7 +548,7 @@ with tab_hardware:
         "Processore e anno": proc_val,
         "RAM": pulisci_valore(dettagli.get("RAM", "-")),
         "Tipo HD": tipo_hd_val,
-        "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "-")),
+        "Capienza HD": cap_hd_val,
         "Garanzia": pulisci_valore(dettagli.get("Garanzia", "-")),
     })
 
@@ -575,14 +599,19 @@ with tab_hardware:
       if not nuovo_nome:
         nuova_tipologia = ""
 
+      # Elaborazione input modificato dall'utente nell'editor
+      cap_edit = pulisci_valore(df_inventario_modificato.loc[i, "Capienza HD"])
+      tipo_edit = pulisci_valore(df_inventario_modificato.loc[i, "Tipo HD"])
+      tipo_finale_ed, cap_finale_ed = processa_stringa_hd(cap_edit, tipo_edit)
+
       st.session_state.hardware_dettagli[ip_comp] = {
           "Marca": pulisci_valore(df_inventario_modificato.loc[i, "Marca"]),
           "Modello": pulisci_valore(df_inventario_modificato.loc[i, "Modello"]),
           "S.O.": pulisci_valore(df_inventario_modificato.loc[i, "S.O."]),
           "Processore": pulisci_valore(df_inventario_modificato.loc[i, "Processore e anno"]),
           "RAM": pulisci_valore(df_inventario_modificato.loc[i, "RAM"]),
-          "Tipo HD": pulisci_valore(df_inventario_modificato.loc[i, "Tipo HD"]),
-          "Capienza HD": pulisci_valore(df_inventario_modificato.loc[i, "Capienza HD"]),
+          "Tipo HD": tipo_finale_ed,
+          "Capienza HD": cap_finale_ed,
           "Garanzia": pulisci_valore(df_inventario_modificato.loc[i, "Garanzia"]),
       }
 
@@ -614,9 +643,7 @@ with tab_hardware:
       dettagli = st.session_state.hardware_dettagli.get(ip_comp, {})
       
       tipo_hd_val = pulisci_valore(dettagli.get("Tipo HD", ""))
-      so_val = pulisci_valore(dettagli.get("S.O.", ""))
-      if not so_val and tipo_hd_val:
-        so_val = tipo_hd_val
+      cap_hd_val = pulisci_valore(dettagli.get("Capienza HD", ""))
 
       lista_export_finale.append({
           "Indirizzo IP": m["Indirizzo IP"],
@@ -624,11 +651,11 @@ with tab_hardware:
           "Tipologia": pulisci_valore(m["Tipologia"]),
           "Marca": pulisci_valore(dettagli.get("Marca", "")),
           "Modello": pulisci_valore(dettagli.get("Modello", "")),
-          "S.O.": so_val,
+          "S.O.": pulisci_valore(dettagli.get("S.O.", "")),
           "Processore e anno": pulisci_valore(dettagli.get("Processore", "")),
           "RAM": pulisci_valore(dettagli.get("RAM", "")),
           "Tipo HD": tipo_hd_val,
-          "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "")),
+          "Capienza HD": cap_hd_val,
           "Garanzia": pulisci_valore(dettagli.get("Garanzia", "")),
       })
       
