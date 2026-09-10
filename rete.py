@@ -424,7 +424,6 @@ with tab_hardware:
                 ip_file_completo = f"{base_ip_sede}.{ip_raw}"
 
               if ip_file_completo.startswith(f"{base_ip_sede}."):
-                # Corretto: legge esattamente la colonna 'Nome Dispositivo' dal file Excel
                 nome_mac_file = pulisci_valore(row.get("Nome Dispositivo", ""))
                 
                 if nome_mac_file:
@@ -566,6 +565,34 @@ with tab_hardware:
   st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
   if inv_modificato:
     st.rerun()
+
+  # ==========================================
+  # NUOVA SEZIONE: PULSANTE DI CANCELLAZIONE
+  # ==========================================
+  st.markdown("---")
+  with st.expander("⚠️ Area Pericolosa - Gestione Svuotamento Sede"):
+    conferma_svuota = st.checkbox(
+        "Conferma di voler eliminare tutti i dati e l'inventario di questa sede", 
+        key=f"chk_svuota_{idx_selezionato}"
+    )
+    if st.button("🗑️ Svuota Inventario Sede", type="primary", key=f"btn_svuota_{idx_selezionato}"):
+      if conferma_svuota:
+        # Pulisce tutti i nomi macchina, tipologie e imposta lo stato su libero per la sede corrente
+        df_rete_sede["Nome Macchina"] = ""
+        df_rete_sede["Tipologia"] = ""
+        df_rete_sede["Stato"] = "🟢 Libero"
+        st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
+
+        # Rimuove tutti i dettagli hardware salvati per gli IP di questa sede
+        ips_da_rimuovere = [m["_ip_completo"] for m in df_rete_sede.to_dict("records")]
+        for ip_c in ips_da_rimuovere:
+          if ip_c in st.session_state.hardware_dettagli:
+            del st.session_state.hardware_dettagli[ip_c]
+
+        st.success(f"Inventario della sede '{sede_scelta['nome']}' svuotato con successo!")
+        st.rerun()
+      else:
+        st.warning("Per favore, spunta la casella di conferma prima di procedere con la cancellazione.")
 
   st.markdown("---")
   st.markdown(f"##### 📥 Esporta Inventario (Solo Dispositivi Occupati) - {sede_scelta['nome']}")
