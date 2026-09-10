@@ -138,6 +138,16 @@ def pulisci_valore(val):
     return ""
   return s
 
+def estrai_marca_e_modello(testo_modello):
+  """Estrae la prima parola come Marca e pulisce il Modello rimuovendola."""
+  testo = pulisci_valore(testo_modello)
+  if not testo:
+    return "", ""
+  parti = testo.split(" ", 1)
+  marca = parti[0]
+  modello = parti[1] if len(parti) > 1 else ""
+  return marca, modello
+
 def estrai_anno(testo):
   if not testo:
     return 9999
@@ -424,7 +434,6 @@ with tab_hardware:
                 ip_file_completo = f"{base_ip_sede}.{ip_raw}"
 
               if ip_file_completo.startswith(f"{base_ip_sede}."):
-                # Corretto: legge esattamente la colonna 'Nome Dispositivo' dal file Excel
                 nome_mac_file = pulisci_valore(row.get("Nome Dispositivo", ""))
                 
                 if nome_mac_file:
@@ -433,9 +442,13 @@ with tab_hardware:
                     df_rete_sede.loc[idx_r, "Nome Macchina"] = nome_mac_file
                     df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
 
+                # Estrazione automatica della prima parola del modello per metterla in Marca
+                modello_grezzo = row.get("Modello", "")
+                marca_estratta, modello_pulito = estrai_marca_e_modello(modello_grezzo)
+
                 st.session_state.hardware_dettagli[ip_file_completo] = {
-                    "Marca": pulisci_valore(row.get("Marca", "-")),
-                    "Modello": pulisci_valore(row.get("Modello", "-")),
+                    "Marca": marca_estratta,
+                    "Modello": modello_pulito,
                     "Processore": pulisci_valore(row.get("Processore e anno", "-")),
                     "RAM": pulisci_valore(row.get("RAM", "-")),
                     "Tipo HD": pulisci_valore(row.get("Tipo HD", "-")),
@@ -479,14 +492,20 @@ with tab_hardware:
     tipo_m = pulisci_valore(m["Tipologia"])
     proc_val = pulisci_valore(dettagli.get("Processore", "-"))
 
+    # Se la marca è vuota ma il modello contiene testo, applichiamo l'estrazione anche a posteriori
+    marca_val = pulisci_valore(dettagli.get("Marca", ""))
+    modello_val = pulisci_valore(dettagli.get("Modello", "-"))
+    if not marca_val and modello_val and modello_val != "-":
+      marca_val, modello_val = estrai_marca_e_modello(modello_val)
+
     lista_completa.append({
         "Indirizzo IP": m["Indirizzo IP"],
         "_ip_completo": ip_comp,
         "Nome Macchina": nome_m,
         "Tipologia": tipo_m,
         "Stato": m["Stato"],
-        "Marca": pulisci_valore(dettagli.get("Marca", "-")),
-        "Modello": pulisci_valore(dettagli.get("Modello", "-")),
+        "Marca": marca_val,
+        "Modello": modello_val,
         "Processore e anno": proc_val,
         "RAM": pulisci_valore(dettagli.get("RAM", "-")),
         "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "-")),
