@@ -156,23 +156,24 @@ def estrai_anno(testo):
   return 9999
 
 def processa_stringa_hd(testo_capienza, tipo_hd_attuale):
-  """Estrae HDD/SSD/NVMe dalla capienza se presenti e pulisce il testo."""
+  """Taglia HDD/SSD/NVMe dalla capienza, li sposta in Tipo HD e pulisce la capienza."""
   cap_str = pulisci_valore(testo_capienza)
   tipo_str = pulisci_valore(tipo_hd_attuale)
   
   if not cap_str:
     return tipo_str, ""
 
-  # Cerca parole chiave nel campo capienza (es. SSD, HDD, NVMe)
+  # Cerca parole chiave nella stringa della capienza
   match_tipo = re.search(r'\b(SSD|HDD|NVMe)\b', cap_str, re.IGNORECASE)
   if match_tipo:
     trovato = match_tipo.group(1).upper()
-    if not tipo_str or tipo_str == "-":
-      tipo_str = trovato
-    # Rimuove la parola trovata e pulisce eventuali virgole/spazi residui
+    # Sposta/imposta nella colonna Tipo HD
+    tipo_str = trovato
+    # Rimuove la dicitura trovata dal testo della capienza
     cap_str = re.sub(r'\b(SSD|HDD|NVMe)\b', '', cap_str, flags=re.IGNORECASE)
+    # Pulisce spazi multipli, trattini o virgole rimasti isolati
     cap_str = re.sub(r'[,;\s]+', ' ', cap_str).strip()
-    cap_str = cap_str.strip(',').strip()
+    cap_str = cap_str.strip(',').strip('-').strip()
 
   return tipo_str, cap_str
 
@@ -405,14 +406,17 @@ with tab_hardware:
         btn_salva = st.form_submit_button("Salva Specifiche Tecniche e Dispositivo")
         
         if btn_salva:
+          # Processa eventuale capienza scritta manualmente con HDD/SSD
+          tipo_hd_fin, cap_hd_fin = processa_stringa_hd(hw_cap_hd, hw_tipo_hd)
+
           st.session_state.hardware_dettagli[ip_scelto] = {
               "Marca": hw_marca,
               "Modello": hw_modello,
               "S.O.": hw_so,
               "Processore": hw_cpu,
               "RAM": f"{hw_ram} GB",
-              "Tipo HD": hw_tipo_hd,
-              "Capienza HD": hw_cap_hd,
+              "Tipo HD": tipo_hd_fin,
+              "Capienza HD": cap_hd_fin,
               "Garanzia": hw_garanzia,
           }
 
@@ -468,7 +472,7 @@ with tab_hardware:
                 modello_grezzo = row.get("Modello", "")
                 marca_estratta, modello_pulito = estrai_marca_e_modello(modello_grezzo)
 
-                # Gestione pulizia capienza HD e estrazione automatica di HDD/SSD/NVMe
+                # Gestione pulizia capienza HD ed estrazione automatica di HDD/SSD/NVMe
                 capienza_grezza = row.get("Capienza HD", "")
                 tipo_hd_grezzo = row.get("Tipo HD", "-")
                 tipo_hd_finale, capienza_finale = processa_stringa_hd(capienza_grezza, tipo_hd_grezzo)
@@ -529,7 +533,7 @@ with tab_hardware:
     tipo_hd_val = pulisci_valore(dettagli.get("Tipo HD", "-"))
     cap_hd_val = pulisci_valore(dettagli.get("Capienza HD", "-"))
 
-    # Applica in tempo reale il controllo se l'utente ha scritto HDD/SSD dentro la capienza
+    # Verifica e sposta in tempo reale se nel campo capienza viene inserito HDD/SSD
     if cap_hd_val and re.search(r'\b(SSD|HDD|NVMe)\b', cap_hd_val, re.IGNORECASE):
       tipo_hd_val, cap_hd_val = processa_stringa_hd(cap_hd_val, tipo_hd_val)
       dettagli["Tipo HD"] = tipo_hd_val
@@ -599,7 +603,7 @@ with tab_hardware:
       if not nuovo_nome:
         nuova_tipologia = ""
 
-      # Elaborazione input modificato dall'utente nell'editor
+      # Elabora i dati inseriti nell'editor dall'utente
       cap_edit = pulisci_valore(df_inventario_modificato.loc[i, "Capienza HD"])
       tipo_edit = pulisci_valore(df_inventario_modificato.loc[i, "Tipo HD"])
       tipo_finale_ed, cap_finale_ed = processa_stringa_hd(cap_edit, tipo_edit)
