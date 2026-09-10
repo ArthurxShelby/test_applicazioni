@@ -5,7 +5,7 @@ from fpdf import FPDF
 import pandas as pd
 import streamlit as st
 
-# Configurazione della pagina
+# Configurazione della pagina Streamlit
 st.set_page_config(
     page_title="Gestione Reti e Hardware per Sede", page_icon="💻", layout="wide"
 )
@@ -28,7 +28,29 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Integrazione Supabase
+# ----------------------------------------------------
+# GESTIONE AUTENTICAZIONE TRAMITE st.secrets
+# ----------------------------------------------------
+if "autenticato" not in st.session_state:
+  st.session_state.autenticato = False
+
+if not st.session_state.autenticato:
+  st.subheader("🔐 Accesso Protetto")
+  password_inserita = st.text_input(
+      "Inserisci la password per accedere", type="password"
+  )
+  if st.button("Accedi"):
+    app_password = st.secrets.get("APP_PASSWORD", "")
+    if password_inserita == app_password:
+      st.session_state.autenticato = True
+      st.rerun()
+    else:
+      st.error("Password errata.")
+  st.stop()
+
+# ----------------------------------------------------
+# INTEGRAZIONE SUPABASE
+# ----------------------------------------------------
 try:
   from supabase import create_client
 
@@ -52,29 +74,13 @@ def get_supabase_client():
 
 supabase = get_supabase_client()
 
+# Rilevamento dispositivo mobile
 try:
   from streamlit_javascript import st_javascript
 
   is_mobile_env = True
 except ImportError:
   is_mobile_env = False
-
-if "autenticato" not in st.session_state:
-  st.session_state.autenticato = False
-
-if not st.session_state.autenticato:
-  st.subheader("🔐 Accesso Protetto")
-  password_inserita = st.text_input(
-      "Inserisci la password per accedere", type="password"
-  )
-  if st.button("Accedi"):
-    app_password = st.secrets.get("APP_PASSWORD", "")
-    if password_inserita == app_password:
-      st.session_state.autenticato = True
-      st.rerun()
-    else:
-      st.error("Password errata.")
-  st.stop()
 
 tipo_dispositivo = "PC / Desktop"
 if is_mobile_env:
@@ -91,6 +97,7 @@ if is_mobile_env:
 st.subheader("Gestione Reti e Hardware per Sede")
 st.caption(f"💻 Dispositivo rilevato: **{tipo_dispositivo}**")
 
+# Configurazione delle Sedi
 sedi_config = [
     {
         "id": 1,
@@ -165,8 +172,18 @@ def carica_dati_da_supabase():
     return []
   try:
     response = supabase.table(NOME_TABELLA_SUPABASE).select("*").execute()
-    if response.data:
-      return response.data
+    dati = response.data if response.data else []
+
+    # PULIZIA DI SICUREZZA BLOCCO 38:
+    # Rimuove l'SSD forzato se nel campo capienza non c'è scritto esplicitamente SSD
+    for row in dati:
+      ip = str(row.get("ip_completo", ""))
+      if ip.startswith("38.") and row.get("tipo_hd") == "SSD":
+        cap = str(row.get("capienza_hd", ""))
+        if "SSD" not in cap.upper():
+          row["tipo_hd"] = ""
+
+    return dati
   except Exception as e:
     st.warning(f"Impossibile connettersi a Supabase: {e}")
   return []
@@ -240,6 +257,7 @@ def estrai_anno(testo):
   return 9999
 
 
+# FUNZIONE HD CORRETTA (NON FORZA PIÙ "SSD" SUL BLOCCO 38)
 def processa_stringa_hd(testo_capienza, tipo_hd_attuale):
   cap_str = pulisci_valore(testo_capienza)
   tipo_str = pulisci_valore(tipo_hd_attuale)
@@ -642,6 +660,9 @@ with tab_hardware:
           salva_o_aggiorna_su_supabase(
               ip_comp, sede_scelta["nome"], dettagli_agg, riga_inf_att
           )
+
+    st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
+    st.success("Inventario aggiornato e salvato su Supabase!")
 
     st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
     st.success("Inventario aggiornato e salvato su Supabase!")
