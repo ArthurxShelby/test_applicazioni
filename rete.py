@@ -151,96 +151,6 @@ sede_scelta = sedi_config[idx_selezionato]
 blocco_completo_ip = sede_scelta["blocco"].split(".")[0]
 subnet_ultimi_due = sede_scelta["subnet"]
 
-# --- BARRA LATERALE (SIDEBAR) CON ESPORTAZIONE SEMPRE ATTIVA ---
-with st.sidebar:
-  st.markdown(f"### 📥 Esporta: {sede_scelta['nome']}")
-  
-  df_rete_sede_sidebar = st.session_state.dataframes_rete[idx_selezionato]
-  lista_completa_export_sb = []
-  for m in df_rete_sede_sidebar.to_dict("records"):
-    ip_comp = m["_ip_completo"]
-    dettagli = st.session_state.hardware_dettagli.get(ip_comp, {})
-    lista_completa_export_sb.append({
-        "Indirizzo IP": m["Indirizzo IP"],
-        "Nome Macchina": pulisci_valore(m["Nome Macchina"]),
-        "Tipologia": pulisci_valore(m["Tipologia"]),
-        "Stato": m["Stato"],
-        "Marca": pulisci_valore(dettagli.get("Marca", "")),
-        "Modello": pulisci_valore(dettagli.get("Modello", "")),
-        "Processore": pulisci_valore(dettagli.get("Processore", "")),
-        "RAM": pulisci_valore(dettagli.get("RAM", "")),
-        "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "")),
-        "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "")),
-        "Garanzia": pulisci_valore(dettagli.get("Garanzia", "")),
-    })
-  df_export_sb = pd.DataFrame(lista_completa_export_sb)
-
-  # 1. Pulsante Excel Sidebar
-  output_excel_sb = io.BytesIO()
-  with pd.ExcelWriter(output_excel_sb, engine="openpyxl") as writer:
-    df_export_sb.to_excel(writer, index=False, sheet_name="Inventario")
-  
-  st.download_button(
-      label="📊 Scarica in Excel (.xlsx)",
-      data=output_excel_sb.getvalue(),
-      file_name=f"Inventario_{sede_scelta['nome'].replace(' ', '_')}.xlsx",
-      mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      use_container_width=True,
-  )
-
-  # 2. Classe e Funzione PDF Sidebar
-  class PDFReportSB(FPDF):
-    def header(self):
-      self.set_font("helvetica", "B", 10)
-      self.cell(0, 10, f"Inventario Hardware - Sede: {sede_scelta['nome']}", 0, 1, "C")
-      self.ln(3)
-
-    def footer(self):
-      self.set_y(-15)
-      self.set_font("helvetica", "I", 8)
-      self.cell(0, 10, f"Pagina {self.page_no()}", 0, 0, "C")
-
-  def genera_pdf_sb(df_data):
-    pdf = PDFReportSB(orientation="L", unit="mm", format="A4")
-    pdf.add_page()
-    pdf.set_font("helvetica", "", 8)
-    
-    headers = ["IP", "Nome", "Tipologia", "Stato", "Marca", "Modello", "CPU", "RAM", "HD", "Capienza", "Garanzia"]
-    col_widths = [22, 30, 25, 20, 25, 25, 25, 15, 18, 22, 25]
-    
-    pdf.set_font("helvetica", "B", 8)
-    for i, h in enumerate(headers):
-      pdf.cell(col_widths[i], 7, h, 1, 0, "C")
-    pdf.ln()
-    
-    pdf.set_font("helvetica", "", 7)
-    for _, row in df_data.iterrows():
-      pdf.cell(col_widths[0], 6, str(row["Indirizzo IP"]), 1, 0, "C")
-      pdf.cell(col_widths[1], 6, str(row["Nome Macchina"])[:18], 1, 0, "L")
-      pdf.cell(col_widths[2], 6, str(row["Tipologia"])[:15], 1, 0, "L")
-      pdf.cell(col_widths[3], 6, str(row["Stato"]).replace("🟢 ", "").replace("🔴 ", ""), 1, 0, "C")
-      pdf.cell(col_widths[4], 6, str(row["Marca"])[:15], 1, 0, "L")
-      pdf.cell(col_widths[5], 6, str(row["Modello"])[:15], 1, 0, "L")
-      pdf.cell(col_widths[6], 6, str(row["Processore"])[:15], 1, 0, "L")
-      pdf.cell(col_widths[7], 6, str(row["RAM"])[:10], 1, 0, "C")
-      pdf.cell(col_widths[8], 6, str(row["Tipo HD"])[:10], 1, 0, "C")
-      pdf.cell(col_widths[9], 6, str(row["Capienza HD"])[:12], 1, 0, "C")
-      pdf.cell(col_widths[10], 6, str(row["Garanzia"])[:15], 1, 1, "C")
-      
-    return pdf.output()
-
-  try:
-    pdf_bytes_sb = genera_pdf_sb(df_export_sb)
-    st.download_button(
-        label="📄 Scarica in PDF (.pdf)",
-        data=pdf_bytes_sb,
-        file_name=f"Inventario_{sede_scelta['nome'].replace(' ', '_')}.pdf",
-        mime="application/pdf",
-        use_container_width=True,
-    )
-  except Exception as e:
-    st.error(f"Errore PDF: {e}")
-
 tab_rete, tab_hardware = st.tabs(
     ["🌐 Blocco IP & Occupazione", "💻 Inventario Hardware Dettagliato"]
 )
@@ -592,3 +502,101 @@ with tab_hardware:
   st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
   if inv_modificato:
     st.rerun()
+
+  # --- PULSANTI DI ESPORTAZIONE SOTTO LA TABELLA INVENTARIO ---
+  st.markdown("---")
+  st.markdown(f"##### 📥 Esporta Inventario - {sede_scelta['nome']}")
+
+  col_btn1, col_btn2 = st.columns(2)
+
+  # Prepariamo il DataFrame per l'export
+  lista_export_finale = []
+  for m in df_rete_sede.to_dict("records"):
+    ip_comp = m["_ip_completo"]
+    dettagli = st.session_state.hardware_dettagli.get(ip_comp, {})
+    lista_export_finale.append({
+        "Indirizzo IP": m["Indirizzo IP"],
+        "Nome Macchina": pulisci_valore(m["Nome Macchina"]),
+        "Tipologia": pulisci_valore(m["Tipologia"]),
+        "Stato": m["Stato"],
+        "Marca": pulisci_valore(dettagli.get("Marca", "")),
+        "Modello": pulisci_valore(dettagli.get("Modello", "")),
+        "Processore": pulisci_valore(dettagli.get("Processore", "")),
+        "RAM": pulisci_valore(dettagli.get("RAM", "")),
+        "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "")),
+        "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "")),
+        "Garanzia": pulisci_valore(dettagli.get("Garanzia", "")),
+    })
+  df_export_finale = pd.DataFrame(lista_export_finale)
+
+  with col_btn1:
+    # Esportazione Excel
+    output_excel_tab = io.BytesIO()
+    with pd.ExcelWriter(output_excel_tab, engine="openpyxl") as writer:
+      df_export_finale.to_excel(writer, index=False, sheet_name="Inventario")
+    
+    st.download_button(
+        label="📊 Scarica Inventario in Excel (.xlsx)",
+        data=output_excel_tab.getvalue(),
+        file_name=f"Inventario_{sede_scelta['nome'].replace(' ', '_')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
+
+  with col_btn2:
+    # Esportazione PDF
+    class PDFReportTab(FPDF):
+      def header(self):
+        self.set_font("helvetica", "B", 10)
+        self.cell(0, 10, f"Inventario Hardware - Sede: {sede_scelta['nome']}", 0, 1, "C")
+        self.ln(3)
+
+      def footer(self):
+        self.set_y(-15)
+        self.set_font("helvetica", "I", 8)
+        self.cell(0, 10, f"Pagina {self.page_no()}", 0, 0, "C")
+
+    def genera_pdf_tab(df_data):
+      pdf = PDFReportTab(orientation="L", unit="mm", format="A4")
+      pdf.add_page()
+      pdf.set_font("helvetica", "", 8)
+      
+      headers = ["IP", "Nome", "Tipologia", "Stato", "Marca", "Modello", "CPU", "RAM", "HD", "Capienza", "Garanzia"]
+      col_widths = [22, 30, 25, 20, 25, 25, 25, 15, 18, 22, 25]
+      
+      pdf.set_font("helvetica", "B", 8)
+      for i, h in enumerate(headers):
+        pdf.cell(col_widths[i], 7, h, 1, 0, "C")
+      pdf.ln()
+      
+      pdf.set_font("helvetica", "", 7)
+      for _, row in df_data.iterrows():
+        pdf.cell(col_widths[0], 6, str(row["Indirizzo IP"]), 1, 0, "C")
+        pdf.cell(col_widths[1], 6, str(row["Nome Macchina"])[:18], 1, 0, "L")
+        pdf.cell(col_widths[2], 6, str(row["Tipologia"])[:15], 1, 0, "L")
+        pdf.cell(col_widths[3], 6, str(row["Stato"]).replace("🟢 ", "").replace("🔴 ", ""), 1, 0, "C")
+        pdf.cell(col_widths[4], 6, str(row["Marca"])[:15], 1, 0, "L")
+        pdf.cell(col_widths[5], 6, str(row["Modello"])[:15], 1, 0, "L")
+        pdf.cell(col_widths[6], 6, str(row["Processore"])[:15], 1, 0, "L")
+        pdf.cell(col_widths[7], 6, str(row["RAM"])[:10], 1, 0, "C")
+        pdf.cell(col_widths[8], 6, str(row["Tipo HD"])[:10], 1, 0, "C")
+        pdf.cell(col_widths[9], 6, str(row["Capienza HD"])[:12], 1, 0, "C")
+        pdf.cell(col_widths[10], 6, str(row["Garanzia"])[:15], 1, 1, "C")
+        
+      # Conversione corretta in bytes per evitare l'errore bytearray
+      raw_pdf = pdf.output()
+      if isinstance(raw_pdf, (bytearray, bytes)):
+        return bytes(raw_pdf)
+      return str(raw_pdf).encode("latin1")
+
+    try:
+      pdf_bytes_tab = genera_pdf_tab(df_export_finale)
+      st.download_button(
+          label="📄 Scarica Inventario in PDF (.pdf)",
+          data=pdf_bytes_tab,
+          file_name=f"Inventario_{sede_scelta['nome'].replace(' ', '_')}.pdf",
+          mime="application/pdf",
+          use_container_width=True,
+      )
+    except Exception as e:
+      st.error(f"Errore nella generazione del PDF: {e}")
