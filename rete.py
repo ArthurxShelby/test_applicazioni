@@ -344,6 +344,7 @@ with tab_hardware:
         if tipo_dispositivo == "Smartphone":
           hw_marca = st.text_input("Marca", value=pulisci_valore(dettagli_esistenti.get("Marca", "")))
           hw_modello = st.text_input("Modello", value=pulisci_valore(dettagli_esistenti.get("Modello", "")))
+          hw_so = st.text_input("S.O. (Sistema Operativo)", value=pulisci_valore(dettagli_esistenti.get("S.O.", dettagli_esistenti.get("Tipo HD", ""))))
           hw_cpu = st.text_input("Processore e anno", value=pulisci_valore(dettagli_esistenti.get("Processore", "")))
           
           ram_salvata = dettagli_esistenti.get("RAM", "16 GB")
@@ -364,6 +365,7 @@ with tab_hardware:
           with col1:
             hw_marca = st.text_input("Marca (es. Dell, HP)", value=pulisci_valore(dettagli_esistenti.get("Marca", "")))
             hw_modello = st.text_input("Modello", value=pulisci_valore(dettagli_esistenti.get("Modello", "")))
+            hw_so = st.text_input("S.O. (Sistema Operativo)", value=pulisci_valore(dettagli_esistenti.get("S.O.", dettagli_esistenti.get("Tipo HD", ""))))
             hw_cpu = st.text_input("Processore e anno (es. i5 2020)", value=pulisci_valore(dettagli_esistenti.get("Processore", "")))
           with col2:
             ram_salvata = dettagli_esistenti.get("RAM", "16 GB")
@@ -386,6 +388,7 @@ with tab_hardware:
           st.session_state.hardware_dettagli[ip_scelto] = {
               "Marca": hw_marca,
               "Modello": hw_modello,
+              "S.O.": hw_so,
               "Processore": hw_cpu,
               "RAM": f"{hw_ram} GB",
               "Tipo HD": hw_tipo_hd,
@@ -446,12 +449,16 @@ with tab_hardware:
                 modello_grezzo = row.get("Modello", "")
                 marca_estratta, modello_pulito = estrai_marca_e_modello(modello_grezzo)
 
+                # Preleva il contenuto della colonna Tipo HD e copialo in S.O.
+                tipo_hd_valore = pulisci_valore(row.get("Tipo HD", "-"))
+
                 st.session_state.hardware_dettagli[ip_file_completo] = {
                     "Marca": marca_estratta,
                     "Modello": modello_pulito,
+                    "S.O.": tipo_hd_valore,
                     "Processore": pulisci_valore(row.get("Processore e anno", "-")),
                     "RAM": pulisci_valore(row.get("RAM", "-")),
-                    "Tipo HD": pulisci_valore(row.get("Tipo HD", "-")),
+                    "Tipo HD": tipo_hd_valore,
                     "Capienza HD": pulisci_valore(row.get("Capienza HD", "-")),
                     "Garanzia": pulisci_valore(row.get("Garanzia", "-")),
                 }
@@ -492,11 +499,18 @@ with tab_hardware:
     tipo_m = pulisci_valore(m["Tipologia"])
     proc_val = pulisci_valore(dettagli.get("Processore", "-"))
 
-    # Se la marca è vuota ma il modello contiene testo, applichiamo l'estrazione anche a posteriori
     marca_val = pulisci_valore(dettagli.get("Marca", ""))
     modello_val = pulisci_valore(dettagli.get("Modello", "-"))
     if not marca_val and modello_val and modello_val != "-":
       marca_val, modello_val = estrai_marca_e_modello(modello_val)
+
+    # Gestione S.O. (se non presente, recupera Tipo HD per compatibilità con i dati vecchi)
+    tipo_hd_val = pulisci_valore(dettagli.get("Tipo HD", "-"))
+    so_val = pulisci_valore(dettagli.get("S.O.", ""))
+    if not so_val and tipo_hd_val and tipo_hd_val != "-":
+      so_val = tipo_hd_val
+    elif not so_val:
+      so_val = "-"
 
     lista_completa.append({
         "Indirizzo IP": m["Indirizzo IP"],
@@ -506,9 +520,10 @@ with tab_hardware:
         "Stato": m["Stato"],
         "Marca": marca_val,
         "Modello": modello_val,
+        "S.O.": so_val,
         "Processore e anno": proc_val,
         "RAM": pulisci_valore(dettagli.get("RAM", "-")),
-        "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "-")),
+        "Tipo HD": tipo_hd_val,
         "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "-")),
         "Garanzia": pulisci_valore(dettagli.get("Garanzia", "-")),
     })
@@ -536,6 +551,7 @@ with tab_hardware:
           "Stato": st.column_config.SelectboxColumn("Stato", options=["🟢 Libero", "🔴 Occupato"], required=True),
           "Marca": st.column_config.TextColumn("Marca"),
           "Modello": st.column_config.TextColumn("Modello"),
+          "S.O.": st.column_config.TextColumn("S.O."),
           "Processore e anno": st.column_config.TextColumn("Processore e anno"),
           "RAM": st.column_config.TextColumn("RAM"),
           "Tipo HD": st.column_config.TextColumn("Tipo HD"),
@@ -562,6 +578,7 @@ with tab_hardware:
       st.session_state.hardware_dettagli[ip_comp] = {
           "Marca": pulisci_valore(df_inventario_modificato.loc[i, "Marca"]),
           "Modello": pulisci_valore(df_inventario_modificato.loc[i, "Modello"]),
+          "S.O.": pulisci_valore(df_inventario_modificato.loc[i, "S.O."]),
           "Processore": pulisci_valore(df_inventario_modificato.loc[i, "Processore e anno"]),
           "RAM": pulisci_valore(df_inventario_modificato.loc[i, "RAM"]),
           "Tipo HD": pulisci_valore(df_inventario_modificato.loc[i, "Tipo HD"]),
@@ -595,15 +612,22 @@ with tab_hardware:
     nome_mac = pulisci_valore(m["Nome Macchina"])
     if nome_mac:
       dettagli = st.session_state.hardware_dettagli.get(ip_comp, {})
+      
+      tipo_hd_val = pulisci_valore(dettagli.get("Tipo HD", ""))
+      so_val = pulisci_valore(dettagli.get("S.O.", ""))
+      if not so_val and tipo_hd_val:
+        so_val = tipo_hd_val
+
       lista_export_finale.append({
           "Indirizzo IP": m["Indirizzo IP"],
           "Nome Dispositivo": nome_mac,
           "Tipologia": pulisci_valore(m["Tipologia"]),
           "Marca": pulisci_valore(dettagli.get("Marca", "")),
           "Modello": pulisci_valore(dettagli.get("Modello", "")),
+          "S.O.": so_val,
           "Processore e anno": pulisci_valore(dettagli.get("Processore", "")),
           "RAM": pulisci_valore(dettagli.get("RAM", "")),
-          "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "")),
+          "Tipo HD": tipo_hd_val,
           "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "")),
           "Garanzia": pulisci_valore(dettagli.get("Garanzia", "")),
       })
@@ -626,8 +650,8 @@ with tab_hardware:
     pdf.add_page()
     pdf.set_font("helvetica", "", 8)
     
-    headers = ["IP", "Nome Dispositivo", "Tipologia", "Marca", "Modello", "CPU & Anno", "RAM", "HD", "Capienza", "Garanzia"]
-    col_widths = [25, 35, 30, 25, 25, 25, 18, 20, 25, 27]
+    headers = ["IP", "Nome Dispositivo", "Tipologia", "Marca", "Modello", "S.O.", "CPU & Anno", "RAM", "HD", "Capienza", "Garanzia"]
+    col_widths = [22, 32, 26, 22, 22, 22, 22, 16, 18, 22, 23]
     
     pdf.set_font("helvetica", "B", 8)
     for i, h in enumerate(headers):
@@ -640,15 +664,16 @@ with tab_hardware:
     else:
       for _, row in df_data.iterrows():
         pdf.cell(col_widths[0], 6, str(row["Indirizzo IP"]), 1, 0, "C")
-        pdf.cell(col_widths[1], 6, str(row["Nome Dispositivo"])[:20], 1, 0, "L")
-        pdf.cell(col_widths[2], 6, str(row["Tipologia"])[:18], 1, 0, "L")
-        pdf.cell(col_widths[3], 6, str(row["Marca"])[:15], 1, 0, "L")
-        pdf.cell(col_widths[4], 6, str(row["Modello"])[:15], 1, 0, "L")
-        pdf.cell(col_widths[5], 6, str(row["Processore e anno"])[:15], 1, 0, "L")
-        pdf.cell(col_widths[6], 6, str(row["RAM"])[:10], 1, 0, "C")
-        pdf.cell(col_widths[7], 6, str(row["Tipo HD"])[:10], 1, 0, "C")
-        pdf.cell(col_widths[8], 6, str(row["Capienza HD"])[:12], 1, 0, "C")
-        pdf.cell(col_widths[9], 6, str(row["Garanzia"])[:15], 1, 1, "C")
+        pdf.cell(col_widths[1], 6, str(row["Nome Dispositivo"])[:18], 1, 0, "L")
+        pdf.cell(col_widths[2], 6, str(row["Tipologia"])[:15], 1, 0, "L")
+        pdf.cell(col_widths[3], 6, str(row["Marca"])[:12], 1, 0, "L")
+        pdf.cell(col_widths[4], 6, str(row["Modello"])[:12], 1, 0, "L")
+        pdf.cell(col_widths[5], 6, str(row["S.O."])[:12], 1, 0, "L")
+        pdf.cell(col_widths[6], 6, str(row["Processore e anno"])[:12], 1, 0, "L")
+        pdf.cell(col_widths[7], 6, str(row["RAM"])[:8], 1, 0, "C")
+        pdf.cell(col_widths[8], 6, str(row["Tipo HD"])[:8], 1, 0, "C")
+        pdf.cell(col_widths[9], 6, str(row["Capienza HD"])[:10], 1, 0, "C")
+        pdf.cell(col_widths[10], 6, str(row["Garanzia"])[:12], 1, 1, "C")
       
     raw_pdf = pdf.output()
     if isinstance(raw_pdf, (bytearray, bytes)):
