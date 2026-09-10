@@ -224,33 +224,25 @@ with tab_rete:
   pc_count = len(df_corrente[df_corrente["Tipologia"] == "PC / Macchina"])
   stampanti_count = len(df_corrente[df_corrente["Tipologia"] == "Stampante"])
   switch_count = len(df_corrente[df_corrente["Tipologia"] == "Switch"])
-  altro_count = len(df_corrente[df_corrente["Tipologia"] == "Altro"])
 
-  if tipo_dispositivo == "Smartphone":
-    col_m1, col_m2, col_m3 = st.columns(3)
-    col_m1.metric("Totale", totale_ip)
-    col_m2.metric("🟢 Liberi", liberi)
-    col_m3.metric("🔴 Occupati", occupati)
-    
-    col_t1, col_t2, col_t3, col_t4 = st.columns(4)
-    col_t1.metric("💻 PC", pc_count)
-    col_t2.metric("🖨️ Stamp.", stampanti_count)
-    col_t3.metric("🖲️ Switch", switch_count)
-    col_t4.metric("📦 Altro", altro_count)
-  else:
-    col_m1, col_m2, col_m3, col_m4, col_m5, col_m6, col_m7 = st.columns(7)
-    col_m1.metric("Totale IP", totale_ip)
-    col_m2.metric("🟢 Liberi", liberi)
-    col_m3.metric("🔴 Occupati", occupati)
-    col_m4.metric("💻 PC", pc_count)
-    col_m5.metric("🖨️ Stampanti", stampanti_count)
-    col_m6.metric("🖲️ Switch", switch_count)
-    col_m7.metric("📦 Altro", altro_count)
+  # 1. Prima riga di metriche: Totale, Liberi, Occupati
+  col_m1, col_m2, col_m3 = st.columns(3)
+  col_m1.metric("Totale IP", totale_ip)
+  col_m2.metric("🟢 Liberi", liberi)
+  col_m3.metric("🔴 Occupati", occupati)
+
+  st.markdown("<br>", unsafe_allow_html=True)
+
+  # 2. Sotto, la riga con le tipologie di dispositivi (senza Altro)
+  col_t1, col_t2, col_t3 = st.columns(3)
+  col_t1.metric("💻 PC / Macchina", pc_count)
+  col_t2.metric("🖨️ Stampanti", stampanti_count)
+  col_t3.metric("🖲️ Switch", switch_count)
 
   st.markdown("---")
 
   df_per_editor = df_corrente.drop(columns=["_ip_completo"], errors="ignore").copy()
-  opzioni_tipologia = ["PC / Macchina", "Stampante", "Switch", "Altro"]
+  opzioni_tipologia = ["PC / Macchina", "Stampante", "Switch"]
   
   for i in range(len(df_per_editor)):
     if not df_per_editor.loc[i, "Nome Macchina"]:
@@ -340,9 +332,9 @@ with tab_hardware:
           hw_ram = st.number_input("RAM / Porte (GB)", min_value=2, max_value=256, value=ram_val)
           
           tipo_hd_esistente = pulisci_valore(dettagli_esistenti.get("Tipo HD", "SSD"))
-          if tipo_hd_esistente not in ["SSD", "HDD", "NVMe", "Altro"]:
+          if tipo_hd_esistente not in ["SSD", "HDD", "NVMe"]:
             tipo_hd_esistente = "SSD"
-          hw_tipo_hd = st.selectbox("Tipo Memoria", ["SSD", "HDD", "NVMe", "Altro"], index=["SSD", "HDD", "NVMe", "Altro"].index(tipo_hd_esistente))
+          hw_tipo_hd = st.selectbox("Tipo Memoria", ["SSD", "HDD", "NVMe"], index=["SSD", "HDD", "NVMe"].index(tipo_hd_esistente))
           hw_cap_hd = st.text_input("Capienza / Note", value=pulisci_valore(dettagli_esistenti.get("Capienza HD", "")))
           hw_garanzia = st.text_input("Scadenza Garanzia", value=pulisci_valore(dettagli_esistenti.get("Garanzia", "")))
         else:
@@ -360,9 +352,9 @@ with tab_hardware:
             hw_ram = st.number_input("RAM / Porte (GB o Num)", min_value=2, max_value=256, value=ram_val)
             
             tipo_hd_esistente = pulisci_valore(dettagli_esistenti.get("Tipo HD", "SSD"))
-            if tipo_hd_esistente not in ["SSD", "HDD", "NVMe", "Altro"]:
+            if tipo_hd_esistente not in ["SSD", "HDD", "NVMe"]:
               tipo_hd_esistente = "SSD"
-            hw_tipo_hd = st.selectbox("Tipo Memoria / Extra", ["SSD", "HDD", "NVMe", "Altro"], index=["SSD", "HDD", "NVMe", "Altro"].index(tipo_hd_esistente))
+            hw_tipo_hd = st.selectbox("Tipo Memoria / Extra", ["SSD", "HDD", "NVMe"], index=["SSD", "HDD", "NVMe"].index(tipo_hd_esistente))
             hw_cap_hd = st.text_input("Capienza / Note", value=pulisci_valore(dettagli_esistenti.get("Capienza HD", "")))
             hw_garanzia = st.text_input("Scadenza Garanzia", value=pulisci_valore(dettagli_esistenti.get("Garanzia", "")))
 
