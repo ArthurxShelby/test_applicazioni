@@ -1,4 +1,5 @@
 import ipaddressimport io
+import io
 import re
 import pandas as pd
 from fpdf import FPDF
@@ -101,11 +102,11 @@ def pulisci_valore(val):
 def estrai_anno(testo):
   """Cerca un anno a 4 cifre (es. 2018, 2022) all'interno della stringa del processore."""
   if not testo:
-    return 0
+    return 9999  # Valore alto per mandare in fondo chi non ha l'anno
   match = re.search(r'\b(19\d{2}|20\d{2})\b', str(testo))
   if match:
     return int(match.group(1))
-  return 0
+  return 9999
 
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
@@ -417,16 +418,19 @@ with tab_hardware:
 
   st.markdown("---")
   
-  # --- OPZIONE DI ORDINAMENTO PER ANNO ---
+  # --- OPZIONE DI ORDINAMENTO PER ANNO (TOGGLE / CLICK SUCCESSIVI) ---
   col_ord1, col_ord2 = st.columns([2, 2])
   with col_ord1:
     st.write("📋 **Inventario Completo della Sede (Modificabile):**")
   with col_ord2:
-    ordinamento_scelto = st.selectbox(
-        "🔄 Ordina inventario per anno",
-        options=["Nessun ordinamento", "Anno: dal più vecchio al più recente (Crescente)", "Anno: dal più recente al più vecchio (Decrescente)"],
-        label_visibility="collapsed"
-    )
+    key_stato_ordine = f"stato_ordine_{idx_selezionato}"
+    if key_stato_ordine not in st.session_state:
+      st.session_state[key_stato_ordine] = False
+
+    label_pulsante = "🔄 Ordina per anno (Crescente)" if not st.session_state[key_stato_ordine] else "🔄 Ripristina ordine IP"
+    if st.button(label_pulsante, use_container_width=True):
+      st.session_state[key_stato_ordine] = not st.session_state[key_stato_ordine]
+      st.rerun()
 
   lista_completa = []
   for m in df_rete_sede.to_dict("records"):
@@ -454,13 +458,10 @@ with tab_hardware:
 
   df_inventario_corrente = pd.DataFrame(lista_completa)
 
-  # Applicazione dell'ordinamento basato sull'anno estratto dal processore
-  if "Crescente" in ordinamento_scelto:
+  # Se il toggle dell'ordine è attivo, ordina per anno crescente partendo dalla prima riga
+  if st.session_state[key_stato_ordine]:
     df_inventario_corrente["_anno_temp"] = df_inventario_corrente["Processore"].apply(estrai_anno)
     df_inventario_corrente = df_inventario_corrente.sort_values(by="_anno_temp", ascending=True).drop(columns=["_anno_temp"])
-  elif "Decrescente" in ordinamento_scelto:
-    df_inventario_corrente["_anno_temp"] = df_inventario_corrente["Processore"].apply(estrai_anno)
-    df_inventario_corrente = df_inventario_corrente.sort_values(by="_anno_temp", ascending=False).drop(columns=["_anno_temp"])
 
   df_inv_per_editor = df_inventario_corrente.drop(
       columns=["_ip_completo"], errors="ignore"
@@ -636,4 +637,4 @@ with tab_hardware:
             use_container_width=True,
         )
     except Exception as e:
-      st.error(f"Errore nella generazione del PDF: {e}")      st.error(f"Errore nella generazione del PDF: {e}")
+      st.error(f"Errore nella generazione del PDF: {e}")
