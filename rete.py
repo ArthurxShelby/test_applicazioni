@@ -4,6 +4,7 @@ import re
 import pandas as pd
 from fpdf import FPDF
 import streamlit as st
+from supabase import create_client, Client
 
 st.set_page_config(
     page_title="Gestione Reti e Hardware per Sede",
@@ -25,6 +26,17 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+# Inizializzazione Client Supabase
+@st.cache_resource
+def init_supabase():
+  url = st.secrets.get("SUPABASE_URL", "")
+  key = st.secrets.get("SUPABASE_KEY", "")
+  if url and key:
+    return create_client(url, key)
+  return None
+
+supabase: Client = init_supabase()
 
 try:
   from streamlit_javascript import st_javascript
@@ -335,6 +347,7 @@ with tab_hardware:
           hw_marca = st.text_input("Marca", value=pulisci_valore(dettagli_esistenti.get("Marca", "")))
           hw_modello = st.text_input("Modello", value=pulisci_valore(dettagli_esistenti.get("Modello", "")))
           hw_cpu = st.text_input("Processore e anno", value=pulisci_valore(dettagli_esistenti.get("Processore", "")))
+          hw_so = st.text_input("S.O.", value=pulisci_valore(dettagli_esistenti.get("S.O.", "")))
           
           ram_salvata = dettagli_esistenti.get("RAM", "16 GB")
           try:
@@ -355,6 +368,7 @@ with tab_hardware:
             hw_marca = st.text_input("Marca (es. Dell, HP)", value=pulisci_valore(dettagli_esistenti.get("Marca", "")))
             hw_modello = st.text_input("Modello", value=pulisci_valore(dettagli_esistenti.get("Modello", "")))
             hw_cpu = st.text_input("Processore e anno (es. i5 2020)", value=pulisci_valore(dettagli_esistenti.get("Processore", "")))
+            hw_so = st.text_input("S.O.", value=pulisci_valore(dettagli_esistenti.get("S.O.", "")))
           with col2:
             ram_salvata = dettagli_esistenti.get("RAM", "16 GB")
             try:
@@ -377,6 +391,7 @@ with tab_hardware:
               "Marca": hw_marca,
               "Modello": hw_modello,
               "Processore": hw_cpu,
+              "S.O.": hw_so,
               "RAM": f"{hw_ram} GB",
               "Tipo HD": hw_tipo_hd,
               "Capienza HD": hw_cap_hd,
@@ -424,7 +439,7 @@ with tab_hardware:
                 ip_file_completo = f"{base_ip_sede}.{ip_raw}"
 
               if ip_file_completo.startswith(f"{base_ip_sede}."):
-                nome_mac_file = pulisci_valore(row.get("Nome Dispositivo", ""))
+                nome_mac_file = pulisci_valore(row.get("Nome Macchina", ""))
                 
                 if nome_mac_file:
                   idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_file_completo].index
@@ -436,6 +451,7 @@ with tab_hardware:
                     "Marca": pulisci_valore(row.get("Marca", "-")),
                     "Modello": pulisci_valore(row.get("Modello", "-")),
                     "Processore": pulisci_valore(row.get("Processore e anno", "-")),
+                    "S.O.": pulisci_valore(row.get("S.O.", "-")),
                     "RAM": pulisci_valore(row.get("RAM", "-")),
                     "Tipo HD": pulisci_valore(row.get("Tipo HD", "-")),
                     "Capienza HD": pulisci_valore(row.get("Capienza HD", "-")),
@@ -477,6 +493,7 @@ with tab_hardware:
     nome_m = pulisci_valore(m["Nome Macchina"])
     tipo_m = pulisci_valore(m["Tipologia"])
     proc_val = pulisci_valore(dettagli.get("Processore", "-"))
+    so_val = pulisci_valore(dettagli.get("S.O.", "-"))
 
     lista_completa.append({
         "Indirizzo IP": m["Indirizzo IP"],
@@ -487,6 +504,7 @@ with tab_hardware:
         "Marca": pulisci_valore(dettagli.get("Marca", "-")),
         "Modello": pulisci_valore(dettagli.get("Modello", "-")),
         "Processore e anno": proc_val,
+        "S.O.": so_val,
         "RAM": pulisci_valore(dettagli.get("RAM", "-")),
         "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "-")),
         "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "-")),
@@ -517,6 +535,7 @@ with tab_hardware:
           "Marca": st.column_config.TextColumn("Marca"),
           "Modello": st.column_config.TextColumn("Modello"),
           "Processore e anno": st.column_config.TextColumn("Processore e anno"),
+          "S.O.": st.column_config.TextColumn("S.O."),
           "RAM": st.column_config.TextColumn("RAM"),
           "Tipo HD": st.column_config.TextColumn("Tipo HD"),
           "Capienza HD": st.column_config.TextColumn("Capienza HD"),
@@ -543,6 +562,7 @@ with tab_hardware:
           "Marca": pulisci_valore(df_inventario_modificato.loc[i, "Marca"]),
           "Modello": pulisci_valore(df_inventario_modificato.loc[i, "Modello"]),
           "Processore": pulisci_valore(df_inventario_modificato.loc[i, "Processore e anno"]),
+          "S.O.": pulisci_valore(df_inventario_modificato.loc[i, "S.O."]),
           "RAM": pulisci_valore(df_inventario_modificato.loc[i, "RAM"]),
           "Tipo HD": pulisci_valore(df_inventario_modificato.loc[i, "Tipo HD"]),
           "Capienza HD": pulisci_valore(df_inventario_modificato.loc[i, "Capienza HD"]),
@@ -567,7 +587,7 @@ with tab_hardware:
     st.rerun()
 
   # ==========================================
-  # NUOVA SEZIONE: PULSANTE DI CANCELLAZIONE
+  # AREA PERICOLOSA: SVUOTA SEDE (LOCALE + SUPABASE)
   # ==========================================
   st.markdown("---")
   with st.expander("⚠️ Area Pericolosa - Gestione Svuotamento Sede"):
@@ -577,17 +597,36 @@ with tab_hardware:
     )
     if st.button("🗑️ Svuota Inventario Sede", type="primary", key=f"btn_svuota_{idx_selezionato}"):
       if conferma_svuota:
-        # Pulisce tutti i nomi macchina, tipologie e imposta lo stato su libero per la sede corrente
+        # 1. Pulizia Locale (Session State)
         df_rete_sede["Nome Macchina"] = ""
         df_rete_sede["Tipologia"] = ""
         df_rete_sede["Stato"] = "🟢 Libero"
         st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
 
-        # Rimuove tutti i dettagli hardware salvati per gli IP di questa sede
         ips_da_rimuovere = [m["_ip_completo"] for m in df_rete_sede.to_dict("records")]
         for ip_c in ips_da_rimuovere:
           if ip_c in st.session_state.hardware_dettagli:
             del st.session_state.hardware_dettagli[ip_c]
+
+        # 2. Pulizia su SUPABASE
+        if supabase is not None:
+          try:
+            for ip_c in ips_da_rimuovere:
+              supabase.table("inventario").update({
+                  "Nome Macchina": None,
+                  "Tipologia": None,
+                  "Stato": "🟢 Libero",
+                  "Marca": None,
+                  "Modello": None,
+                  "Processore e anno": None,
+                  "S.O.": None,
+                  "RAM": None,
+                  "Tipo HD": None,
+                  "Capienza HD": None,
+                  "Garanzia": None
+              }).eq("Indirizzo IP", ip_c).execute()
+          except Exception as e:
+            st.warning(f"Dati svuotati in locale, ma si è verificato un errore con Supabase: {e}")
 
         st.success(f"Inventario della sede '{sede_scelta['nome']}' svuotato con successo!")
         st.rerun()
@@ -610,6 +649,7 @@ with tab_hardware:
           "Marca": pulisci_valore(dettagli.get("Marca", "")),
           "Modello": pulisci_valore(dettagli.get("Modello", "")),
           "Processore e anno": pulisci_valore(dettagli.get("Processore", "")),
+          "S.O.": pulisci_valore(dettagli.get("S.O.", "")),
           "RAM": pulisci_valore(dettagli.get("RAM", "")),
           "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "")),
           "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "")),
@@ -634,8 +674,8 @@ with tab_hardware:
     pdf.add_page()
     pdf.set_font("helvetica", "", 8)
     
-    headers = ["IP", "Nome Dispositivo", "Tipologia", "Marca", "Modello", "CPU & Anno", "RAM", "HD", "Capienza", "Garanzia"]
-    col_widths = [25, 35, 30, 25, 25, 25, 18, 20, 25, 27]
+    headers = ["IP", "Nome Dispositivo", "Tipologia", "Marca", "Modello", "CPU & Anno", "S.O.", "RAM", "HD", "Capienza", "Garanzia"]
+    col_widths = [22, 32, 25, 22, 22, 22, 20, 15, 18, 22, 25]
     
     pdf.set_font("helvetica", "B", 8)
     for i, h in enumerate(headers):
@@ -653,10 +693,11 @@ with tab_hardware:
         pdf.cell(col_widths[3], 6, str(row["Marca"])[:15], 1, 0, "L")
         pdf.cell(col_widths[4], 6, str(row["Modello"])[:15], 1, 0, "L")
         pdf.cell(col_widths[5], 6, str(row["Processore e anno"])[:15], 1, 0, "L")
-        pdf.cell(col_widths[6], 6, str(row["RAM"])[:10], 1, 0, "C")
-        pdf.cell(col_widths[7], 6, str(row["Tipo HD"])[:10], 1, 0, "C")
-        pdf.cell(col_widths[8], 6, str(row["Capienza HD"])[:12], 1, 0, "C")
-        pdf.cell(col_widths[9], 6, str(row["Garanzia"])[:15], 1, 1, "C")
+        pdf.cell(col_widths[6], 6, str(row["S.O."])[:15], 1, 0, "L")
+        pdf.cell(col_widths[7], 6, str(row["RAM"])[:10], 1, 0, "C")
+        pdf.cell(col_widths[8], 6, str(row["Tipo HD"])[:10], 1, 0, "C")
+        pdf.cell(col_widths[9], 6, str(row["Capienza HD"])[:12], 1, 0, "C")
+        pdf.cell(col_widths[10], 6, str(row["Garanzia"])[:15], 1, 1, "C")
       
     raw_pdf = pdf.output()
     if isinstance(raw_pdf, (bytearray, bytes)):
