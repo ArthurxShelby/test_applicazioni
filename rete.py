@@ -174,8 +174,7 @@ def carica_dati_da_supabase():
     response = supabase.table(NOME_TABELLA_SUPABASE).select("*").execute()
     dati = response.data if response.data else []
 
-    # PULIZIA DI SICUREZZA BLOCCO 38:
-    # Rimuove l'SSD forzato se nel campo capienza non c'è scritto esplicitamente SSD
+    # PULIZIA DI SICUREZZA BLOCCO 38: Rimuove l'SSD forzato se non specificato in capienza
     for row in dati:
       ip = str(row.get("ip_completo", ""))
       if ip.startswith("38.") and row.get("tipo_hd") == "SSD":
@@ -337,9 +336,11 @@ idx_selezionato = st.selectbox(
 
 sede_scelta = sedi_config[idx_selezionato]
 
-tab_rete, tab_hardware = st.tabs(
-    ["🌐 Blocco IP & Occupazione", "💻 Inventario Hardware Dettagliato"]
-)
+tab_rete, tab_hardware, tab_report = st.tabs([
+    "🌐 Blocco IP & Occupazione",
+    "💻 Inventario Hardware Dettagliato",
+    "📄 Report & Esportazione PDF",
+])
 
 with tab_rete:
   st.markdown(f"### 🌐 Gestione IP: {sede_scelta['nome']}")
@@ -664,5 +665,68 @@ with tab_hardware:
     st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
     st.success("Inventario aggiornato e salvato su Supabase!")
 
-    st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
-    st.success("Inventario aggiornato e salvato su Supabase!")
+with tab_report:
+  st.markdown(
+      f"### 📄 Generazione Report PDF per la sede: {sede_scelta['nome']}"
+  )
+  st.write(
+      "Clicca sul pulsante sottostante per generare e scaricare il report"
+      " dettagliato in formato PDF dell'inventario corrente."
+  )
+
+
+  class PDFReport(FPDF):
+
+    def header(self):
+      self.set_font("Arial", "B", 12)
+      self.cell(
+          0,
+          10,
+          f"Report Inventario Hardware & Reti - {sede_scelta['nome']}",
+          0,
+          1,
+          "C",
+      )
+      self.ln(5)
+
+    def footer(self):
+      self.set_y(-15)
+      self.set_font("Arial", "I", 8)
+      self.cell(
+          0, 10, f"Pagina {self.page_no()}", 0, 0, "C"
+      )
+
+
+  if st.button("📥 Genera PDF Sede Corrente"):
+    pdf = PDFReport(orientation="L", unit="mm", format="A4")
+    pdf.add_page()
+    pdf.set_font("Arial", "", 9)
+
+    # Intestazione Tabella PDF
+    headers = ["IP", "Nome", "Tipologia", "Stato", "Marca", "Modello", "RAM/HD"]
+    widths = [30, 45, 30, 25, 35, 45, 45]
+
+    pdf.set_font("Arial", "B", 9)
+    for h, w in zip(headers, widths):
+      pdf.cell(w, 7, h, 1, 0, "C")
+    pdf.ln()
+
+    pdf.set_font("Arial", "", 8)
+    for riga in lista_completa:
+      pdf.cell(widths[0], 6, str(riga["Indirizzo IP"]), 1, 0, "L")
+      pdf.cell(widths[1], 6, str(riga["Nome Macchina"][:25]), 1, 0, "L")
+      pdf.cell(widths[2], 6, str(riga["Tipologia"][:15]), 1, 0, "L")
+      pdf.cell(widths[3], 6, str(riga["Stato"].replace("🟢 ", "").replace("🔴 ", "")), 1, 0, "L")
+      pdf.cell(widths[4], 6, str(riga["Marca"][:20]), 1, 0, "L")
+      pdf.cell(widths[5], 6, str(riga["Modello"][:25]), 1, 0, "L")
+      ram_hd = f"{riga['RAM']} - {riga['Tipo HD']} {riga['Capienza HD']}"
+      pdf.cell(widths[6], 6, str(ram_hd[:25]), 1, 0, "L")
+      pdf.ln()
+
+    pdf_output = pdf.output(dest="S").encode("latin1")
+    st.download_button(
+        label="💾 Scarica il file PDF",
+        data=pdf_output,
+        file_name=f"Inventario_{sede_scelta['nome'].replace(' ', '_')}.pdf",
+        mime="application/pdf",
+    )
