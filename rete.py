@@ -104,14 +104,14 @@ def estrai_anno(testo):
     return int(match.group(1))
   return 9999
 
-# Caricamento iniziale dei dati da Supabase in session_state
+# Inizializzazione Stati
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
 
 if "hardware_dettagli" not in st.session_state:
   st.session_state.hardware_dettagli = {}
 
-# Scarica dati da Supabase una sola volta all'avvio
+# Caricamento dati da Supabase all'avvio
 if "dati_caricati_da_supabase" not in st.session_state:
   if supabase is not None:
     try:
@@ -121,6 +121,9 @@ if "dati_caricati_da_supabase" not in st.session_state:
           ip_db = row.get("Indirizzo IP")
           if ip_db:
             st.session_state.hardware_dettagli[ip_db] = {
+                "Nome Macchina": pulisci_valore(row.get("Nome Macchina")),
+                "Tipologia": pulisci_valore(row.get("Tipologia")),
+                "Stato": pulisci_valore(row.get("Stato")) or ("🔴 Occupato" if row.get("Nome Macchina") else "🟢 Libero"),
                 "Marca": pulisci_valore(row.get("Marca")),
                 "Modello": pulisci_valore(row.get("Modello")),
                 "Processore": pulisci_valore(row.get("Processore e anno")),
@@ -142,21 +145,13 @@ for idx, item in enumerate(sedi_config):
   for i in range_ip:
     ip_completo = f"{base_ip}.{i}"
     
-    # Recupera dati hardware se esistono già in memoria/supabase
+    # Recupera i dati salvati (da Supabase o session_state)
     hw = st.session_state.hardware_dettagli.get(ip_completo, {})
-    nome_mac_salvato = hw.get("Nome_Macchina_Rete", "")
-    
-    # Controlla se esiste nello storage locale o se dobbiamo dedurlo
-    old_df = st.session_state.dataframes_rete.get(idx, pd.DataFrame())
-    existing_row = None
-    if not old_df.empty and "_ip_completo" in old_df.columns:
-      match_old = old_df[old_df["_ip_completo"] == ip_completo]
-      if not match_old.empty:
-        existing_row = match_old.iloc[0]
-
-    nome_macchina = pulisci_valore(existing_row["Nome Macchina"] if existing_row is not None else "")
-    tipologia = pulisci_valore(existing_row["Tipologia"] if existing_row is not None else "")
-    stato = "🔴 Occupato" if nome_macchina else "🟢 Libero"
+    nome_macchina = pulisci_valore(hw.get("Nome Macchina", ""))
+    tipologia = pulisci_valore(hw.get("Tipologia", ""))
+    stato = hw.get("Stato", "")
+    if not stato:
+      stato = "🔴 Occupato" if nome_macchina else "🟢 Libero"
 
     righe_ip.append({
         "Indirizzo IP": ip_completo,
@@ -264,7 +259,9 @@ with tab_rete:
       df_modificato.loc[i, "Stato"] = "🟢 Libero"
       tipo_scelto = ""
       if ip_corr in st.session_state.hardware_dettagli:
-        del st.session_state.hardware_dettagli[ip_corr]
+        st.session_state.hardware_dettagli[ip_corr]["Nome Macchina"] = ""
+        st.session_state.hardware_dettagli[ip_corr]["Tipologia"] = ""
+        st.session_state.hardware_dettagli[ip_corr]["Stato"] = "🟢 Libero"
       modificato = True
 
     if df_corrente.loc[i, "Tipologia"] != tipo_scelto or df_corrente.loc[i, "Nome Macchina"] != nome_mac:
@@ -273,6 +270,13 @@ with tab_rete:
     df_corrente.loc[i, "Nome Macchina"] = nome_mac
     df_corrente.loc[i, "Tipologia"] = tipo_scelto
     df_corrente.loc[i, "Stato"] = df_modificato.loc[i, "Stato"]
+
+    # Aggiorna anche il dizionario locale
+    if ip_corr not in st.session_state.hardware_dettagli:
+      st.session_state.hardware_dettagli[ip_corr] = {}
+    st.session_state.hardware_dettagli[ip_corr]["Nome Macchina"] = nome_mac
+    st.session_state.hardware_dettagli[ip_corr]["Tipologia"] = tipo_scelto
+    st.session_state.hardware_dettagli[ip_corr]["Stato"] = df_corrente.loc[i, "Stato"]
 
     # Sincronizzazione automatica su Supabase per ogni riga modificata
     if modificato and supabase is not None:
@@ -348,7 +352,12 @@ with tab_hardware:
         btn_salva = st.form_submit_button("Salva Specifiche Tecniche e Dispositivo")
         
         if btn_salva:
+          stato_finale = "🔴 Occupato" if pulisci_valore(hw_nome_macchina) else "🟢 Libero"
+          
           st.session_state.hardware_dettagli[ip_scelto] = {
+              "Nome Macchina": pulisci_valore(hw_nome_macchina),
+              "Tipologia": hw_tipologia if pulisci_valore(hw_nome_macchina) else "",
+              "Stato": stato_finale,
               "Marca": hw_marca,
               "Modello": hw_modello,
               "Processore": hw_cpu,
@@ -363,7 +372,6 @@ with tab_hardware:
           if not idx_r.empty:
             df_rete_sede.loc[idx_r, "Nome Macchina"] = pulisci_valore(hw_nome_macchina)
             df_rete_sede.loc[idx_r, "Tipologia"] = hw_tipologia if pulisci_valore(hw_nome_macchina) else ""
-            stato_finale = "🔴 Occupato" if pulisci_valore(hw_nome_macchina) else "🟢 Libero"
             df_rete_sede.loc[idx_r, "Stato"] = stato_finale
             st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
 
@@ -374,7 +382,7 @@ with tab_hardware:
                   "Indirizzo IP": ip_scelto,
                   "Nome Macchina": pulisci_valore(hw_nome_macchina) if pulisci_valore(hw_nome_macchina) else None,
                   "Tipologia": hw_tipologia if pulisci_valore(hw_nome_macchina) else None,
-                  "Stato": "🔴 Occupato" if pulisci_valore(hw_nome_macchina) else "🟢 Libero",
+                  "Stato": stato_finale,
                   "Marca": hw_marca if hw_marca else None,
                   "Modello": hw_modello if hw_modello else None,
                   "Processore e anno": hw_cpu if hw_cpu else None,
@@ -420,14 +428,18 @@ with tab_hardware:
               if ip_file_completo.startswith(f"{base_ip_sede}."):
                 nome_mac_file = pulisci_valore(row.get("Nome Macchina", ""))
                 tipologia_file = pulisci_valore(row.get("Tipologia", "PC / Macchina"))
+                stato_file = "🔴 Occupato" if nome_mac_file else "🟢 Libero"
                 
                 idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_file_completo].index
                 if not idx_r.empty:
                   df_rete_sede.loc[idx_r, "Nome Macchina"] = nome_mac_file
                   df_rete_sede.loc[idx_r, "Tipologia"] = tipologia_file if nome_mac_file else ""
-                  df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato" if nome_mac_file else "🟢 Libero"
+                  df_rete_sede.loc[idx_r, "Stato"] = stato_file
 
                 st.session_state.hardware_dettagli[ip_file_completo] = {
+                    "Nome Macchina": nome_mac_file,
+                    "Tipologia": tipologia_file if nome_mac_file else "",
+                    "Stato": stato_file,
                     "Marca": pulisci_valore(row.get("Marca", "")),
                     "Modello": pulisci_valore(row.get("Modello", "")),
                     "Processore": pulisci_valore(row.get("Processore e anno", "")),
@@ -444,7 +456,7 @@ with tab_hardware:
                         "Indirizzo IP": ip_file_completo,
                         "Nome Macchina": nome_mac_file if nome_mac_file else None,
                         "Tipologia": tipologia_file if nome_mac_file else None,
-                        "Stato": "🔴 Occupato" if nome_mac_file else "🟢 Libero",
+                        "Stato": stato_file,
                         "Marca": pulisci_valore(row.get("Marca")) or None,
                         "Modello": pulisci_valore(row.get("Modello")) or None,
                         "Processore e anno": pulisci_valore(row.get("Processore e anno")) or None,
@@ -484,6 +496,7 @@ with tab_hardware:
 
     nome_m = pulisci_valore(m["Nome Macchina"])
     tipo_m = pulisci_valore(m["Tipologia"])
+    stato_m = m["Stato"]
     proc_val = pulisci_valore(dettagli.get("Processore", ""))
     so_val = pulisci_valore(dettagli.get("S.O.", ""))
 
@@ -492,7 +505,7 @@ with tab_hardware:
         "_ip_completo": ip_comp,
         "Nome Macchina": nome_m,
         "Tipologia": tipo_m,
-        "Stato": m["Stato"],
+        "Stato": stato_m,
         "Marca": pulisci_valore(dettagli.get("Marca", "")),
         "Modello": pulisci_valore(dettagli.get("Modello", "")),
         "Processore e anno": proc_val,
@@ -546,9 +559,13 @@ with tab_hardware:
       ip_comp = riga_orig.iloc[0]["_ip_completo"]
       nuovo_nome = pulisci_valore(df_inventario_modificato.loc[i, "Nome Macchina"])
       nuova_tipologia = pulisci_valore(df_inventario_modificato.loc[i, "Tipologia"])
+      nuovo_stato = df_inventario_modificato.loc[i, "Stato"]
 
       if not nuovo_nome:
         nuova_tipologia = ""
+        nuovo_stato = "🟢 Libero"
+      elif nuovo_stato != "🔴 Occupato":
+        nuovo_stato = "🔴 Occupato"
 
       marca_v = pulisci_valore(df_inventario_modificato.loc[i, "Marca"])
       modello_v = pulisci_valore(df_inventario_modificato.loc[i, "Modello"])
@@ -560,6 +577,9 @@ with tab_hardware:
       gar_v = pulisci_valore(df_inventario_modificato.loc[i, "Garanzia"])
 
       st.session_state.hardware_dettagli[ip_comp] = {
+          "Nome Macchina": nuovo_nome,
+          "Tipologia": nuova_tipologia,
+          "Stato": nuovo_stato,
           "Marca": marca_v,
           "Modello": modello_v,
           "Processore": proc_v,
@@ -574,10 +594,11 @@ with tab_hardware:
       if not idx_r.empty:
         vecchio_nome = str(df_rete_sede.loc[idx_r[0], "Nome Macchina"])
         vecchia_tipologia = str(df_rete_sede.loc[idx_r[0], "Tipologia"])
-        if vecchio_nome != nuovo_nome or vecchia_tipologia != nuova_tipologia:
+        vecchio_stato = str(df_rete_sede.loc[idx_r[0], "Stato"])
+        if vecchio_nome != nuovo_nome or vecchia_tipologia != nuova_tipologia or vecchio_stato != nuovo_stato:
           df_rete_sede.loc[idx_r, "Nome Macchina"] = nuovo_nome
           df_rete_sede.loc[idx_r, "Tipologia"] = nuova_tipologia
-          df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato" if nuovo_nome else "🟢 Libero"
+          df_rete_sede.loc[idx_r, "Stato"] = nuovo_stato
           inv_modificato = True
 
       # Sincronizzazione dell'inventario completo su Supabase
@@ -587,7 +608,7 @@ with tab_hardware:
               "Indirizzo IP": ip_comp,
               "Nome Macchina": nuovo_nome if nuovo_nome else None,
               "Tipologia": nuova_tipologia if nuovo_nome else None,
-              "Stato": "🔴 Occupato" if nuovo_nome else "🟢 Libero",
+              "Stato": nuovo_stato,
               "Marca": marca_v if marca_v else None,
               "Modello": modello_v if modello_v else None,
               "Processore e anno": proc_v if proc_v else None,
