@@ -77,69 +77,15 @@ st.subheader("Gestione Reti e Hardware per Sede")
 st.caption(f"💻 Dispositivo rilevato: **{tipo_dispositivo}**")
 
 sedi_config = [
-    {
-        "id": 1,
-        "nome": "Trieste",
-        "blocco": "38.0",
-        "subnet": "254.0",
-        "range_custom": range(1, 256),
-    },
-    {
-        "id": 2,
-        "nome": "Sede Centrale",
-        "blocco": "39.0",
-        "subnet": "254.0",
-        "range_custom": range(1, 256),
-    },
-    {
-        "id": 3,
-        "nome": "Monfalcone",
-        "blocco": "86.0",
-        "subnet": "255.0",
-        "range_custom": range(1, 256),
-    },
-    {
-        "id": 4,
-        "nome": "Grado",
-        "blocco": "168.0",
-        "subnet": "255.0",
-        "range_custom": range(1, 256),
-    },
-    {
-        "id": 5,
-        "nome": "Nogaro",
-        "blocco": "61.0",
-        "subnet": "255.0",
-        "range_custom": range(1, 256),
-    },
-    {
-        "id": 6,
-        "nome": "Lignao",
-        "blocco": "26.0",
-        "subnet": "255.0",
-        "range_custom": range(1, 256),
-    },
-    {
-        "id": 7,
-        "nome": "Marano",
-        "blocco": "29.0",
-        "subnet": "255.0",
-        "range_custom": range(1, 256),
-    },
-    {
-        "id": 8,
-        "nome": "MMnn",
-        "blocco": "66.0",
-        "subnet": "255.0",
-        "range_custom": range(1, 256),
-    },
-    {
-        "id": 9,
-        "nome": "P.nuovo",
-        "blocco": "77.0",
-        "subnet": "255.192",
-        "range_custom": range(65, 127),
-    },
+    {"id": 1, "nome": "Trieste", "blocco": "38.0", "subnet": "254.0", "range_custom": range(1, 256)},
+    {"id": 2, "nome": "Sede Centrale", "blocco": "39.0", "subnet": "254.0", "range_custom": range(1, 256)},
+    {"id": 3, "nome": "Monfalcone", "blocco": "86.0", "subnet": "255.0", "range_custom": range(1, 256)},
+    {"id": 4, "nome": "Grado", "blocco": "168.0", "subnet": "255.0", "range_custom": range(1, 256)},
+    {"id": 5, "nome": "Nogaro", "blocco": "61.0", "subnet": "255.0", "range_custom": range(1, 256)},
+    {"id": 6, "nome": "Lignao", "blocco": "26.0", "subnet": "255.0", "range_custom": range(1, 256)},
+    {"id": 7, "nome": "Marano", "blocco": "29.0", "subnet": "255.0", "range_custom": range(1, 256)},
+    {"id": 8, "nome": "MMnn", "blocco": "66.0", "subnet": "255.0", "range_custom": range(1, 256)},
+    {"id": 9, "nome": "P.nuovo", "blocco": "77.0", "subnet": "255.192", "range_custom": range(65, 127)},
 ]
 
 def pulisci_valore(val):
@@ -158,45 +104,68 @@ def estrai_anno(testo):
     return int(match.group(1))
   return 9999
 
+# Caricamento iniziale dei dati da Supabase in session_state
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
+
+if "hardware_dettagli" not in st.session_state:
+  st.session_state.hardware_dettagli = {}
+
+# Scarica dati da Supabase una sola volta all'avvio
+if "dati_caricati_da_supabase" not in st.session_state:
+  if supabase is not None:
+    try:
+      response = supabase.table("inventario").select("*").execute()
+      if response.data:
+        for row in response.data:
+          ip_db = row.get("Indirizzo IP")
+          if ip_db:
+            st.session_state.hardware_dettagli[ip_db] = {
+                "Marca": pulisci_valore(row.get("Marca")),
+                "Modello": pulisci_valore(row.get("Modello")),
+                "Processore": pulisci_valore(row.get("Processore e anno")),
+                "S.O.": pulisci_valore(row.get("S.O.")),
+                "RAM": pulisci_valore(row.get("RAM")),
+                "Tipo HD": pulisci_valore(row.get("Tipo HD")),
+                "Capienza HD": pulisci_valore(row.get("Capienza HD")),
+                "Garanzia": pulisci_valore(row.get("Garanzia")),
+            }
+    except Exception as e:
+      st.error(f"Errore di caricamento da Supabase: {e}")
+  st.session_state.dati_caricati_da_supabase = True
 
 for idx, item in enumerate(sedi_config):
   base_ip = item["blocco"].split(".")[0]
   range_ip = item["range_custom"]
 
-  old_df = st.session_state.dataframes_rete.get(idx, pd.DataFrame())
-  old_data_map = {}
-  if not old_df.empty and "_ip_completo" in old_df.columns:
-    for _, r in old_df.iterrows():
-      old_data_map[r["_ip_completo"]] = {
-          "Nome Macchina": pulisci_valore(r.get("Nome Macchina", "")),
-          "Tipologia": pulisci_valore(r.get("Tipologia", "")),
-          "Stato": r.get("Stato", "🟢 Libero"),
-      }
-
   righe_ip = []
   for i in range_ip:
     ip_completo = f"{base_ip}.{i}"
-    existing = old_data_map.get(
-        ip_completo,
-        {
-            "Nome Macchina": "",
-            "Tipologia": "",
-            "Stato": "🟢 Libero",
-        },
-    )
+    
+    # Recupera dati hardware se esistono già in memoria/supabase
+    hw = st.session_state.hardware_dettagli.get(ip_completo, {})
+    nome_mac_salvato = hw.get("Nome_Macchina_Rete", "")
+    
+    # Controlla se esiste nello storage locale o se dobbiamo dedurlo
+    old_df = st.session_state.dataframes_rete.get(idx, pd.DataFrame())
+    existing_row = None
+    if not old_df.empty and "_ip_completo" in old_df.columns:
+      match_old = old_df[old_df["_ip_completo"] == ip_completo]
+      if not match_old.empty:
+        existing_row = match_old.iloc[0]
+
+    nome_macchina = pulisci_valore(existing_row["Nome Macchina"] if existing_row is not None else "")
+    tipologia = pulisci_valore(existing_row["Tipologia"] if existing_row is not None else "")
+    stato = "🔴 Occupato" if nome_macchina else "🟢 Libero"
+
     righe_ip.append({
         "Indirizzo IP": ip_completo,
         "_ip_completo": ip_completo,
-        "Nome Macchina": existing["Nome Macchina"],
-        "Tipologia": existing["Tipologia"],
-        "Stato": existing["Stato"],
+        "Nome Macchina": nome_macchina,
+        "Tipologia": tipologia,
+        "Stato": stato,
     })
   st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
-
-if "hardware_dettagli" not in st.session_state:
-  st.session_state.hardware_dettagli = {}
 
 if "stato_ordinamento_anno" not in st.session_state:
   st.session_state.stato_ordinamento_anno = {}
@@ -305,6 +274,18 @@ with tab_rete:
     df_corrente.loc[i, "Tipologia"] = tipo_scelto
     df_corrente.loc[i, "Stato"] = df_modificato.loc[i, "Stato"]
 
+    # Sincronizzazione automatica su Supabase per ogni riga modificata
+    if modificato and supabase is not None:
+      try:
+        supabase.table("inventario").upsert({
+            "Indirizzo IP": ip_corr,
+            "Nome Macchina": nome_mac if nome_mac else None,
+            "Tipologia": tipo_scelto if tipo_scelto else None,
+            "Stato": df_corrente.loc[i, "Stato"]
+        }, on_conflict="Indirizzo IP").execute()
+      except Exception as e:
+        st.error(f"Errore sincronizzazione Supabase: {e}")
+
   st.session_state.dataframes_rete[idx_selezionato] = df_corrente
 
   if modificato:
@@ -343,46 +324,26 @@ with tab_hardware:
 
         st.markdown("---")
 
-        if tipo_dispositivo == "Smartphone":
-          hw_marca = st.text_input("Marca", value=pulisci_valore(dettagli_esistenti.get("Marca", "")))
+        col1, col2 = st.columns(2)
+        with col1:
+          hw_marca = st.text_input("Marca (es. Dell, HP)", value=pulisci_valore(dettagli_esistenti.get("Marca", "")))
           hw_modello = st.text_input("Modello", value=pulisci_valore(dettagli_esistenti.get("Modello", "")))
-          hw_cpu = st.text_input("Processore e anno", value=pulisci_valore(dettagli_esistenti.get("Processore", "")))
+          hw_cpu = st.text_input("Processore e anno (es. i5 2020)", value=pulisci_valore(dettagli_esistenti.get("Processore", "")))
           hw_so = st.text_input("S.O.", value=pulisci_valore(dettagli_esistenti.get("S.O.", "")))
-          
+        with col2:
           ram_salvata = dettagli_esistenti.get("RAM", "16 GB")
           try:
             ram_val = int(str(ram_salvata).replace(" GB", "").strip())
           except:
             ram_val = 16
-          hw_ram = st.number_input("RAM / Porte (GB)", min_value=2, max_value=256, value=ram_val)
+          hw_ram = st.number_input("RAM / Porte (GB o Num)", min_value=2, max_value=256, value=ram_val)
           
           tipo_hd_esistente = pulisci_valore(dettagli_esistenti.get("Tipo HD", "SSD"))
           if tipo_hd_esistente not in ["SSD", "HDD", "NVMe"]:
             tipo_hd_esistente = "SSD"
-          hw_tipo_hd = st.selectbox("Tipo Memoria", ["SSD", "HDD", "NVMe"], index=["SSD", "HDD", "NVMe"].index(tipo_hd_esistente))
+          hw_tipo_hd = st.selectbox("Tipo Memoria / Extra", ["SSD", "HDD", "NVMe"], index=["SSD", "HDD", "NVMe"].index(tipo_hd_esistente))
           hw_cap_hd = st.text_input("Capienza / Note", value=pulisci_valore(dettagli_esistenti.get("Capienza HD", "")))
           hw_garanzia = st.text_input("Scadenza Garanzia", value=pulisci_valore(dettagli_esistenti.get("Garanzia", "")))
-        else:
-          col1, col2 = st.columns(2)
-          with col1:
-            hw_marca = st.text_input("Marca (es. Dell, HP)", value=pulisci_valore(dettagli_esistenti.get("Marca", "")))
-            hw_modello = st.text_input("Modello", value=pulisci_valore(dettagli_esistenti.get("Modello", "")))
-            hw_cpu = st.text_input("Processore e anno (es. i5 2020)", value=pulisci_valore(dettagli_esistenti.get("Processore", "")))
-            hw_so = st.text_input("S.O.", value=pulisci_valore(dettagli_esistenti.get("S.O.", "")))
-          with col2:
-            ram_salvata = dettagli_esistenti.get("RAM", "16 GB")
-            try:
-              ram_val = int(str(ram_salvata).replace(" GB", "").strip())
-            except:
-              ram_val = 16
-            hw_ram = st.number_input("RAM / Porte (GB o Num)", min_value=2, max_value=256, value=ram_val)
-            
-            tipo_hd_esistente = pulisci_valore(dettagli_esistenti.get("Tipo HD", "SSD"))
-            if tipo_hd_esistente not in ["SSD", "HDD", "NVMe"]:
-              tipo_hd_esistente = "SSD"
-            hw_tipo_hd = st.selectbox("Tipo Memoria / Extra", ["SSD", "HDD", "NVMe"], index=["SSD", "HDD", "NVMe"].index(tipo_hd_esistente))
-            hw_cap_hd = st.text_input("Capienza / Note", value=pulisci_valore(dettagli_esistenti.get("Capienza HD", "")))
-            hw_garanzia = st.text_input("Scadenza Garanzia", value=pulisci_valore(dettagli_esistenti.get("Garanzia", "")))
 
         btn_salva = st.form_submit_button("Salva Specifiche Tecniche e Dispositivo")
         
@@ -402,11 +363,29 @@ with tab_hardware:
           if not idx_r.empty:
             df_rete_sede.loc[idx_r, "Nome Macchina"] = pulisci_valore(hw_nome_macchina)
             df_rete_sede.loc[idx_r, "Tipologia"] = hw_tipologia if pulisci_valore(hw_nome_macchina) else ""
-            if pulisci_valore(hw_nome_macchina):
-              df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
-            else:
-              df_rete_sede.loc[idx_r, "Stato"] = "🟢 Libero"
+            stato_finale = "🔴 Occupato" if pulisci_valore(hw_nome_macchina) else "🟢 Libero"
+            df_rete_sede.loc[idx_r, "Stato"] = stato_finale
             st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
+
+          # SCRITTURA SU SUPABASE
+          if supabase is not None:
+            try:
+              supabase.table("inventario").upsert({
+                  "Indirizzo IP": ip_scelto,
+                  "Nome Macchina": pulisci_valore(hw_nome_macchina) if pulisci_valore(hw_nome_macchina) else None,
+                  "Tipologia": hw_tipologia if pulisci_valore(hw_nome_macchina) else None,
+                  "Stato": "🔴 Occupato" if pulisci_valore(hw_nome_macchina) else "🟢 Libero",
+                  "Marca": hw_marca if hw_marca else None,
+                  "Modello": hw_modello if hw_modello else None,
+                  "Processore e anno": hw_cpu if hw_cpu else None,
+                  "S.O.": hw_so if hw_so else None,
+                  "RAM": f"{hw_ram} GB",
+                  "Tipo HD": hw_tipo_hd if hw_tipo_hd else None,
+                  "Capienza HD": hw_cap_hd if hw_cap_hd else None,
+                  "Garanzia": hw_garanzia if hw_garanzia else None,
+              }, on_conflict="Indirizzo IP").execute()
+            except Exception as e:
+              st.error(f"Errore scrittura su Supabase: {e}")
 
           st.success(f"Dati di {scelta_mostrata} salvati con successo!")
           st.rerun()
@@ -440,23 +419,44 @@ with tab_hardware:
 
               if ip_file_completo.startswith(f"{base_ip_sede}."):
                 nome_mac_file = pulisci_valore(row.get("Nome Macchina", ""))
+                tipologia_file = pulisci_valore(row.get("Tipologia", "PC / Macchina"))
                 
-                if nome_mac_file:
-                  idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_file_completo].index
-                  if not idx_r.empty:
-                    df_rete_sede.loc[idx_r, "Nome Macchina"] = nome_mac_file
-                    df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
+                idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_file_completo].index
+                if not idx_r.empty:
+                  df_rete_sede.loc[idx_r, "Nome Macchina"] = nome_mac_file
+                  df_rete_sede.loc[idx_r, "Tipologia"] = tipologia_file if nome_mac_file else ""
+                  df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato" if nome_mac_file else "🟢 Libero"
 
                 st.session_state.hardware_dettagli[ip_file_completo] = {
-                    "Marca": pulisci_valore(row.get("Marca", "-")),
-                    "Modello": pulisci_valore(row.get("Modello", "-")),
-                    "Processore": pulisci_valore(row.get("Processore e anno", "-")),
-                    "S.O.": pulisci_valore(row.get("S.O.", "-")),
-                    "RAM": pulisci_valore(row.get("RAM", "-")),
-                    "Tipo HD": pulisci_valore(row.get("Tipo HD", "-")),
-                    "Capienza HD": pulisci_valore(row.get("Capienza HD", "-")),
-                    "Garanzia": pulisci_valore(row.get("Garanzia", "-")),
+                    "Marca": pulisci_valore(row.get("Marca", "")),
+                    "Modello": pulisci_valore(row.get("Modello", "")),
+                    "Processore": pulisci_valore(row.get("Processore e anno", "")),
+                    "S.O.": pulisci_valore(row.get("S.O.", "")),
+                    "RAM": pulisci_valore(row.get("RAM", "")),
+                    "Tipo HD": pulisci_valore(row.get("Tipo HD", "")),
+                    "Capienza HD": pulisci_valore(row.get("Capienza HD", "")),
+                    "Garanzia": pulisci_valore(row.get("Garanzia", "")),
                 }
+
+                if supabase is not None:
+                  try:
+                    supabase.table("inventario").upsert({
+                        "Indirizzo IP": ip_file_completo,
+                        "Nome Macchina": nome_mac_file if nome_mac_file else None,
+                        "Tipologia": tipologia_file if nome_mac_file else None,
+                        "Stato": "🔴 Occupato" if nome_mac_file else "🟢 Libero",
+                        "Marca": pulisci_valore(row.get("Marca")) or None,
+                        "Modello": pulisci_valore(row.get("Modello")) or None,
+                        "Processore e anno": pulisci_valore(row.get("Processore e anno")) or None,
+                        "S.O.": pulisci_valore(row.get("S.O.")) or None,
+                        "RAM": pulisci_valore(row.get("RAM")) or None,
+                        "Tipo HD": pulisci_valore(row.get("Tipo HD")) or None,
+                        "Capienza HD": pulisci_valore(row.get("Capienza HD")) or None,
+                        "Garanzia": pulisci_valore(row.get("Garanzia")) or None,
+                    }, on_conflict="Indirizzo IP").execute()
+                  except Exception as e:
+                    pass
+
                 count_importati += 1
 
             st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
@@ -467,23 +467,15 @@ with tab_hardware:
 
   st.markdown("---")
   
-  if tipo_dispositivo == "Smartphone":
-    st.markdown(f"📋 **Inventario Sede**")
+  col_tit_inv, col_btn_ord = st.columns([3, 1])
+  with col_tit_inv:
+    st.markdown(f"📋 **Inventario Completo della Sede (Modificabile)**")
+  with col_btn_ord:
     ordinato_attivo = st.session_state.stato_ordinamento_anno.get(idx_selezionato, False)
-    label_btn = "🔄 Annulla Ordine Anno" if ordinato_attivo else "📅 Ordina per Anno"
+    label_btn = "🔄 Riordina per Anno (Attivo)" if ordinato_attivo else "📅 Ordina per Anno"
     if st.button(label_btn, use_container_width=True):
       st.session_state.stato_ordinamento_anno[idx_selezionato] = not ordinato_attivo
       st.rerun()
-  else:
-    col_tit_inv, col_btn_ord = st.columns([3, 1])
-    with col_tit_inv:
-      st.markdown(f"📋 **Inventario Completo della Sede (Modificabile)**")
-    with col_btn_ord:
-      ordinato_attivo = st.session_state.stato_ordinamento_anno.get(idx_selezionato, False)
-      label_btn = "🔄 Riordina per Anno (Attivo)" if ordinato_attivo else "📅 Ordina per Anno"
-      if st.button(label_btn, use_container_width=True):
-        st.session_state.stato_ordinamento_anno[idx_selezionato] = not ordinato_attivo
-        st.rerun()
 
   lista_completa = []
   for m in df_rete_sede.to_dict("records"):
@@ -492,8 +484,8 @@ with tab_hardware:
 
     nome_m = pulisci_valore(m["Nome Macchina"])
     tipo_m = pulisci_valore(m["Tipologia"])
-    proc_val = pulisci_valore(dettagli.get("Processore", "-"))
-    so_val = pulisci_valore(dettagli.get("S.O.", "-"))
+    proc_val = pulisci_valore(dettagli.get("Processore", ""))
+    so_val = pulisci_valore(dettagli.get("S.O.", ""))
 
     lista_completa.append({
         "Indirizzo IP": m["Indirizzo IP"],
@@ -501,14 +493,14 @@ with tab_hardware:
         "Nome Macchina": nome_m,
         "Tipologia": tipo_m,
         "Stato": m["Stato"],
-        "Marca": pulisci_valore(dettagli.get("Marca", "-")),
-        "Modello": pulisci_valore(dettagli.get("Modello", "-")),
+        "Marca": pulisci_valore(dettagli.get("Marca", "")),
+        "Modello": pulisci_valore(dettagli.get("Modello", "")),
         "Processore e anno": proc_val,
         "S.O.": so_val,
-        "RAM": pulisci_valore(dettagli.get("RAM", "-")),
-        "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "-")),
-        "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "-")),
-        "Garanzia": pulisci_valore(dettagli.get("Garanzia", "-")),
+        "RAM": pulisci_valore(dettagli.get("RAM", "")),
+        "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "")),
+        "Capienza HD": pulisci_valore(dettagli.get("Capienza HD", "")),
+        "Garanzia": pulisci_valore(dettagli.get("Garanzia", "")),
     })
 
   df_inventario_corrente = pd.DataFrame(lista_completa)
@@ -558,15 +550,24 @@ with tab_hardware:
       if not nuovo_nome:
         nuova_tipologia = ""
 
+      marca_v = pulisci_valore(df_inventario_modificato.loc[i, "Marca"])
+      modello_v = pulisci_valore(df_inventario_modificato.loc[i, "Modello"])
+      proc_v = pulisci_valore(df_inventario_modificato.loc[i, "Processore e anno"])
+      so_v = pulisci_valore(df_inventario_modificato.loc[i, "S.O."])
+      ram_v = pulisci_valore(df_inventario_modificato.loc[i, "RAM"])
+      tipo_hd_v = pulisci_valore(df_inventario_modificato.loc[i, "Tipo HD"])
+      cap_hd_v = pulisci_valore(df_inventario_modificato.loc[i, "Capienza HD"])
+      gar_v = pulisci_valore(df_inventario_modificato.loc[i, "Garanzia"])
+
       st.session_state.hardware_dettagli[ip_comp] = {
-          "Marca": pulisci_valore(df_inventario_modificato.loc[i, "Marca"]),
-          "Modello": pulisci_valore(df_inventario_modificato.loc[i, "Modello"]),
-          "Processore": pulisci_valore(df_inventario_modificato.loc[i, "Processore e anno"]),
-          "S.O.": pulisci_valore(df_inventario_modificato.loc[i, "S.O."]),
-          "RAM": pulisci_valore(df_inventario_modificato.loc[i, "RAM"]),
-          "Tipo HD": pulisci_valore(df_inventario_modificato.loc[i, "Tipo HD"]),
-          "Capienza HD": pulisci_valore(df_inventario_modificato.loc[i, "Capienza HD"]),
-          "Garanzia": pulisci_valore(df_inventario_modificato.loc[i, "Garanzia"]),
+          "Marca": marca_v,
+          "Modello": modello_v,
+          "Processore": proc_v,
+          "S.O.": so_v,
+          "RAM": ram_v,
+          "Tipo HD": tipo_hd_v,
+          "Capienza HD": cap_hd_v,
+          "Garanzia": gar_v,
       }
 
       idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_comp].index
@@ -576,11 +577,28 @@ with tab_hardware:
         if vecchio_nome != nuovo_nome or vecchia_tipologia != nuova_tipologia:
           df_rete_sede.loc[idx_r, "Nome Macchina"] = nuovo_nome
           df_rete_sede.loc[idx_r, "Tipologia"] = nuova_tipologia
-          if nuovo_nome:
-            df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato"
-          else:
-            df_rete_sede.loc[idx_r, "Stato"] = "🟢 Libero"
+          df_rete_sede.loc[idx_r, "Stato"] = "🔴 Occupato" if nuovo_nome else "🟢 Libero"
           inv_modificato = True
+
+      # Sincronizzazione dell'inventario completo su Supabase
+      if supabase is not None:
+        try:
+          supabase.table("inventario").upsert({
+              "Indirizzo IP": ip_comp,
+              "Nome Macchina": nuovo_nome if nuovo_nome else None,
+              "Tipologia": nuova_tipologia if nuovo_nome else None,
+              "Stato": "🔴 Occupato" if nuovo_nome else "🟢 Libero",
+              "Marca": marca_v if marca_v else None,
+              "Modello": modello_v if modello_v else None,
+              "Processore e anno": proc_v if proc_v else None,
+              "S.O.": so_v if so_v else None,
+              "RAM": ram_v if ram_v else None,
+              "Tipo HD": tipo_hd_v if tipo_hd_v else None,
+              "Capienza HD": cap_hd_v if cap_hd_v else None,
+              "Garanzia": gar_v if gar_v else None,
+          }, on_conflict="Indirizzo IP").execute()
+        except Exception as e:
+          pass
 
   st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
   if inv_modificato:
@@ -597,7 +615,6 @@ with tab_hardware:
     )
     if st.button("🗑️ Svuota Inventario Sede", type="primary", key=f"btn_svuota_{idx_selezionato}"):
       if conferma_svuota:
-        # 1. Pulizia Locale (Session State)
         df_rete_sede["Nome Macchina"] = ""
         df_rete_sede["Tipologia"] = ""
         df_rete_sede["Stato"] = "🟢 Libero"
@@ -608,7 +625,6 @@ with tab_hardware:
           if ip_c in st.session_state.hardware_dettagli:
             del st.session_state.hardware_dettagli[ip_c]
 
-        # 2. Pulizia su SUPABASE
         if supabase is not None:
           try:
             for ip_c in ips_da_rimuovere:
@@ -626,7 +642,7 @@ with tab_hardware:
                   "Garanzia": None
               }).eq("Indirizzo IP", ip_c).execute()
           except Exception as e:
-            st.warning(f"Dati svuotati in locale, ma si è verificato un errore con Supabase: {e}")
+            st.warning(f"Errore pulizia su Supabase: {e}")
 
         st.success(f"Inventario della sede '{sede_scelta['nome']}' svuotato con successo!")
         st.rerun()
@@ -713,36 +729,20 @@ with tab_hardware:
   except Exception as e:
     pdf_bytes_tab = b""
 
-  if tipo_dispositivo == "Smartphone":
+  col_btn1, col_btn2 = st.columns(2)
+  with col_btn1:
     st.download_button(
-        label="📊 Scarica Excel (.xlsx)",
+        label="📊 Scarica Occupati in Excel (.xlsx)",
         data=output_excel_tab.getvalue(),
         file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True,
     )
+  with col_btn2:
     st.download_button(
-        label="📄 Scarica PDF (.pdf)",
+        label="📄 Scarica Occupati in PDF (.pdf)",
         data=pdf_bytes_tab,
         file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.pdf",
         mime="application/pdf",
         use_container_width=True,
     )
-  else:
-    col_btn1, col_btn2 = st.columns(2)
-    with col_btn1:
-      st.download_button(
-          label="📊 Scarica Occupati in Excel (.xlsx)",
-          data=output_excel_tab.getvalue(),
-          file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.xlsx",
-          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          use_container_width=True,
-      )
-    with col_btn2:
-      st.download_button(
-          label="📄 Scarica Occupati in PDF (.pdf)",
-          data=pdf_bytes_tab,
-          file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.pdf",
-          mime="application/pdf",
-          use_container_width=True,
-      )
