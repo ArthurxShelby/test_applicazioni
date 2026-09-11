@@ -38,6 +38,31 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
+# Funzione centralizzata e pulita per la sincronizzazione su Supabase
+def salva_su_supabase(ip_comp, dati_dict):
+  if supabase is None:
+    return False
+  try:
+    payload = {
+        "Indirizzo IP": ip_comp,
+        "Nome Dispositivo": dati_dict.get("Nome Dispositivo") or None,
+        "Tipologia": dati_dict.get("Tipologia") or None,
+        "Stato": dati_dict.get("Stato") or "🟢 Libero",
+        "Marca": dati_dict.get("Marca") or None,
+        "Modello": dati_dict.get("Modello") or None,
+        "Processore e anno": dati_dict.get("Processore") or dati_dict.get("Processore e anno") or None,
+        "S.O.": dati_dict.get("S.O.") or None,
+        "RAM": dati_dict.get("RAM") or None,
+        "Tipo HD": dati_dict.get("Tipo HD") or None,
+        "Capienza HD": dati_dict.get("Capienza HD") or None,
+        "Garanzia": dati_dict.get("Garanzia") or None,
+    }
+    supabase.table("inventario").upsert(payload, on_conflict="Indirizzo IP").execute()
+    return True
+  except Exception as e:
+    st.error(f"Errore sincronizzazione Supabase su IP {ip_comp}: {e}")
+    return False
+
 try:
   from streamlit_javascript import st_javascript
   is_mobile_env = True
@@ -264,20 +289,13 @@ with tab_rete:
 
     if ip_corr not in st.session_state.hardware_dettagli:
       st.session_state.hardware_dettagli[ip_corr] = {}
+    
     st.session_state.hardware_dettagli[ip_corr]["Nome Dispositivo"] = nome_mac
     st.session_state.hardware_dettagli[ip_corr]["Tipologia"] = tipo_scelto
     st.session_state.hardware_dettagli[ip_corr]["Stato"] = stato_attuale
 
-    if modificato and supabase is not None:
-      try:
-        supabase.table("inventario").upsert({
-            "Indirizzo IP": ip_corr,
-            "Nome Dispositivo": nome_mac if nome_mac else None,
-            "Tipologia": tipo_scelto if tipo_scelto else None,
-            "Stato": stato_attuale
-        }, on_conflict="Indirizzo IP").execute()
-      except Exception as e:
-        st.error(f"Errore sincronizzazione Supabase: {e}")
+    if modificato:
+      salva_su_supabase(ip_corr, st.session_state.hardware_dettagli[ip_corr])
 
   st.session_state.dataframes_rete[idx_selezionato] = df_corrente
 
@@ -344,7 +362,7 @@ with tab_hardware:
           nome_salvato = pulisci_valore(hw_nome_macchina)
           stato_finale = "🔴 Occupato" if nome_salvato else "🟢 Libero"
           
-          st.session_state.hardware_dettagli[ip_scelto] = {
+          dati_salvataggio = {
               "Nome Dispositivo": nome_salvato,
               "Tipologia": hw_tipologia if nome_salvato else "",
               "Stato": stato_finale,
@@ -358,6 +376,8 @@ with tab_hardware:
               "Garanzia": hw_garanzia,
           }
 
+          st.session_state.hardware_dettagli[ip_scelto] = dati_salvataggio
+
           idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_scelto].index
           if not idx_r.empty:
             df_rete_sede.loc[idx_r, "Nome Dispositivo"] = nome_salvato
@@ -365,24 +385,7 @@ with tab_hardware:
             df_rete_sede.loc[idx_r, "Stato"] = stato_finale
             st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
 
-          if supabase is not None:
-            try:
-              supabase.table("inventario").upsert({
-                  "Indirizzo IP": ip_scelto,
-                  "Nome Dispositivo": nome_salvato if nome_salvato else None,
-                  "Tipologia": hw_tipologia if nome_salvato else None,
-                  "Stato": stato_finale,
-                  "Marca": hw_marca if hw_marca else None,
-                  "Modello": hw_modello if hw_modello else None,
-                  "Processore e anno": hw_cpu if hw_cpu else None,
-                  "S.O.": hw_so if hw_so else None,
-                  "RAM": f"{hw_ram} GB",
-                  "Tipo HD": hw_tipo_hd if hw_tipo_hd else None,
-                  "Capienza HD": hw_cap_hd if hw_cap_hd else None,
-                  "Garanzia": hw_garanzia if hw_garanzia else None,
-              }, on_conflict="Indirizzo IP").execute()
-            except Exception as e:
-              st.error(f"Errore scrittura su Supabase: {e}")
+          salva_su_supabase(ip_scelto, dati_salvataggio)
 
           st.success(f"Dati di {scelta_mostrata} salvati con successo!")
           st.rerun()
@@ -425,7 +428,7 @@ with tab_hardware:
                   df_rete_sede.loc[idx_r, "Tipologia"] = tipologia_file if nome_mac_file else ""
                   df_rete_sede.loc[idx_r, "Stato"] = stato_file
 
-                st.session_state.hardware_dettagli[ip_file_completo] = {
+                dati_file = {
                     "Nome Dispositivo": nome_mac_file,
                     "Tipologia": tipologia_file if nome_mac_file else "",
                     "Stato": stato_file,
@@ -439,24 +442,8 @@ with tab_hardware:
                     "Garanzia": pulisci_valore(row.get("Garanzia", "")),
                 }
 
-                if supabase is not None:
-                  try:
-                    supabase.table("inventario").upsert({
-                        "Indirizzo IP": ip_file_completo,
-                        "Nome Dispositivo": nome_mac_file if nome_mac_file else None,
-                        "Tipologia": tipologia_file if nome_mac_file else None,
-                        "Stato": stato_file,
-                        "Marca": pulisci_valore(row.get("Marca")) or None,
-                        "Modello": pulisci_valore(row.get("Modello")) or None,
-                        "Processore e anno": pulisci_valore(row.get("Processore e anno")) or None,
-                        "S.O.": pulisci_valore(row.get("S.O.")) or None,
-                        "RAM": pulisci_valore(row.get("RAM")) or None,
-                        "Tipo HD": pulisci_valore(row.get("Tipo HD")) or None,
-                        "Capienza HD": pulisci_valore(row.get("Capienza HD")) or None,
-                        "Garanzia": pulisci_valore(row.get("Garanzia")) or None,
-                    }, on_conflict="Indirizzo IP").execute()
-                  except Exception as e:
-                    st.error(f"Errore importazione Supabase: {e}")
+                st.session_state.hardware_dettagli[ip_file_completo] = dati_file
+                salva_su_supabase(ip_file_completo, dati_file)
 
                 count_importati += 1
 
@@ -562,7 +549,7 @@ with tab_hardware:
       cap_hd_v = pulisci_valore(df_inventario_modificato.loc[i, "Capienza HD"])
       gar_v = pulisci_valore(df_inventario_modificato.loc[i, "Garanzia"])
 
-      st.session_state.hardware_dettagli[ip_comp] = {
+      dati_aggiornati = {
           "Nome Dispositivo": nuovo_nome,
           "Tipologia": nuova_tipologia,
           "Stato": nuovo_stato,
@@ -576,6 +563,8 @@ with tab_hardware:
           "Garanzia": gar_v,
       }
 
+      st.session_state.hardware_dettagli[ip_comp] = dati_aggiornati
+
       idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_comp].index
       if not idx_r.empty:
         vecchio_nome = str(df_rete_sede.loc[idx_r[0], "Nome Dispositivo"])
@@ -587,24 +576,7 @@ with tab_hardware:
           df_rete_sede.loc[idx_r, "Stato"] = nuovo_stato
           inv_modificato = True
 
-      if supabase is not None:
-        try:
-          supabase.table("inventario").upsert({
-              "Indirizzo IP": ip_comp,
-              "Nome Dispositivo": nuovo_nome if nuovo_nome else None,
-              "Tipologia": nuova_tipologia if nuovo_nome else None,
-              "Stato": nuovo_stato,
-              "Marca": marca_v if marca_v else None,
-              "Modello": modello_v if modello_v else None,
-              "Processore e anno": proc_v if proc_v else None,
-              "S.O.": so_v if so_v else None,
-              "RAM": ram_v if ram_v else None,
-              "Tipo HD": tipo_hd_v if tipo_hd_v else None,
-              "Capienza HD": cap_hd_v if cap_hd_v else None,
-              "Garanzia": gar_v if gar_v else None,
-          }, on_conflict="Indirizzo IP").execute()
-        except Exception as e:
-          st.error(f"Errore sincronizzazione inventario Supabase: {e}")
+      salva_su_supabase(ip_comp, dati_aggiornati)
 
   st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
   if inv_modificato:
@@ -627,25 +599,21 @@ with tab_hardware:
         for ip_c in ips_da_rimuovere:
           if ip_c in st.session_state.hardware_dettagli:
             del st.session_state.hardware_dettagli[ip_c]
-
-        if supabase is not None:
-          try:
-            for ip_c in ips_da_rimuovere:
-              supabase.table("inventario").update({
-                  "Nome Dispositivo": None,
-                  "Tipologia": None,
-                  "Stato": "🟢 Libero",
-                  "Marca": None,
-                  "Modello": None,
-                  "Processore e anno": None,
-                  "S.O.": None,
-                  "RAM": None,
-                  "Tipo HD": None,
-                  "Capienza HD": None,
-                  "Garanzia": None
-              }).eq("Indirizzo IP", ip_c).execute()
-          except Exception as e:
-            st.warning(f"Errore pulizia su Supabase: {e}")
+          
+          # Svuota i campi su Supabase
+          salva_su_supabase(ip_c, {
+              "Nome Dispositivo": "",
+              "Tipologia": "",
+              "Stato": "🟢 Libero",
+              "Marca": "",
+              "Modello": "",
+              "Processore": "",
+              "S.O.": "",
+              "RAM": "",
+              "Tipo HD": "",
+              "Capienza HD": "",
+              "Garanzia": ""
+          })
 
         st.success(f"Inventario della sede '{sede_scelta['nome']}' svuotato con successo!")
         st.rerun()
