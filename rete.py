@@ -66,8 +66,17 @@ def carica_dati_supabase_cached():
   if supabase is None:
     return []
   try:
-    response = supabase.table("inventario").select("*").execute()
-    return response.data if response.data else []
+    tutti_i_dati = []
+    chunk_size = 1000
+    start = 0
+    while True:
+      response = supabase.table("inventario").select("*").range(start, start + chunk_size - 1).execute()
+      data = response.data if response.data else []
+      tutti_i_dati.extend(data)
+      if len(data) < chunk_size:
+        break
+      start += chunk_size
+    return tutti_i_dati
   except Exception:
     return []
 
@@ -321,7 +330,6 @@ with tab_hardware:
   st.markdown("---")
   st.markdown(f"📋 **Inventario Completo della Sede**")
 
-  # Pulsante/Toggle per ordinare unicamente per Anno del processore in maniera crescente
   ordina_per_anno = st.toggle("📅 Ordina per Anno del processore (Crescente)", key=f"toggle_anno_{idx_selezionato}")
 
   lista_completa = []
@@ -352,7 +360,6 @@ with tab_hardware:
 
   df_inventario_corrente = pd.DataFrame(lista_completa)
 
-  # Applicazione dell'ordinamento: se il toggle è attivo ordina per anno (crescente), altrimenti per IP
   if ordina_per_anno:
     df_inventario_corrente = df_inventario_corrente.sort_values(by="_anno_proc", ascending=True)
   else:
