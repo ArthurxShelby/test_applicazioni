@@ -469,7 +469,6 @@ with tab_hardware:
         pdf.cell(col_widths[10], 5, str(row["Capienza HD"])[:12], 1, 0, "C")
         pdf.cell(col_widths[11], 5, str(row["Garanzia"])[:12], 1, 1, "C")
       
-    # Restituisce direttamente i byte corretti senza generare file vuoti
     return pdf.output()
 
   output_excel_tab = io.BytesIO()
@@ -477,7 +476,11 @@ with tab_hardware:
     df_export_finale.to_excel(writer, index=False, sheet_name="Inventario Occupati")
 
   try:
-    pdf_bytes_tab = genera_pdf_tab(df_export_finale)
+    pdf_raw = genera_pdf_tab(df_export_finale)
+    if isinstance(pdf_raw, (bytes, bytearray)):
+      pdf_bytes_tab = bytes(pdf_raw)
+    else:
+      pdf_bytes_tab = str(pdf_raw).encode("latin1")
   except Exception:
     pdf_bytes_tab = b""
 
@@ -493,7 +496,7 @@ with tab_hardware:
   with col_btn2:
     st.download_button(
         label="📄 Scarica Occupati in PDF (.pdf)",
-        data=pdf_bytes_tab,
+        data=io.BytesIO(pdf_bytes_tab),
         file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.pdf",
         mime="application/pdf",
         use_container_width=True,
