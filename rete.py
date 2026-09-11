@@ -38,6 +38,7 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
+# Funzione centralizzata e pulita per la sincronizzazione su Supabase
 def salva_su_supabase(ip_comp, dati_dict):
   if supabase is None:
     return False
@@ -62,6 +63,7 @@ def salva_su_supabase(ip_comp, dati_dict):
     st.error(f"Errore sincronizzazione Supabase su IP {ip_comp}: {e}")
     return False
 
+# Funzione per ordinare correttamente gli IP in modo numerico (compatibile con tipo inet)
 def ordina_per_ip(df, colonna_ip="_ip_completo"):
   if df.empty or colonna_ip not in df.columns:
     return df
@@ -88,7 +90,9 @@ if "autenticato" not in st.session_state:
 
 if not st.session_state.autenticato:
   st.subheader("🔐 Accesso Protetto")
-  password_inserita = st.text_input("Inserisci la password per accedere", type="password")
+  password_inserita = st.text_input(
+      "Inserisci la password per accedere", type="password"
+  )
   if st.button("Accedi"):
     app_password = st.secrets.get("APP_PASSWORD", "")
     if password_inserita == app_password:
@@ -142,16 +146,13 @@ def estrai_anno(testo):
   return 9999
 
 # Inizializzazione Stati
-if "hardware_dettagli" not in st.session_state:
-  st.session_state.hardware_dettagli = {}
-
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
 
-if "stato_ordinamento_anno" not in st.session_state:
-  st.session_state.stato_ordinamento_anno = {}
+if "hardware_dettagli" not in st.session_state:
+  st.session_state.hardware_dettagli = {}
 
-# Caricamento dati da Supabase all'avvio (una sola volta)
+# Caricamento dati da Supabase all'avvio
 if "dati_caricati_da_supabase" not in st.session_state:
   if supabase is not None:
     try:
@@ -180,28 +181,14 @@ if "dati_caricati_da_supabase" not in st.session_state:
       st.error(f"Errore di caricamento da Supabase: {e}")
   st.session_state.dati_caricati_da_supabase = True
 
-# Posizioniamo il selettore SUBITO per calcolare solo la sede attiva
-idx_selezionato = st.selectbox(
-    "📍 Seleziona la Sede da Gestire",
-    options=range(len(sedi_config)),
-    format_func=lambda i: (
-        f"{sedi_config[i]['nome']} — Rete: {sedi_config[i]['blocco']}"
-        f" / {sedi_config[i]['subnet']}"
-    ),
-)
-
-sede_scelta = sedi_config[idx_selezionato]
-blocco_completo_ip = sede_scelta["blocco"].split(".")[0]
-subnet_ultimi_due = sede_scelta["subnet"]
-
-# Generazione o recupero del DataFrame SOLO per la sede selezionata
-if idx_selezionato not in st.session_state.dataframes_rete:
-  base_ip = sede_scelta["blocco"].split(".")[0]
-  range_ip = sede_scelta["range_custom"]
+for idx, item in enumerate(sedi_config):
+  base_ip = item["blocco"].split(".")[0]
+  range_ip = item["range_custom"]
 
   righe_ip = []
   for i in range_ip:
     ip_completo = f"{base_ip}.0.0.{i}"
+    
     hw = st.session_state.hardware_dettagli.get(ip_completo, {})
     nome_macchina = pulisci_valore(hw.get("Nome Dispositivo", ""))
     tipologia = pulisci_valore(hw.get("Tipologia", ""))
@@ -219,7 +206,23 @@ if idx_selezionato not in st.session_state.dataframes_rete:
     })
   
   df_temp = pd.DataFrame(righe_ip)
-  st.session_state.dataframes_rete[idx_selezionato] = ordina_per_ip(df_temp, "_ip_completo")
+  st.session_state.dataframes_rete[idx] = ordina_per_ip(df_temp, "_ip_completo")
+
+if "stato_ordinamento_anno" not in st.session_state:
+  st.session_state.stato_ordinamento_anno = {}
+
+idx_selezionato = st.selectbox(
+    "📍 Seleziona la Sede da Gestire",
+    options=range(len(sedi_config)),
+    format_func=lambda i: (
+        f"{sedi_config[i]['nome']} — Rete: {sedi_config[i]['blocco']}"
+        f" / {sedi_config[i]['subnet']}"
+    ),
+)
+
+sede_scelta = sedi_config[idx_selezionato]
+blocco_completo_ip = sede_scelta["blocco"].split(".")[0]
+subnet_ultimi_due = sede_scelta["subnet"]
 
 tab_rete, tab_hardware = st.tabs(
     ["🌐 Blocco IP & Occupazione", "💻 Inventario Hardware Dettagliato"]
@@ -741,3 +744,5 @@ with tab_hardware:
         mime="application/pdf",
         use_container_width=True,
     )
+
+
