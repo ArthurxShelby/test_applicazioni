@@ -187,7 +187,6 @@ for idx, item in enumerate(sedi_config):
 
   righe_ip = []
   for i in range_ip:
-    # Generazione IP nel formato completo a 4 ottetti compatibile con inet
     ip_completo = f"{base_ip}.0.0.{i}"
     
     hw = st.session_state.hardware_dettagli.get(ip_completo, {})
@@ -654,6 +653,7 @@ with tab_hardware:
           "Indirizzo IP": m["Indirizzo IP"],
           "Nome Dispositivo": nome_mac,
           "Tipologia": pulisci_valore(m["Tipologia"]),
+          "Stato": "🔴 Occupato",
           "Marca": pulisci_valore(dettagli.get("Marca", "")),
           "Modello": pulisci_valore(dettagli.get("Modello", "")),
           "Processore e anno": pulisci_valore(dettagli.get("Processore", "")),
@@ -669,44 +669,49 @@ with tab_hardware:
 
   class PDFReportTab(FPDF):
     def header(self):
-      self.set_font("helvetica", "B", 10)
+      self.set_font("helvetica", "B", 9)
       self.cell(0, 10, f"Inventario Hardware Occupati - Sede: {sede_scelta['nome']}", 0, 1, "C")
-      self.ln(3)
+      self.ln(2)
 
     def footer(self):
-      self.set_y(-15)
+      self.set_y(-12)
       self.set_font("helvetica", "I", 8)
       self.cell(0, 10, f"Pagina {self.page_no()}", 0, 0, "C")
 
   def genera_pdf_tab(df_data):
     pdf = PDFReportTab(orientation="L", unit="mm", format="A4")
     pdf.add_page()
-    pdf.set_font("helvetica", "", 8)
+    pdf.set_font("helvetica", "", 7)
     
-    headers = ["IP", "Nome Dispositivo", "Tipologia", "Marca", "Modello", "CPU & Anno", "S.O.", "RAM", "HD", "Capienza", "Garanzia"]
-    col_widths = [28, 32, 25, 22, 22, 22, 20, 15, 18, 22, 25]
+    headers = [
+        "Indirizzo IP", "Nome Dispositivo", "Tipologia", "Stato", 
+        "Marca", "Modello", "Processore e anno", "S.O.", "RAM", 
+        "Tipo HD", "Capienza HD", "Garanzia"
+    ]
+    col_widths = [24, 28, 22, 18, 20, 20, 22, 18, 15, 18, 22, 22]
     
-    pdf.set_font("helvetica", "B", 8)
+    pdf.set_font("helvetica", "B", 7)
     for i, h in enumerate(headers):
-      pdf.cell(col_widths[i], 7, h, 1, 0, "C")
+      pdf.cell(col_widths[i], 6, h, 1, 0, "C")
     pdf.ln()
     
-    pdf.set_font("helvetica", "", 7)
+    pdf.set_font("helvetica", "", 6)
     if df_data.empty:
       pdf.cell(sum(col_widths), 10, "Nessun dispositivo occupato presente in questa sede.", 1, 1, "C")
     else:
       for _, row in df_data.iterrows():
-        pdf.cell(col_widths[0], 6, str(row["Indirizzo IP"]), 1, 0, "C")
-        pdf.cell(col_widths[1], 6, str(row["Nome Dispositivo"])[:20], 1, 0, "L")
-        pdf.cell(col_widths[2], 6, str(row["Tipologia"])[:18], 1, 0, "L")
-        pdf.cell(col_widths[3], 6, str(row["Marca"])[:15], 1, 0, "L")
-        pdf.cell(col_widths[4], 6, str(row["Modello"])[:15], 1, 0, "L")
-        pdf.cell(col_widths[5], 6, str(row["Processore e anno"])[:15], 1, 0, "L")
-        pdf.cell(col_widths[6], 6, str(row["S.O."])[:15], 1, 0, "L")
-        pdf.cell(col_widths[7], 6, str(row["RAM"])[:10], 1, 0, "C")
-        pdf.cell(col_widths[8], 6, str(row["Tipo HD"])[:10], 1, 0, "C")
-        pdf.cell(col_widths[9], 6, str(row["Capienza HD"])[:12], 1, 0, "C")
-        pdf.cell(col_widths[10], 6, str(row["Garanzia"])[:15], 1, 1, "C")
+        pdf.cell(col_widths[0], 5, str(row["Indirizzo IP"]), 1, 0, "C")
+        pdf.cell(col_widths[1], 5, str(row["Nome Dispositivo"])[:18], 1, 0, "L")
+        pdf.cell(col_widths[2], 5, str(row["Tipologia"])[:15], 1, 0, "L")
+        pdf.cell(col_widths[3], 5, str(row["Stato"])[:12], 1, 0, "C")
+        pdf.cell(col_widths[4], 5, str(row["Marca"])[:12], 1, 0, "L")
+        pdf.cell(col_widths[5], 5, str(row["Modello"])[:12], 1, 0, "L")
+        pdf.cell(col_widths[6], 5, str(row["Processore e anno"])[:15], 1, 0, "L")
+        pdf.cell(col_widths[7], 5, str(row["S.O."])[:12], 1, 0, "L")
+        pdf.cell(col_widths[8], 5, str(row["RAM"])[:10], 1, 0, "C")
+        pdf.cell(col_widths[9], 5, str(row["Tipo HD"])[:10], 1, 0, "C")
+        pdf.cell(col_widths[10], 5, str(row["Capienza HD"])[:12], 1, 0, "C")
+        pdf.cell(col_widths[11], 5, str(row["Garanzia"])[:12], 1, 1, "C")
       
     raw_pdf = pdf.output()
     if isinstance(raw_pdf, (bytearray, bytes)):
