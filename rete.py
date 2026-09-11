@@ -439,6 +439,7 @@ with tab_hardware:
     pdf = PDFReportTab(orientation="L", unit="mm", format="A4")
     pdf.add_page()
     pdf.set_font("helvetica", "", 7)
+    
     headers = [
         "Indirizzo IP", "Nome Dispositivo", "Tipologia", "Stato", 
         "Marca", "Modello", "Processore e anno", "S.O.", "RAM", 
@@ -448,7 +449,7 @@ with tab_hardware:
     
     pdf.set_font("helvetica", "B", 7)
     for i, h in enumerate(headers):
-      pdf.cell(col_widths[i], 6, h, 1, 0, "C")
+      pdf.cell(col_widths[i], 6, str(h), 1, 0, "C")
     pdf.ln()
     
     pdf.set_font("helvetica", "", 6)
@@ -456,33 +457,27 @@ with tab_hardware:
       pdf.cell(sum(col_widths), 10, "Nessun dispositivo occupato presente in questa sede.", 1, 1, "C")
     else:
       for _, row in df_data.iterrows():
-        pdf.cell(col_widths[0], 5, str(row["Indirizzo IP"]), 1, 0, "C")
-        pdf.cell(col_widths[1], 5, str(row["Nome Dispositivo"])[:18], 1, 0, "L")
-        pdf.cell(col_widths[2], 5, str(row["Tipologia"])[:15], 1, 0, "L")
-        pdf.cell(col_widths[3], 5, str(row["Stato"])[:12], 1, 0, "C")
-        pdf.cell(col_widths[4], 5, str(row["Marca"])[:12], 1, 0, "L")
-        pdf.cell(col_widths[5], 5, str(row["Modello"])[:12], 1, 0, "L")
-        pdf.cell(col_widths[6], 5, str(row["Processore e anno"])[:15], 1, 0, "L")
-        pdf.cell(col_widths[7], 5, str(row["S.O."])[:12], 1, 0, "L")
-        pdf.cell(col_widths[8], 5, str(row["RAM"])[:10], 1, 0, "C")
-        pdf.cell(col_widths[9], 5, str(row["Tipo HD"])[:10], 1, 0, "C")
-        pdf.cell(col_widths[10], 5, str(row["Capienza HD"])[:12], 1, 0, "C")
-        pdf.cell(col_widths[11], 5, str(row["Garanzia"])[:12], 1, 1, "C")
+        pdf.cell(col_widths[0], 5, str(row.get("Indirizzo IP", ""))[:20], 1, 0, "C")
+        pdf.cell(col_widths[1], 5, str(row.get("Nome Dispositivo", ""))[:18], 1, 0, "L")
+        pdf.cell(col_widths[2], 5, str(row.get("Tipologia", ""))[:15], 1, 0, "L")
+        pdf.cell(col_widths[3], 5, str(row.get("Stato", ""))[:12], 1, 0, "C")
+        pdf.cell(col_widths[4], 5, str(row.get("Marca", ""))[:12], 1, 0, "L")
+        pdf.cell(col_widths[5], 5, str(row.get("Modello", ""))[:12], 1, 0, "L")
+        pdf.cell(col_widths[6], 5, str(row.get("Processore e anno", ""))[:15], 1, 0, "L")
+        pdf.cell(col_widths[7], 5, str(row.get("S.O.", ""))[:12], 1, 0, "L")
+        pdf.cell(col_widths[8], 5, str(row.get("RAM", ""))[:10], 1, 0, "C")
+        pdf.cell(col_widths[9], 5, str(row.get("Tipo HD", ""))[:10], 1, 0, "C")
+        pdf.cell(col_widths[10], 5, str(row.get("Capienza HD", ""))[:12], 1, 0, "C")
+        pdf.cell(col_widths[11], 5, str(row.get("Garanzia", ""))[:12], 1, 1, "C")
       
-    return pdf.output()
+    return bytes(pdf.output())
 
   output_excel_tab = io.BytesIO()
   with pd.ExcelWriter(output_excel_tab, engine="openpyxl") as writer:
     df_export_finale.to_excel(writer, index=False, sheet_name="Inventario Occupati")
 
-  try:
-    pdf_raw = genera_pdf_tab(df_export_finale)
-    if isinstance(pdf_raw, (bytes, bytearray)):
-      pdf_bytes_tab = bytes(pdf_raw)
-    else:
-      pdf_bytes_tab = str(pdf_raw).encode("latin1")
-  except Exception:
-    pdf_bytes_tab = b""
+  # Generazione diretta senza try/except nascosto
+  pdf_bytes_tab = genera_pdf_tab(df_export_finale)
 
   col_btn1, col_btn2 = st.columns(2)
   with col_btn1:
