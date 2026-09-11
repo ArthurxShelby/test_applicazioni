@@ -80,7 +80,7 @@ def ordina_per_ip(df, colonna_ip="_ip_completo"):
     return df
 
 try:
-  from streamlit_javascript вместе import st_javascript
+  from streamlit_javascript import st_javascript
   is_mobile_env = True
 except ImportError:
   is_mobile_env = False
