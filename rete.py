@@ -142,9 +142,6 @@ if "dataframes_rete" not in st.session_state:
 if "hardware_dettagli" not in st.session_state:
   st.session_state.hardware_dettagli = {}
 
-if "stato_ordinamento_inventario" not in st.session_state:
-  st.session_state.stato_ordinamento_inventario = {}
-
 if "dati_caricati_da_supabase" not in st.session_state:
   dati_db = carica_dati_supabase_cached()
   for row in dati_db:
@@ -324,14 +321,8 @@ with tab_hardware:
   st.markdown("---")
   st.markdown(f"📋 **Inventario Completo della Sede**")
 
-  # Pulsante di ordinamento per l'inventario
-  c_ord1, c_ord2 = st.columns([2, 4])
-  with c_ord1:
-    criterio_ordinamento = st.selectbox(
-        "Metti in ordine per:",
-        options=["Indirizzo IP", "Anno Processore (Crescente)", "Anno Processore (Decrescente)"],
-        key=f"criterio_ord_{idx_selezionato}"
-    )
+  # Pulsante/Toggle per ordinare unicamente per Anno del processore in maniera crescente
+  ordina_per_anno = st.toggle("📅 Ordina per Anno del processore (Crescente)", key=f"toggle_anno_{idx_selezionato}")
 
   lista_completa = []
   for m in df_rete_sede.to_dict("records"):
@@ -361,13 +352,11 @@ with tab_hardware:
 
   df_inventario_corrente = pd.DataFrame(lista_completa)
 
-  # Applica l'ordinamento scelto
-  if criterio_ordinamento == "Indirizzo IP":
-    df_inventario_corrente = ordina_per_ip(df_inventario_corrente, "_ip_completo")
-  elif criterio_ordinamento == "Anno Processore (Crescente)":
+  # Applicazione dell'ordinamento: se il toggle è attivo ordina per anno (crescente), altrimenti per IP
+  if ordina_per_anno:
     df_inventario_corrente = df_inventario_corrente.sort_values(by="_anno_proc", ascending=True)
-  elif criterio_ordinamento == "Anno Processore (Decrescente)":
-    df_inventario_corrente = df_inventario_corrente.sort_values(by="_anno_proc", ascending=False)
+  else:
+    df_inventario_corrente = ordina_per_ip(df_inventario_corrente, "_ip_completo")
 
   df_inv_per_editor = df_inventario_corrente.drop(columns=["_ip_completo", "_anno_proc"], errors="ignore").fillna("")
 
