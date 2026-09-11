@@ -38,7 +38,7 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
-# Funzione centralizzata e pulita per la sincronizzazione su Supabase
+# Funzione centralizzata per la sincronizzazione su Supabase
 def salva_su_supabase(ip_comp, dati_dict):
   if supabase is None:
     return False
@@ -63,7 +63,7 @@ def salva_su_supabase(ip_comp, dati_dict):
     st.error(f"Errore sincronizzazione Supabase su IP {ip_comp}: {e}")
     return False
 
-# Funzione per ordinare correttamente gli IP in modo numerico (compatibile con tipo inet)
+# Funzione per ordinare correttamente gli IP in modo numerico
 def ordina_per_ip(df, colonna_ip="_ip_completo"):
   if df.empty or colonna_ip not in df.columns:
     return df
@@ -152,7 +152,7 @@ if "dataframes_rete" not in st.session_state:
 if "hardware_dettagli" not in st.session_state:
   st.session_state.hardware_dettagli = {}
 
-# Caricamento dati da Supabase all'avvio
+# Caricamento dati da Supabase all'avvio (una tantum)
 if "dati_caricati_da_supabase" not in st.session_state:
   if supabase is not None:
     try:
@@ -181,36 +181,6 @@ if "dati_caricati_da_supabase" not in st.session_state:
       st.error(f"Errore di caricamento da Supabase: {e}")
   st.session_state.dati_caricati_da_supabase = True
 
-for idx, item in enumerate(sedi_config):
-  base_ip = item["blocco"].split(".")[0]
-  range_ip = item["range_custom"]
-
-  righe_ip = []
-  for i in range_ip:
-    ip_completo = f"{base_ip}.0.0.{i}"
-    
-    hw = st.session_state.hardware_dettagli.get(ip_completo, {})
-    nome_macchina = pulisci_valore(hw.get("Nome Dispositivo", ""))
-    tipologia = pulisci_valore(hw.get("Tipologia", ""))
-    
-    stato = "🔴 Occupato" if nome_macchina else pulisci_valore(hw.get("Stato", "🟢 Libero"))
-    if not stato:
-      stato = "🟢 Libero"
-
-    righe_ip.append({
-        "Indirizzo IP": ip_completo,
-        "_ip_completo": ip_completo,
-        "Nome Dispositivo": nome_macchina,
-        "Tipologia": tipologia,
-        "Stato": stato,
-    })
-  
-  df_temp = pd.DataFrame(righe_ip)
-  st.session_state.dataframes_rete[idx] = ordina_per_ip(df_temp, "_ip_completo")
-
-if "stato_ordinamento_anno" not in st.session_state:
-  st.session_state.stato_ordinamento_anno = {}
-
 idx_selezionato = st.selectbox(
     "📍 Seleziona la Sede da Gestire",
     options=range(len(sedi_config)),
@@ -223,6 +193,32 @@ idx_selezionato = st.selectbox(
 sede_scelta = sedi_config[idx_selezionato]
 blocco_completo_ip = sede_scelta["blocco"].split(".")[0]
 subnet_ultimi_due = sede_scelta["subnet"]
+
+# Generazione on-demand o recupero del DataFrame per la sola sede selezionata
+if idx_selezionato not in st.session_state.dataframes_rete:
+  base_ip = sede_scelta["blocco"].split(".")[0]
+  range_ip = sede_scelta["range_custom"]
+  righe_ip = []
+  for i in range_ip:
+    ip_completo = f"{base_ip}.0.0.{i}"
+    hw = st.session_state.hardware_dettagli.get(ip_completo, {})
+    nome_macchina = pulisci_valore(hw.get("Nome Dispositivo", ""))
+    tipologia = pulisci_valore(hw.get("Tipologia", ""))
+    stato = "🔴 Occupato" if nome_macchina else pulisci_valore(hw.get("Stato", "🟢 Libero"))
+    if not stato:
+      stato = "🟢 Libero"
+
+    righe_ip.append({
+        "Indirizzo IP": ip_completo,
+        "_ip_completo": ip_completo,
+        "Nome Dispositivo": nome_macchina,
+        "Tipologia": tipologia,
+        "Stato": stato,
+    })
+  st.session_state.dataframes_rete[idx_selezionato] = ordina_per_ip(pd.DataFrame(righe_ip), "_ip_completo")
+
+if "stato_ordinamento_anno" not in st.session_state:
+  st.session_state.stato_ordinamento_anno = {}
 
 tab_rete, tab_hardware = st.tabs(
     ["🌐 Blocco IP & Occupazione", "💻 Inventario Hardware Dettagliato"]
@@ -298,21 +294,25 @@ with tab_rete:
 
     stato_attuale = "🔴 Occupato" if nome_mac else "🟢 Libero"
 
-    if df_corrente.loc[i, "Tipologia"] != tipo_scelto or df_corrente.loc[i, "Nome Dispositivo"] != nome_mac or df_corrente.loc[i, "Stato"] != stato_attuale:
+    row_changed = (
+        df_corrente.loc[i, "Tipologia"] != tipo_scelto or 
+        df_corrente.loc[i, "Nome Dispositivo"] != nome_mac or 
+        df_corrente.loc[i, "Stato"] != stato_attuale
+    )
+
+    if row_changed:
       modificato = True
+      df_corrente.loc[i, "Nome Dispositivo"] = nome_mac
+      df_corrente.loc[i, "Tipologia"] = tipo_scelto
+      df_corrente.loc[i, "Stato"] = stato_attuale
 
-    df_corrente.loc[i, "Nome Dispositivo"] = nome_mac
-    df_corrente.loc[i, "Tipologia"] = tipo_scelto
-    df_corrente.loc[i, "Stato"] = stato_attuale
+      if ip_corr not in st.session_state.hardware_dettagli:
+        st.session_state.hardware_dettagli[ip_corr] = {}
+      
+      st.session_state.hardware_dettagli[ip_corr]["Nome Dispositivo"] = nome_mac
+      st.session_state.hardware_dettagli[ip_corr]["Tipologia"] = tipo_scelto
+      st.session_state.hardware_dettagli[ip_corr]["Stato"] = stato_attuale
 
-    if ip_corr not in st.session_state.hardware_dettagli:
-      st.session_state.hardware_dettagli[ip_corr] = {}
-    
-    st.session_state.hardware_dettagli[ip_corr]["Nome Dispositivo"] = nome_mac
-    st.session_state.hardware_dettagli[ip_corr]["Tipologia"] = tipo_scelto
-    st.session_state.hardware_dettagli[ip_corr]["Stato"] = stato_attuale
-
-    if modificato:
       salva_su_supabase(ip_corr, st.session_state.hardware_dettagli[ip_corr])
 
   st.session_state.dataframes_rete[idx_selezionato] = df_corrente
@@ -744,5 +744,3 @@ with tab_hardware:
         mime="application/pdf",
         use_container_width=True,
     )
-
-
