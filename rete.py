@@ -63,7 +63,7 @@ def salva_su_supabase(ip_comp, dati_dict):
     st.error(f"Errore sincronizzazione Supabase su IP {ip_comp}: {e}")
     return False
 
-# Funzione per ordinare correttamente gli IP in modo numerico anziché alfabetico
+# Funzione per ordinare correttamente gli IP in modo numerico (compatibile con tipo inet)
 def ordina_per_ip(df, colonna_ip="_ip_completo"):
   if df.empty or colonna_ip not in df.columns:
     return df
@@ -187,7 +187,8 @@ for idx, item in enumerate(sedi_config):
 
   righe_ip = []
   for i in range_ip:
-    ip_completo = f"{base_ip}.{i}"
+    # Generazione IP nel formato completo a 4 ottetti compatibile con inet
+    ip_completo = f"{base_ip}.0.0.{i}"
     
     hw = st.session_state.hardware_dettagli.get(ip_completo, {})
     nome_macchina = pulisci_valore(hw.get("Nome Dispositivo", ""))
@@ -205,7 +206,6 @@ for idx, item in enumerate(sedi_config):
         "Stato": stato,
     })
   
-  # Genera il DataFrame e applica l'ordinamento numerico degli IP
   df_temp = pd.DataFrame(righe_ip)
   st.session_state.dataframes_rete[idx] = ordina_per_ip(df_temp, "_ip_completo")
 
@@ -431,10 +431,12 @@ with tab_hardware:
                 continue
 
               parti_ip = ip_raw.split(".")
-              if len(parti_ip) >= 2:
-                ip_file_completo = f"{parti_ip[-2]}.{parti_ip[-1]}"
+              if len(parti_ip) == 4:
+                ip_file_completo = ip_raw
+              elif len(parti_ip) >= 2:
+                ip_file_completo = f"{parti_ip[-2]}.0.0.{parti_ip[-1]}"
               else:
-                ip_file_completo = f"{base_ip_sede}.{ip_raw}"
+                ip_file_completo = f"{base_ip_sede}.0.0.{ip_raw}"
 
               if ip_file_completo.startswith(f"{base_ip_sede}."):
                 nome_mac_file = pulisci_valore(row.get("Nome Dispositivo", ""))
@@ -682,7 +684,7 @@ with tab_hardware:
     pdf.set_font("helvetica", "", 8)
     
     headers = ["IP", "Nome Dispositivo", "Tipologia", "Marca", "Modello", "CPU & Anno", "S.O.", "RAM", "HD", "Capienza", "Garanzia"]
-    col_widths = [22, 32, 25, 22, 22, 22, 20, 15, 18, 22, 25]
+    col_widths = [28, 32, 25, 22, 22, 22, 20, 15, 18, 22, 25]
     
     pdf.set_font("helvetica", "B", 8)
     for i, h in enumerate(headers):
