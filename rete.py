@@ -120,12 +120,11 @@ if "dati_caricati_da_supabase" not in st.session_state:
         for row in response.data:
           ip_db = row.get("Indirizzo IP")
           if ip_db:
-            nome_db = pulisci_valore(row.get("Nome Macchina"))
-            # CORRETTO: Forza lo stato a Occupato se c'è il nome macchina
+            nome_db = pulisci_valore(row.get("Nome Dispositivo"))
             stato_db = "🔴 Occupato" if nome_db else (pulisci_valore(row.get("Stato")) or "🟢 Libero")
             
             st.session_state.hardware_dettagli[ip_db] = {
-                "Nome Macchina": nome_db,
+                "Nome Dispositivo": nome_db,
                 "Tipologia": pulisci_valore(row.get("Tipologia")),
                 "Stato": stato_db,
                 "Marca": pulisci_valore(row.get("Marca")),
@@ -150,10 +149,9 @@ for idx, item in enumerate(sedi_config):
     ip_completo = f"{base_ip}.{i}"
     
     hw = st.session_state.hardware_dettagli.get(ip_completo, {})
-    nome_macchina = pulisci_valore(hw.get("Nome Macchina", ""))
+    nome_macchina = pulisci_valore(hw.get("Nome Dispositivo", ""))
     tipologia = pulisci_valore(hw.get("Tipologia", ""))
     
-    # CORRETTO: Se c'è il nome, lo stato deve essere obbligatoriamente Occupato
     stato = "🔴 Occupato" if nome_macchina else pulisci_valore(hw.get("Stato", "🟢 Libero"))
     if not stato:
       stato = "🟢 Libero"
@@ -161,7 +159,7 @@ for idx, item in enumerate(sedi_config):
     righe_ip.append({
         "Indirizzo IP": ip_completo,
         "_ip_completo": ip_completo,
-        "Nome Macchina": nome_macchina,
+        "Nome Dispositivo": nome_macchina,
         "Tipologia": tipologia,
         "Stato": stato,
     })
@@ -195,7 +193,7 @@ with tab_rete:
   )
 
   df_corrente = st.session_state.dataframes_rete[idx_selezionato]
-  df_corrente["Nome Macchina"] = df_corrente["Nome Macchina"].apply(pulisci_valore)
+  df_corrente["Nome Dispositivo"] = df_corrente["Nome Dispositivo"].apply(pulisci_valore)
   df_corrente["Tipologia"] = df_corrente["Tipologia"].apply(pulisci_valore)
 
   totale_ip = len(df_corrente)
@@ -224,7 +222,7 @@ with tab_rete:
   opzioni_tipologia = ["PC / Macchina", "Stampante", "Switch"]
   
   for i in range(len(df_per_editor)):
-    if not df_per_editor.loc[i, "Nome Macchina"]:
+    if not df_per_editor.loc[i, "Nome Dispositivo"]:
       df_per_editor.loc[i, "Tipologia"] = ""
     else:
       val_t = str(df_per_editor.loc[i, "Tipologia"])
@@ -237,7 +235,7 @@ with tab_rete:
       df_per_editor,
       column_config={
           "Indirizzo IP": st.column_config.TextColumn("Indirizzo IP", disabled=True),
-          "Nome Macchina": st.column_config.TextColumn("Nome Dispositivo"),
+          "Nome Dispositivo": st.column_config.TextColumn("Nome Dispositivo"),
           "Tipologia": st.column_config.SelectboxColumn("Tipologia", options=opzioni_tipologia, required=False),
           "Stato": st.column_config.SelectboxColumn("Stato", options=["🟢 Libero", "🔴 Occupato"], required=True),
       },
@@ -249,25 +247,24 @@ with tab_rete:
   modificato = False
   for i in range(len(df_modificato)):
     ip_corr = df_corrente.loc[i, "_ip_completo"]
-    nome_mac = pulisci_valore(df_modificato.loc[i, "Nome Macchina"])
+    nome_mac = pulisci_valore(df_modificato.loc[i, "Nome Dispositivo"])
     tipo_scelto = pulisci_valore(df_modificato.loc[i, "Tipologia"])
 
     if not nome_mac:
       tipo_scelto = ""
 
-    # CORRETTO: Forzatura automatica dello stato in base al nome
     stato_attuale = "🔴 Occupato" if nome_mac else "🟢 Libero"
 
-    if df_corrente.loc[i, "Tipologia"] != tipo_scelto or df_corrente.loc[i, "Nome Macchina"] != nome_mac or df_corrente.loc[i, "Stato"] != stato_attuale:
+    if df_corrente.loc[i, "Tipologia"] != tipo_scelto or df_corrente.loc[i, "Nome Dispositivo"] != nome_mac or df_corrente.loc[i, "Stato"] != stato_attuale:
       modificato = True
 
-    df_corrente.loc[i, "Nome Macchina"] = nome_mac
+    df_corrente.loc[i, "Nome Dispositivo"] = nome_mac
     df_corrente.loc[i, "Tipologia"] = tipo_scelto
     df_corrente.loc[i, "Stato"] = stato_attuale
 
     if ip_corr not in st.session_state.hardware_dettagli:
       st.session_state.hardware_dettagli[ip_corr] = {}
-    st.session_state.hardware_dettagli[ip_corr]["Nome Macchina"] = nome_mac
+    st.session_state.hardware_dettagli[ip_corr]["Nome Dispositivo"] = nome_mac
     st.session_state.hardware_dettagli[ip_corr]["Tipologia"] = tipo_scelto
     st.session_state.hardware_dettagli[ip_corr]["Stato"] = stato_attuale
 
@@ -275,7 +272,7 @@ with tab_rete:
       try:
         supabase.table("inventario").upsert({
             "Indirizzo IP": ip_corr,
-            "Nome Macchina": nome_mac if nome_mac else None,
+            "Nome Dispositivo": nome_mac if nome_mac else None,
             "Tipologia": tipo_scelto if tipo_scelto else None,
             "Stato": stato_attuale
         }, on_conflict="Indirizzo IP").execute()
@@ -311,7 +308,7 @@ with tab_hardware:
         
         col_f1, col_f2 = st.columns(2)
         with col_f1:
-          hw_nome_macchina = st.text_input("Nome Dispositivo", value=pulisci_valore(riga_corrente_ip.get("Nome Macchina", "")))
+          hw_nome_macchina = st.text_input("Nome Dispositivo", value=pulisci_valore(riga_corrente_ip.get("Nome Dispositivo", "")))
         with col_f2:
           tipologia_esistente = pulisci_valore(riga_corrente_ip.get("Tipologia", "PC / Macchina"))
           if tipologia_esistente not in ["PC / Macchina", "Stampante", "Switch"]:
@@ -344,12 +341,11 @@ with tab_hardware:
         btn_salva = st.form_submit_button("Salva Specifiche Tecniche e Dispositivo")
         
         if btn_salva:
-          # CORRETTO: Forzatura automatica dello stato
           nome_salvato = pulisci_valore(hw_nome_macchina)
           stato_finale = "🔴 Occupato" if nome_salvato else "🟢 Libero"
           
           st.session_state.hardware_dettagli[ip_scelto] = {
-              "Nome Macchina": nome_salvato,
+              "Nome Dispositivo": nome_salvato,
               "Tipologia": hw_tipologia if nome_salvato else "",
               "Stato": stato_finale,
               "Marca": hw_marca,
@@ -364,7 +360,7 @@ with tab_hardware:
 
           idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_scelto].index
           if not idx_r.empty:
-            df_rete_sede.loc[idx_r, "Nome Macchina"] = nome_salvato
+            df_rete_sede.loc[idx_r, "Nome Dispositivo"] = nome_salvato
             df_rete_sede.loc[idx_r, "Tipologia"] = hw_tipologia if nome_salvato else ""
             df_rete_sede.loc[idx_r, "Stato"] = stato_finale
             st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
@@ -373,7 +369,7 @@ with tab_hardware:
             try:
               supabase.table("inventario").upsert({
                   "Indirizzo IP": ip_scelto,
-                  "Nome Macchina": nome_salvato if nome_salvato else None,
+                  "Nome Dispositivo": nome_salvato if nome_salvato else None,
                   "Tipologia": hw_tipologia if nome_salvato else None,
                   "Stato": stato_finale,
                   "Marca": hw_marca if hw_marca else None,
@@ -419,18 +415,18 @@ with tab_hardware:
                 ip_file_completo = f"{base_ip_sede}.{ip_raw}"
 
               if ip_file_completo.startswith(f"{base_ip_sede}."):
-                nome_mac_file = pulisci_valore(row.get("Nome Macchina", ""))
+                nome_mac_file = pulisci_valore(row.get("Nome Dispositivo", ""))
                 tipologia_file = pulisci_valore(row.get("Tipologia", "PC / Macchina"))
                 stato_file = "🔴 Occupato" if nome_mac_file else "🟢 Libero"
                 
                 idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_file_completo].index
                 if not idx_r.empty:
-                  df_rete_sede.loc[idx_r, "Nome Macchina"] = nome_mac_file
+                  df_rete_sede.loc[idx_r, "Nome Dispositivo"] = nome_mac_file
                   df_rete_sede.loc[idx_r, "Tipologia"] = tipologia_file if nome_mac_file else ""
                   df_rete_sede.loc[idx_r, "Stato"] = stato_file
 
                 st.session_state.hardware_dettagli[ip_file_completo] = {
-                    "Nome Macchina": nome_mac_file,
+                    "Nome Dispositivo": nome_mac_file,
                     "Tipologia": tipologia_file if nome_mac_file else "",
                     "Stato": stato_file,
                     "Marca": pulisci_valore(row.get("Marca", "")),
@@ -447,7 +443,7 @@ with tab_hardware:
                   try:
                     supabase.table("inventario").upsert({
                         "Indirizzo IP": ip_file_completo,
-                        "Nome Macchina": nome_mac_file if nome_mac_file else None,
+                        "Nome Dispositivo": nome_mac_file if nome_mac_file else None,
                         "Tipologia": tipologia_file if nome_mac_file else None,
                         "Stato": stato_file,
                         "Marca": pulisci_valore(row.get("Marca")) or None,
@@ -487,9 +483,8 @@ with tab_hardware:
     ip_comp = m["_ip_completo"]
     dettagli = st.session_state.hardware_dettagli.get(ip_comp, {})
 
-    nome_m = pulisci_valore(m["Nome Macchina"])
+    nome_m = pulisci_valore(m["Nome Dispositivo"])
     tipo_m = pulisci_valore(m["Tipologia"])
-    # CORRETTO: Stato coerente basato sul nome macchina
     stato_m = "🔴 Occupato" if nome_m else "🟢 Libero"
     proc_val = pulisci_valore(dettagli.get("Processore", ""))
     so_val = pulisci_valore(dettagli.get("S.O.", ""))
@@ -497,7 +492,7 @@ with tab_hardware:
     lista_completa.append({
         "Indirizzo IP": m["Indirizzo IP"],
         "_ip_completo": ip_comp,
-        "Nome Macchina": nome_m,
+        "Nome Dispositivo": nome_m,
         "Tipologia": tipo_m,
         "Stato": stato_m,
         "Marca": pulisci_valore(dettagli.get("Marca", "")),
@@ -519,7 +514,7 @@ with tab_hardware:
   df_inv_per_editor = df_inventario_corrente.drop(columns=["_ip_completo"], errors="ignore").copy()
 
   for i in range(len(df_inv_per_editor)):
-    if not df_inv_per_editor.loc[i, "Nome Macchina"]:
+    if not df_inv_per_editor.loc[i, "Nome Dispositivo"]:
       df_inv_per_editor.loc[i, "Tipologia"] = ""
 
   df_inv_per_editor = df_inv_per_editor.fillna("")
@@ -528,7 +523,7 @@ with tab_hardware:
       df_inv_per_editor,
       column_config={
           "Indirizzo IP": st.column_config.TextColumn("Indirizzo IP", disabled=True),
-          "Nome Macchina": st.column_config.TextColumn("Nome Dispositivo"),
+          "Nome Dispositivo": st.column_config.TextColumn("Nome Dispositivo"),
           "Tipologia": st.column_config.SelectboxColumn("Tipologia", options=opzioni_tipologia, required=False),
           "Stato": st.column_config.SelectboxColumn("Stato", options=["🟢 Libero", "🔴 Occupato"], required=True),
           "Marca": st.column_config.TextColumn("Marca"),
@@ -551,10 +546,9 @@ with tab_hardware:
     riga_orig = df_inventario_corrente[df_inventario_corrente["Indirizzo IP"] == ip_corr_riga]
     if not riga_orig.empty:
       ip_comp = riga_orig.iloc[0]["_ip_completo"]
-      nuovo_nome = pulisci_valore(df_inventario_modificato.loc[i, "Nome Macchina"])
+      nuovo_nome = pulisci_valore(df_inventario_modificato.loc[i, "Nome Dispositivo"])
       nuova_tipologia = pulisci_valore(df_inventario_modificato.loc[i, "Tipologia"])
       
-      # CORRETTO: Forzatura automatica dello stato in base al nome inserito
       nuovo_stato = "🔴 Occupato" if nuovo_nome else "🟢 Libero"
       if not nuovo_nome:
         nuova_tipologia = ""
@@ -569,7 +563,7 @@ with tab_hardware:
       gar_v = pulisci_valore(df_inventario_modificato.loc[i, "Garanzia"])
 
       st.session_state.hardware_dettagli[ip_comp] = {
-          "Nome Macchina": nuovo_nome,
+          "Nome Dispositivo": nuovo_nome,
           "Tipologia": nuova_tipologia,
           "Stato": nuovo_stato,
           "Marca": marca_v,
@@ -584,11 +578,11 @@ with tab_hardware:
 
       idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_comp].index
       if not idx_r.empty:
-        vecchio_nome = str(df_rete_sede.loc[idx_r[0], "Nome Macchina"])
+        vecchio_nome = str(df_rete_sede.loc[idx_r[0], "Nome Dispositivo"])
         vecchia_tipologia = str(df_rete_sede.loc[idx_r[0], "Tipologia"])
         vecchio_stato = str(df_rete_sede.loc[idx_r[0], "Stato"])
         if vecchio_nome != nuovo_nome or vecchia_tipologia != nuova_tipologia or vecchio_stato != nuovo_stato:
-          df_rete_sede.loc[idx_r, "Nome Macchina"] = nuovo_nome
+          df_rete_sede.loc[idx_r, "Nome Dispositivo"] = nuovo_nome
           df_rete_sede.loc[idx_r, "Tipologia"] = nuova_tipologia
           df_rete_sede.loc[idx_r, "Stato"] = nuovo_stato
           inv_modificato = True
@@ -597,7 +591,7 @@ with tab_hardware:
         try:
           supabase.table("inventario").upsert({
               "Indirizzo IP": ip_comp,
-              "Nome Macchina": nuovo_nome if nuovo_nome else None,
+              "Nome Dispositivo": nuovo_nome if nuovo_nome else None,
               "Tipologia": nuova_tipologia if nuovo_nome else None,
               "Stato": nuovo_stato,
               "Marca": marca_v if marca_v else None,
@@ -624,7 +618,7 @@ with tab_hardware:
     )
     if st.button("🗑️ Svuota Inventario Sede", type="primary", key=f"btn_svuota_{idx_selezionato}"):
       if conferma_svuota:
-        df_rete_sede["Nome Macchina"] = ""
+        df_rete_sede["Nome Dispositivo"] = ""
         df_rete_sede["Tipologia"] = ""
         df_rete_sede["Stato"] = "🟢 Libero"
         st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
@@ -638,7 +632,7 @@ with tab_hardware:
           try:
             for ip_c in ips_da_rimuovere:
               supabase.table("inventario").update({
-                  "Nome Macchina": None,
+                  "Nome Dispositivo": None,
                   "Tipologia": None,
                   "Stato": "🟢 Libero",
                   "Marca": None,
@@ -664,7 +658,7 @@ with tab_hardware:
   lista_export_finale = []
   for m in df_rete_sede.to_dict("records"):
     ip_comp = m["_ip_completo"]
-    nome_mac = pulisci_valore(m["Nome Macchina"])
+    nome_mac = pulisci_valore(m["Nome Dispositivo"])
     if nome_mac:
       dettagli = st.session_state.hardware_dettagli.get(ip_comp, {})
       lista_export_finale.append({
