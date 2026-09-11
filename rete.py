@@ -38,7 +38,7 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
-# Funzione centralizzata e pulita per la sincronizzazione su Supabase
+# Funzione centralizzata e pulita per la sincronizzazione su Supabase (con gestione errori di rete temporanei)
 def salva_su_supabase(ip_comp, dati_dict):
   if supabase is None:
     return False
@@ -60,7 +60,11 @@ def salva_su_supabase(ip_comp, dati_dict):
     supabase.table("inventario").upsert(payload, on_conflict="Indirizzo IP").execute()
     return True
   except Exception as e:
-    st.error(f"Errore sincronizzazione Supabase su IP {ip_comp}: {e}")
+    err_str = str(e)
+    if "Resource temporarily unavailable" in err_str or "Temporary failure" in err_str:
+      st.warning(f"Connessione temporaneamente assente per IP {ip_comp}. Le modifiche sono salvate in locale.")
+    else:
+      st.error(f"Errore sincronizzazione Supabase su IP {ip_comp}: {e}")
     return False
 
 # Funzione per ordinare correttamente gli IP in modo numerico (compatibile con tipo inet)
@@ -178,7 +182,7 @@ if "dati_caricati_da_supabase" not in st.session_state:
                 "Garanzia": pulisci_valore(row.get("Garanzia")),
             }
     except Exception as e:
-      st.error(f"Errore di caricamento da Supabase: {e}")
+      st.warning(f"Impossibile connettersi a Supabase all'avvio: {e}")
   st.session_state.dati_caricati_da_supabase = True
 
 for idx, item in enumerate(sedi_config):
@@ -265,14 +269,17 @@ with tab_rete:
   opzioni_tipologia = ["PC / Macchina", "Stampante", "Switch"]
   
   for i in range(len(df_per_editor)):
-    if not df_per_editor.loc[i, "Nome Dispositivo"]:
+    nome_dev = str(df_per_editor.loc[i, "Nome Dispositivo"]).strip()
+    if not nome_dev or nome_dev.lower() in ["none", "nan", ""]:
+      df_per_editor.loc[i, "Nome Dispositivo"] = ""
       df_per_editor.loc[i, "Tipologia"] = ""
     else:
-      val_t = str(df_per_editor.loc[i, "Tipologia"])
-      if val_t not in opzioni_tipologia and val_t != "":
+      val_t = str(df_per_editor.loc[i, "Tipologia"]).strip()
+      if val_t not in opzioni_tipologia or val_t.lower() in ["none", "nan", ""]:
         df_per_editor.loc[i, "Tipologia"] = "PC / Macchina"
 
   df_per_editor = df_per_editor.fillna("")
+  df_per_editor = df_per_editor.replace(["None", "nan", "NaN", None], "")
 
   df_modificato = st.data_editor(
       df_per_editor,
@@ -526,10 +533,13 @@ with tab_hardware:
   df_inv_per_editor = df_inventario_corrente.drop(columns=["_ip_completo"], errors="ignore").copy()
 
   for i in range(len(df_inv_per_editor)):
-    if not df_inv_per_editor.loc[i, "Nome Dispositivo"]:
+    nome_dev = str(df_inv_per_editor.loc[i, "Nome Dispositivo"]).strip()
+    if not nome_dev or nome_dev.lower() in ["none", "nan", ""]:
+      df_inv_per_editor.loc[i, "Nome Dispositivo"] = ""
       df_inv_per_editor.loc[i, "Tipologia"] = ""
 
   df_inv_per_editor = df_inv_per_editor.fillna("")
+  df_inv_per_editor = df_inv_per_editor.replace(["None", "nan", "NaN", None], "")
 
   df_inventario_modificato = st.data_editor(
       df_inv_per_editor,
@@ -737,7 +747,7 @@ with tab_hardware:
         label="📊 Scarica Occupati in Excel (.xlsx)",
         data=output_excel_tab.getvalue(),
         file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        mime="application/vnd.openpyxlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True,
     )
   with col_btn2:
