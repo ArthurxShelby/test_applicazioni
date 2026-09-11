@@ -86,6 +86,14 @@ def ordina_per_ip(df, colonna_ip="_ip_completo"):
   except Exception:
     return df
 
+def estrai_anno(testo):
+  if not testo:
+    return 9999
+  match = re.search(r'\b(19\d{2}|20\d{2})\b', str(testo))
+  if match:
+    return int(match.group(1))
+  return 9999
+
 if "autenticato" not in st.session_state:
   st.session_state.autenticato = False
 
@@ -123,10 +131,8 @@ def pulisci_valore(val):
     return ""
   return s
 
-# Funzione per rimuovere emoji incompatibili con FPDF standard
 def pulisci_testo_pdf(val):
   s = pulisci_valore(val)
-  # Rimuove emoji e caratteri fuori latin1
   s_clean = s.replace("🟢", "").replace("🔴", "").strip()
   return s_clean.encode('latin-1', 'replace').decode('latin-1')
 
@@ -135,6 +141,9 @@ if "dataframes_rete" not in st.session_state:
 
 if "hardware_dettagli" not in st.session_state:
   st.session_state.hardware_dettagli = {}
+
+if "stato_ordinamento_inventario" not in st.session_state:
+  st.session_state.stato_ordinamento_inventario = {}
 
 if "dati_caricati_da_supabase" not in st.session_state:
   dati_db = carica_dati_supabase_cached()
@@ -315,6 +324,15 @@ with tab_hardware:
   st.markdown("---")
   st.markdown(f"📋 **Inventario Completo della Sede**")
 
+  # Pulsante di ordinamento per l'inventario
+  c_ord1, c_ord2 = st.columns([2, 4])
+  with c_ord1:
+    criterio_ordinamento = st.selectbox(
+        "Metti in ordine per:",
+        options=["Indirizzo IP", "Anno Processore (Crescente)", "Anno Processore (Decrescente)"],
+        key=f"criterio_ord_{idx_selezionato}"
+    )
+
   lista_completa = []
   for m in df_rete_sede.to_dict("records"):
     ip_comp = m["_ip_completo"]
@@ -322,6 +340,7 @@ with tab_hardware:
     nome_m = pulisci_valore(m["Nome Dispositivo"])
     tipo_m = pulisci_valore(m["Tipologia"])
     stato_m = "🔴 Occupato" if nome_m else "🟢 Libero"
+    proc_val = pulisci_valore(dettagli.get("Processore", ""))
 
     lista_completa.append({
         "Indirizzo IP": m["Indirizzo IP"],
@@ -331,7 +350,8 @@ with tab_hardware:
         "Stato": stato_m,
         "Marca": pulisci_valore(dettagli.get("Marca", "")),
         "Modello": pulisci_valore(dettagli.get("Modello", "")),
-        "Processore e anno": pulisci_valore(dettagli.get("Processore", "")),
+        "Processore e anno": proc_val,
+        "_anno_proc": estrai_anno(proc_val),
         "S.O.": pulisci_valore(dettagli.get("S.O.", "")),
         "RAM": pulisci_valore(dettagli.get("RAM", "")),
         "Tipo HD": pulisci_valore(dettagli.get("Tipo HD", "")),
@@ -340,7 +360,16 @@ with tab_hardware:
     })
 
   df_inventario_corrente = pd.DataFrame(lista_completa)
-  df_inv_per_editor = df_inventario_corrente.drop(columns=["_ip_completo"], errors="ignore").fillna("")
+
+  # Applica l'ordinamento scelto
+  if criterio_ordinamento == "Indirizzo IP":
+    df_inventario_corrente = ordina_per_ip(df_inventario_corrente, "_ip_completo")
+  elif criterio_ordinamento == "Anno Processore (Crescente)":
+    df_inventario_corrente = df_inventario_corrente.sort_values(by="_anno_proc", ascending=True)
+  elif criterio_ordinamento == "Anno Processore (Decrescente)":
+    df_inventario_corrente = df_inventario_corrente.sort_values(by="_anno_proc", ascending=False)
+
+  df_inv_per_editor = df_inventario_corrente.drop(columns=["_ip_completo", "_anno_proc"], errors="ignore").fillna("")
 
   df_inventario_modificato = st.data_editor(
       df_inv_per_editor,
