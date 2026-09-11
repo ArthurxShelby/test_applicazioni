@@ -38,7 +38,6 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
-# Funzione centralizzata e pulita per la sincronizzazione su Supabase (con gestione errori di rete temporanei)
 def salva_su_supabase(ip_comp, dati_dict):
   if supabase is None:
     return False
@@ -60,14 +59,9 @@ def salva_su_supabase(ip_comp, dati_dict):
     supabase.table("inventario").upsert(payload, on_conflict="Indirizzo IP").execute()
     return True
   except Exception as e:
-    err_str = str(e)
-    if "Resource temporarily unavailable" in err_str or "Temporary failure" in err_str:
-      st.warning(f"Connessione temporaneamente assente per IP {ip_comp}. Le modifiche sono salvate in locale.")
-    else:
-      st.error(f"Errore sincronizzazione Supabase su IP {ip_comp}: {e}")
+    st.error(f"Errore sincronizzazione Supabase su IP {ip_comp}: {e}")
     return False
 
-# Funzione per ordinare correttamente gli IP in modo numerico (compatibile con tipo inet)
 def ordina_per_ip(df, colonna_ip="_ip_completo"):
   if df.empty or colonna_ip not in df.columns:
     return df
@@ -94,9 +88,7 @@ if "autenticato" not in st.session_state:
 
 if not st.session_state.autenticato:
   st.subheader("🔐 Accesso Protetto")
-  password_inserita = st.text_input(
-      "Inserisci la password per accedere", type="password"
-  )
+  password_inserita = st.text_input("Inserisci la password per accedere", type="password")
   if st.button("Accedi"):
     app_password = st.secrets.get("APP_PASSWORD", "")
     if password_inserita == app_password:
@@ -150,13 +142,16 @@ def estrai_anno(testo):
   return 9999
 
 # Inizializzazione Stati
-if "dataframes_rete" not in st.session_state:
-  st.session_state.dataframes_rete = {}
-
 if "hardware_dettagli" not in st.session_state:
   st.session_state.hardware_dettagli = {}
 
-# Caricamento dati da Supabase all'avvio
+if "dataframes_rete" not in st.session_state:
+  st.session_state.dataframes_rete = {}
+
+if "stato_ordinamento_anno" not in st.session_state:
+  st.session_state.stato_ordinamento_anno = {}
+
+# Caricamento dati da Supabase all'avvio (una sola volta)
 if "dati_caricati_da_supabase" not in st.session_state:
   if supabase is not None:
     try:
@@ -182,17 +177,31 @@ if "dati_caricati_da_supabase" not in st.session_state:
                 "Garanzia": pulisci_valore(row.get("Garanzia")),
             }
     except Exception as e:
-      st.warning(f"Impossibile connettersi a Supabase all'avvio: {e}")
+      st.error(f"Errore di caricamento da Supabase: {e}")
   st.session_state.dati_caricati_da_supabase = True
 
-for idx, item in enumerate(sedi_config):
-  base_ip = item["blocco"].split(".")[0]
-  range_ip = item["range_custom"]
+# Posizioniamo il selettore SUBITO per calcolare solo la sede attiva
+idx_selezionato = st.selectbox(
+    "📍 Seleziona la Sede da Gestire",
+    options=range(len(sedi_config)),
+    format_func=lambda i: (
+        f"{sedi_config[i]['nome']} — Rete: {sedi_config[i]['blocco']}"
+        f" / {sedi_config[i]['subnet']}"
+    ),
+)
+
+sede_scelta = sedi_config[idx_selezionato]
+blocco_completo_ip = sede_scelta["blocco"].split(".")[0]
+subnet_ultimi_due = sede_scelta["subnet"]
+
+# Generazione o recupero del DataFrame SOLO per la sede selezionata
+if idx_selezionato not in st.session_state.dataframes_rete:
+  base_ip = sede_scelta["blocco"].split(".")[0]
+  range_ip = sede_scelta["range_custom"]
 
   righe_ip = []
   for i in range_ip:
     ip_completo = f"{base_ip}.0.0.{i}"
-    
     hw = st.session_state.hardware_dettagli.get(ip_completo, {})
     nome_macchina = pulisci_valore(hw.get("Nome Dispositivo", ""))
     tipologia = pulisci_valore(hw.get("Tipologia", ""))
@@ -210,23 +219,7 @@ for idx, item in enumerate(sedi_config):
     })
   
   df_temp = pd.DataFrame(righe_ip)
-  st.session_state.dataframes_rete[idx] = ordina_per_ip(df_temp, "_ip_completo")
-
-if "stato_ordinamento_anno" not in st.session_state:
-  st.session_state.stato_ordinamento_anno = {}
-
-idx_selezionato = st.selectbox(
-    "📍 Seleziona la Sede da Gestire",
-    options=range(len(sedi_config)),
-    format_func=lambda i: (
-        f"{sedi_config[i]['nome']} — Rete: {sedi_config[i]['blocco']}"
-        f" / {sedi_config[i]['subnet']}"
-    ),
-)
-
-sede_scelta = sedi_config[idx_selezionato]
-blocco_completo_ip = sede_scelta["blocco"].split(".")[0]
-subnet_ultimi_due = sede_scelta["subnet"]
+  st.session_state.dataframes_rete[idx_selezionato] = ordina_per_ip(df_temp, "_ip_completo")
 
 tab_rete, tab_hardware = st.tabs(
     ["🌐 Blocco IP & Occupazione", "💻 Inventario Hardware Dettagliato"]
@@ -269,17 +262,14 @@ with tab_rete:
   opzioni_tipologia = ["PC / Macchina", "Stampante", "Switch"]
   
   for i in range(len(df_per_editor)):
-    nome_dev = str(df_per_editor.loc[i, "Nome Dispositivo"]).strip()
-    if not nome_dev or nome_dev.lower() in ["none", "nan", ""]:
-      df_per_editor.loc[i, "Nome Dispositivo"] = ""
+    if not df_per_editor.loc[i, "Nome Dispositivo"]:
       df_per_editor.loc[i, "Tipologia"] = ""
     else:
-      val_t = str(df_per_editor.loc[i, "Tipologia"]).strip()
-      if val_t not in opzioni_tipologia or val_t.lower() in ["none", "nan", ""]:
+      val_t = str(df_per_editor.loc[i, "Tipologia"])
+      if val_t not in opzioni_tipologia and val_t != "":
         df_per_editor.loc[i, "Tipologia"] = "PC / Macchina"
 
   df_per_editor = df_per_editor.fillna("")
-  df_per_editor = df_per_editor.replace(["None", "nan", "NaN", None], "")
 
   df_modificato = st.data_editor(
       df_per_editor,
@@ -423,10 +413,6 @@ with tab_hardware:
           df_import = pd.read_csv(uploaded_file)
         else:
           df_import = pd.read_excel(uploaded_file)
-        
-        # Pulisce le virgole interne dai campi di testo per evitare errori di tokenizzazione
-        for col in df_import.select_dtypes(include=['object']).columns:
-          df_import[col] = df_import[col].astype(str).str.replace(',', '', regex=False)
 
         if "Indirizzo IP" not in df_import.columns:
           st.error("Il file caricato deve contenere una colonna 'Indirizzo IP'.")
@@ -533,13 +519,10 @@ with tab_hardware:
   df_inv_per_editor = df_inventario_corrente.drop(columns=["_ip_completo"], errors="ignore").copy()
 
   for i in range(len(df_inv_per_editor)):
-    nome_dev = str(df_inv_per_editor.loc[i, "Nome Dispositivo"]).strip()
-    if not nome_dev or nome_dev.lower() in ["none", "nan", ""]:
-      df_inv_per_editor.loc[i, "Nome Dispositivo"] = ""
+    if not df_inv_per_editor.loc[i, "Nome Dispositivo"]:
       df_inv_per_editor.loc[i, "Tipologia"] = ""
 
   df_inv_per_editor = df_inv_per_editor.fillna("")
-  df_inv_per_editor = df_inv_per_editor.replace(["None", "nan", "NaN", None], "")
 
   df_inventario_modificato = st.data_editor(
       df_inv_per_editor,
@@ -747,7 +730,7 @@ with tab_hardware:
         label="📊 Scarica Occupati in Excel (.xlsx)",
         data=output_excel_tab.getvalue(),
         file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.xlsx",
-        mime="application/vnd.openpyxlformats-officedocument.spreadsheetml.sheet",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True,
     )
   with col_btn2:
