@@ -38,7 +38,6 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
-# Funzione centralizzata per il salvataggio su Supabase
 def salva_su_supabase(ip_comp, dati_dict):
   if supabase is None:
     return False
@@ -62,7 +61,6 @@ def salva_su_supabase(ip_comp, dati_dict):
   except Exception as e:
     return False
 
-# Caricamento dati da Supabase con Cache per massima velocità
 @st.cache_data(ttl=60)
 def carica_dati_supabase_cached():
   if supabase is None:
@@ -73,7 +71,6 @@ def carica_dati_supabase_cached():
   except Exception:
     return []
 
-# Funzione per ordinare correttamente gli IP in modo numerico
 def ordina_per_ip(df, colonna_ip="_ip_completo"):
   if df.empty or colonna_ip not in df.columns:
     return df
@@ -126,13 +123,12 @@ def pulisci_valore(val):
     return ""
   return s
 
-def estrai_anno(testo):
-  if not testo:
-    return 9999
-  match = re.search(r'\b(19\d{2}|20\d{2})\b', str(testo))
-  if match:
-    return int(match.group(1))
-  return 9999
+# Funzione per rimuovere emoji incompatibili con FPDF standard
+def pulisci_testo_pdf(val):
+  s = pulisci_valore(val)
+  # Rimuove emoji e caratteri fuori latin1
+  s_clean = s.replace("🟢", "").replace("🔴", "").strip()
+  return s_clean.encode('latin-1', 'replace').decode('latin-1')
 
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
@@ -140,7 +136,6 @@ if "dataframes_rete" not in st.session_state:
 if "hardware_dettagli" not in st.session_state:
   st.session_state.hardware_dettagli = {}
 
-# Inizializzazione dati da cache Supabase all'avvio
 if "dati_caricati_da_supabase" not in st.session_state:
   dati_db = carica_dati_supabase_cached()
   for row in dati_db:
@@ -189,9 +184,6 @@ for idx, item in enumerate(sedi_config):
   df_temp = pd.DataFrame(righe_ip)
   st.session_state.dataframes_rete[idx] = ordina_per_ip(df_temp, "_ip_completo")
 
-if "stato_ordinamento_anno" not in st.session_state:
-  st.session_state.stato_ordinamento_anno = {}
-
 idx_selezionato = st.selectbox(
     "📍 Seleziona la Sede da Gestire",
     options=range(len(sedi_config)),
@@ -199,8 +191,6 @@ idx_selezionato = st.selectbox(
 )
 
 sede_scelta = sedi_config[idx_selezionato]
-blocco_completo_ip = sede_scelta["blocco"].split(".")[0]
-subnet_ultimi_due = sede_scelta["subnet"]
 
 tab_rete, tab_hardware = st.tabs(["🌐 Blocco IP & Occupazione", "💻 Inventario Hardware Dettagliato"])
 
@@ -223,7 +213,6 @@ with tab_rete:
 
   df_per_editor = df_corrente.drop(columns=["_ip_completo"], errors="ignore").copy()
   opzioni_tipologia = ["PC / Macchina", "Stampante", "Switch"]
-  
   df_per_editor = df_per_editor.fillna("")
 
   df_modificato = st.data_editor(
@@ -410,7 +399,7 @@ with tab_hardware:
           "Indirizzo IP": m["Indirizzo IP"],
           "Nome Dispositivo": nome_mac,
           "Tipologia": pulisci_valore(m["Tipologia"]),
-          "Stato": "🔴 Occupato",
+          "Stato": "Occupato",
           "Marca": pulisci_valore(dettagli.get("Marca", "")),
           "Modello": pulisci_valore(dettagli.get("Modello", "")),
           "Processore e anno": pulisci_valore(dettagli.get("Processore", "")),
@@ -457,18 +446,18 @@ with tab_hardware:
       pdf.cell(sum(col_widths), 10, "Nessun dispositivo occupato presente in questa sede.", 1, 1, "C")
     else:
       for _, row in df_data.iterrows():
-        pdf.cell(col_widths[0], 5, str(row.get("Indirizzo IP", ""))[:20], 1, 0, "C")
-        pdf.cell(col_widths[1], 5, str(row.get("Nome Dispositivo", ""))[:18], 1, 0, "L")
-        pdf.cell(col_widths[2], 5, str(row.get("Tipologia", ""))[:15], 1, 0, "L")
-        pdf.cell(col_widths[3], 5, str(row.get("Stato", ""))[:12], 1, 0, "C")
-        pdf.cell(col_widths[4], 5, str(row.get("Marca", ""))[:12], 1, 0, "L")
-        pdf.cell(col_widths[5], 5, str(row.get("Modello", ""))[:12], 1, 0, "L")
-        pdf.cell(col_widths[6], 5, str(row.get("Processore e anno", ""))[:15], 1, 0, "L")
-        pdf.cell(col_widths[7], 5, str(row.get("S.O.", ""))[:12], 1, 0, "L")
-        pdf.cell(col_widths[8], 5, str(row.get("RAM", ""))[:10], 1, 0, "C")
-        pdf.cell(col_widths[9], 5, str(row.get("Tipo HD", ""))[:10], 1, 0, "C")
-        pdf.cell(col_widths[10], 5, str(row.get("Capienza HD", ""))[:12], 1, 0, "C")
-        pdf.cell(col_widths[11], 5, str(row.get("Garanzia", ""))[:12], 1, 1, "C")
+        pdf.cell(col_widths[0], 5, pulisci_testo_pdf(row.get("Indirizzo IP", ""))[:20], 1, 0, "C")
+        pdf.cell(col_widths[1], 5, pulisci_testo_pdf(row.get("Nome Dispositivo", ""))[:18], 1, 0, "L")
+        pdf.cell(col_widths[2], 5, pulisci_testo_pdf(row.get("Tipologia", ""))[:15], 1, 0, "L")
+        pdf.cell(col_widths[3], 5, pulisci_testo_pdf(row.get("Stato", ""))[:12], 1, 0, "C")
+        pdf.cell(col_widths[4], 5, pulisci_testo_pdf(row.get("Marca", ""))[:12], 1, 0, "L")
+        pdf.cell(col_widths[5], 5, pulisci_testo_pdf(row.get("Modello", ""))[:12], 1, 0, "L")
+        pdf.cell(col_widths[6], 5, pulisci_testo_pdf(row.get("Processore e anno", ""))[:15], 1, 0, "L")
+        pdf.cell(col_widths[7], 5, pulisci_testo_pdf(row.get("S.O.", ""))[:12], 1, 0, "L")
+        pdf.cell(col_widths[8], 5, pulisci_testo_pdf(row.get("RAM", ""))[:10], 1, 0, "C")
+        pdf.cell(col_widths[9], 5, pulisci_testo_pdf(row.get("Tipo HD", ""))[:10], 1, 0, "C")
+        pdf.cell(col_widths[10], 5, pulisci_testo_pdf(row.get("Capienza HD", ""))[:12], 1, 0, "C")
+        pdf.cell(col_widths[11], 5, pulisci_testo_pdf(row.get("Garanzia", ""))[:12], 1, 1, "C")
       
     return bytes(pdf.output())
 
@@ -476,8 +465,11 @@ with tab_hardware:
   with pd.ExcelWriter(output_excel_tab, engine="openpyxl") as writer:
     df_export_finale.to_excel(writer, index=False, sheet_name="Inventario Occupati")
 
-  # Generazione diretta senza try/except nascosto
-  pdf_bytes_tab = genera_pdf_tab(df_export_finale)
+  try:
+    pdf_bytes_tab = genera_pdf_tab(df_export_finale)
+  except Exception as e:
+    pdf_bytes_tab = b""
+    st.error(f"Errore generazione PDF: {e}")
 
   col_btn1, col_btn2 = st.columns(2)
   with col_btn1:
