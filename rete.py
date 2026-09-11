@@ -413,7 +413,11 @@ with tab_hardware:
     if uploaded_file is not None:
       try:
         if uploaded_file.name.endswith(".csv"):
-          df_import = pd.read_csv(uploaded_file)
+          try:
+            df_import = pd.read_csv(uploaded_file, sep=None, engine='python')
+          except Exception:
+            uploaded_file.seek(0)
+            df_import = pd.read_csv(uploaded_file, sep=None, engine='python', encoding='latin1')
         else:
           df_import = pd.read_excel(uploaded_file)
 
@@ -430,8 +434,9 @@ with tab_hardware:
                 continue
 
               parti_ip = ip_raw.split(".")
+              # Sincronizzazione IP completo (es. 10.142.77.66 -> prende il 3° ottetto come blocco e il 4° come host)
               if len(parti_ip) == 4:
-                ip_file_completo = ip_raw
+                ip_file_completo = f"{parti_ip[2]}.0.0.{parti_ip[3]}"
               elif len(parti_ip) >= 2:
                 ip_file_completo = f"{parti_ip[-2]}.0.0.{parti_ip[-1]}"
               else:
