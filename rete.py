@@ -63,6 +63,22 @@ def salva_su_supabase(ip_comp, dati_dict):
     st.error(f"Errore sincronizzazione Supabase su IP {ip_comp}: {e}")
     return False
 
+# Funzione per ordinare correttamente gli IP in modo numerico anziché alfabetico
+def ordina_per_ip(df, colonna_ip="_ip_completo"):
+  if df.empty or colonna_ip not in df.columns:
+    return df
+  try:
+    df = df.copy()
+    df["_sort_key"] = df[colonna_ip].apply(
+        lambda x: ipaddress.ip_address(str(x).strip())
+        if str(x).strip()
+        else ipaddress.ip_address("0.0.0.0")
+    )
+    df = df.sort_values(by="_sort_key").drop(columns=["_sort_key"])
+    return df
+  except Exception:
+    return df
+
 try:
   from streamlit_javascript import st_javascript
   is_mobile_env = True
@@ -188,7 +204,10 @@ for idx, item in enumerate(sedi_config):
         "Tipologia": tipologia,
         "Stato": stato,
     })
-  st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
+  
+  # Genera il DataFrame e applica l'ordinamento numerico degli IP
+  df_temp = pd.DataFrame(righe_ip)
+  st.session_state.dataframes_rete[idx] = ordina_per_ip(df_temp, "_ip_completo")
 
 if "stato_ordinamento_anno" not in st.session_state:
   st.session_state.stato_ordinamento_anno = {}
@@ -493,6 +512,7 @@ with tab_hardware:
     })
 
   df_inventario_corrente = pd.DataFrame(lista_completa)
+  df_inventario_corrente = ordina_per_ip(df_inventario_corrente, "_ip_completo")
 
   if st.session_state.stato_ordinamento_anno.get(idx_selezionato, False):
     df_inventario_corrente["_anno_temp"] = df_inventario_corrente["Processore e anno"].apply(estrai_anno)
@@ -600,7 +620,6 @@ with tab_hardware:
           if ip_c in st.session_state.hardware_dettagli:
             del st.session_state.hardware_dettagli[ip_c]
           
-          # Svuota i campi su Supabase
           salva_su_supabase(ip_c, {
               "Nome Dispositivo": "",
               "Tipologia": "",
@@ -644,6 +663,7 @@ with tab_hardware:
       })
       
   df_export_finale = pd.DataFrame(lista_export_finale)
+  df_export_finale = ordina_per_ip(df_export_finale, "Indirizzo IP")
 
   class PDFReportTab(FPDF):
     def header(self):
@@ -716,4 +736,4 @@ with tab_hardware:
         file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.pdf",
         mime="application/pdf",
         use_container_width=True,
-    )
+    ))
