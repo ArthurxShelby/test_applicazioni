@@ -120,10 +120,14 @@ if "dati_caricati_da_supabase" not in st.session_state:
         for row in response.data:
           ip_db = row.get("Indirizzo IP")
           if ip_db:
+            nome_db = pulisci_valore(row.get("Nome Macchina"))
+            # CORRETTO: Forza lo stato a Occupato se c'è il nome macchina
+            stato_db = "🔴 Occupato" if nome_db else (pulisci_valore(row.get("Stato")) or "🟢 Libero")
+            
             st.session_state.hardware_dettagli[ip_db] = {
-                "Nome Macchina": pulisci_valore(row.get("Nome Macchina")),
+                "Nome Macchina": nome_db,
                 "Tipologia": pulisci_valore(row.get("Tipologia")),
-                "Stato": pulisci_valore(row.get("Stato")) or ("🔴 Occupato" if row.get("Nome Macchina") else "🟢 Libero"),
+                "Stato": stato_db,
                 "Marca": pulisci_valore(row.get("Marca")),
                 "Modello": pulisci_valore(row.get("Modello")),
                 "Processore": pulisci_valore(row.get("Processore e anno")),
@@ -145,13 +149,14 @@ for idx, item in enumerate(sedi_config):
   for i in range_ip:
     ip_completo = f"{base_ip}.{i}"
     
-    # Recupera i dati salvati (da Supabase o session_state)
     hw = st.session_state.hardware_dettagli.get(ip_completo, {})
     nome_macchina = pulisci_valore(hw.get("Nome Macchina", ""))
     tipologia = pulisci_valore(hw.get("Tipologia", ""))
-    stato = hw.get("Stato", "")
+    
+    # CORRETTO: Se c'è il nome, lo stato deve essere obbligatoriamente Occupato
+    stato = "🔴 Occupato" if nome_macchina else pulisci_valore(hw.get("Stato", "🟢 Libero"))
     if not stato:
-      stato = "🔴 Occupato" if nome_macchina else "🟢 Libero"
+      stato = "🟢 Libero"
 
     righe_ip.append({
         "Indirizzo IP": ip_completo,
@@ -250,42 +255,29 @@ with tab_rete:
     if not nome_mac:
       tipo_scelto = ""
 
-    stato_attuale = df_modificato.loc[i, "Stato"]
+    # CORRETTO: Forzatura automatica dello stato in base al nome
+    stato_attuale = "🔴 Occupato" if nome_mac else "🟢 Libero"
 
-    if nome_mac and stato_attuale != "🔴 Occupato":
-      df_modificato.loc[i, "Stato"] = "🔴 Occupato"
-      modificato = True
-    elif not nome_mac and stato_attuale == "🔴 Occupato":
-      df_modificato.loc[i, "Stato"] = "🟢 Libero"
-      tipo_scelto = ""
-      if ip_corr in st.session_state.hardware_dettagli:
-        st.session_state.hardware_dettagli[ip_corr]["Nome Macchina"] = ""
-        st.session_state.hardware_dettagli[ip_corr]["Tipologia"] = ""
-        st.session_state.hardware_dettagli[ip_corr]["Stato"] = "🟢 Libero"
-      modificato = True
-
-    if df_corrente.loc[i, "Tipologia"] != tipo_scelto or df_corrente.loc[i, "Nome Macchina"] != nome_mac:
+    if df_corrente.loc[i, "Tipologia"] != tipo_scelto or df_corrente.loc[i, "Nome Macchina"] != nome_mac or df_corrente.loc[i, "Stato"] != stato_attuale:
       modificato = True
 
     df_corrente.loc[i, "Nome Macchina"] = nome_mac
     df_corrente.loc[i, "Tipologia"] = tipo_scelto
-    df_corrente.loc[i, "Stato"] = df_modificato.loc[i, "Stato"]
+    df_corrente.loc[i, "Stato"] = stato_attuale
 
-    # Aggiorna anche il dizionario locale
     if ip_corr not in st.session_state.hardware_dettagli:
       st.session_state.hardware_dettagli[ip_corr] = {}
     st.session_state.hardware_dettagli[ip_corr]["Nome Macchina"] = nome_mac
     st.session_state.hardware_dettagli[ip_corr]["Tipologia"] = tipo_scelto
-    st.session_state.hardware_dettagli[ip_corr]["Stato"] = df_corrente.loc[i, "Stato"]
+    st.session_state.hardware_dettagli[ip_corr]["Stato"] = stato_attuale
 
-    # Sincronizzazione automatica su Supabase per ogni riga modificata
     if modificato and supabase is not None:
       try:
         supabase.table("inventario").upsert({
             "Indirizzo IP": ip_corr,
             "Nome Macchina": nome_mac if nome_mac else None,
             "Tipologia": tipo_scelto if tipo_scelto else None,
-            "Stato": df_corrente.loc[i, "Stato"]
+            "Stato": stato_attuale
         }, on_conflict="Indirizzo IP").execute()
       except Exception as e:
         st.error(f"Errore sincronizzazione Supabase: {e}")
@@ -352,11 +344,13 @@ with tab_hardware:
         btn_salva = st.form_submit_button("Salva Specifiche Tecniche e Dispositivo")
         
         if btn_salva:
-          stato_finale = "🔴 Occupato" if pulisci_valore(hw_nome_macchina) else "🟢 Libero"
+          # CORRETTO: Forzatura automatica dello stato
+          nome_salvato = pulisci_valore(hw_nome_macchina)
+          stato_finale = "🔴 Occupato" if nome_salvato else "🟢 Libero"
           
           st.session_state.hardware_dettagli[ip_scelto] = {
-              "Nome Macchina": pulisci_valore(hw_nome_macchina),
-              "Tipologia": hw_tipologia if pulisci_valore(hw_nome_macchina) else "",
+              "Nome Macchina": nome_salvato,
+              "Tipologia": hw_tipologia if nome_salvato else "",
               "Stato": stato_finale,
               "Marca": hw_marca,
               "Modello": hw_modello,
@@ -370,18 +364,17 @@ with tab_hardware:
 
           idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_scelto].index
           if not idx_r.empty:
-            df_rete_sede.loc[idx_r, "Nome Macchina"] = pulisci_valore(hw_nome_macchina)
-            df_rete_sede.loc[idx_r, "Tipologia"] = hw_tipologia if pulisci_valore(hw_nome_macchina) else ""
+            df_rete_sede.loc[idx_r, "Nome Macchina"] = nome_salvato
+            df_rete_sede.loc[idx_r, "Tipologia"] = hw_tipologia if nome_salvato else ""
             df_rete_sede.loc[idx_r, "Stato"] = stato_finale
             st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
 
-          # SCRITTURA SU SUPABASE
           if supabase is not None:
             try:
               supabase.table("inventario").upsert({
                   "Indirizzo IP": ip_scelto,
-                  "Nome Macchina": pulisci_valore(hw_nome_macchina) if pulisci_valore(hw_nome_macchina) else None,
-                  "Tipologia": hw_tipologia if pulisci_valore(hw_nome_macchina) else None,
+                  "Nome Macchina": nome_salvato if nome_salvato else None,
+                  "Tipologia": hw_tipologia if nome_salvato else None,
                   "Stato": stato_finale,
                   "Marca": hw_marca if hw_marca else None,
                   "Modello": hw_modello if hw_modello else None,
@@ -467,7 +460,7 @@ with tab_hardware:
                         "Garanzia": pulisci_valore(row.get("Garanzia")) or None,
                     }, on_conflict="Indirizzo IP").execute()
                   except Exception as e:
-                    pass
+                    st.error(f"Errore importazione Supabase: {e}")
 
                 count_importati += 1
 
@@ -496,7 +489,8 @@ with tab_hardware:
 
     nome_m = pulisci_valore(m["Nome Macchina"])
     tipo_m = pulisci_valore(m["Tipologia"])
-    stato_m = m["Stato"]
+    # CORRETTO: Stato coerente basato sul nome macchina
+    stato_m = "🔴 Occupato" if nome_m else "🟢 Libero"
     proc_val = pulisci_valore(dettagli.get("Processore", ""))
     so_val = pulisci_valore(dettagli.get("S.O.", ""))
 
@@ -559,13 +553,11 @@ with tab_hardware:
       ip_comp = riga_orig.iloc[0]["_ip_completo"]
       nuovo_nome = pulisci_valore(df_inventario_modificato.loc[i, "Nome Macchina"])
       nuova_tipologia = pulisci_valore(df_inventario_modificato.loc[i, "Tipologia"])
-      nuovo_stato = df_inventario_modificato.loc[i, "Stato"]
-
+      
+      # CORRETTO: Forzatura automatica dello stato in base al nome inserito
+      nuovo_stato = "🔴 Occupato" if nuovo_nome else "🟢 Libero"
       if not nuovo_nome:
         nuova_tipologia = ""
-        nuovo_stato = "🟢 Libero"
-      elif nuovo_stato != "🔴 Occupato":
-        nuovo_stato = "🔴 Occupato"
 
       marca_v = pulisci_valore(df_inventario_modificato.loc[i, "Marca"])
       modello_v = pulisci_valore(df_inventario_modificato.loc[i, "Modello"])
@@ -601,7 +593,6 @@ with tab_hardware:
           df_rete_sede.loc[idx_r, "Stato"] = nuovo_stato
           inv_modificato = True
 
-      # Sincronizzazione dell'inventario completo su Supabase
       if supabase is not None:
         try:
           supabase.table("inventario").upsert({
@@ -619,15 +610,12 @@ with tab_hardware:
               "Garanzia": gar_v if gar_v else None,
           }, on_conflict="Indirizzo IP").execute()
         except Exception as e:
-          pass
+          st.error(f"Errore sincronizzazione inventario Supabase: {e}")
 
   st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
   if inv_modificato:
     st.rerun()
 
-  # ==========================================
-  # AREA PERICOLOSA: SVUOTA SEDE (LOCALE + SUPABASE)
-  # ==========================================
   st.markdown("---")
   with st.expander("⚠️ Area Pericolosa - Gestione Svuotamento Sede"):
     conferma_svuota = st.checkbox(
