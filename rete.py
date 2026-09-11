@@ -736,4 +736,4 @@ with tab_hardware:
         file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.pdf",
         mime="application/pdf",
         use_container_width=True,
-    ))
+    )
