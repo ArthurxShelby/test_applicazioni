@@ -38,7 +38,7 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
-# Funzione centralizzata per singolo salvataggio
+# Funzione centralizzata e pulita per la sincronizzazione su Supabase
 def salva_su_supabase(ip_comp, dati_dict):
   if supabase is None:
     return False
@@ -63,18 +63,7 @@ def salva_su_supabase(ip_comp, dati_dict):
     st.error(f"Errore sincronizzazione Supabase su IP {ip_comp}: {e}")
     return False
 
-# Nuova funzione per salvataggio massivo (Batch Upsert)
-def salva_batch_su_supabase(payloads_list):
-  if supabase is None or not payloads_list:
-    return False
-  try:
-    supabase.table("inventario").upsert(payloads_list, on_conflict="Indirizzo IP").execute()
-    return True
-  except Exception as e:
-    st.error(f"Errore sincronizzazione batch Supabase: {e}")
-    return False
-
-# Funzione per ordinare correttamente gli IP in modo numerico
+# Funzione per ordinare correttamente gli IP in modo numerico (compatibile con tipo inet)
 def ordina_per_ip(df, colonna_ip="_ip_completo"):
   if df.empty or colonna_ip not in df.columns:
     return df
@@ -299,8 +288,6 @@ with tab_rete:
   )
 
   modificato = False
-  payloads_da_salvare = []
-  
   for i in range(len(df_modificato)):
     ip_corr = df_corrente.loc[i, "_ip_completo"]
     nome_mac = pulisci_valore(df_modificato.loc[i, "Nome Dispositivo"])
@@ -326,26 +313,11 @@ with tab_rete:
     st.session_state.hardware_dettagli[ip_corr]["Stato"] = stato_attuale
 
     if modificato:
-      dati_dict = st.session_state.hardware_dettagli[ip_corr]
-      payloads_da_salvare.append({
-          "Indirizzo IP": ip_corr,
-          "Nome Dispositivo": dati_dict.get("Nome Dispositivo") or None,
-          "Tipologia": dati_dict.get("Tipologia") or None,
-          "Stato": dati_dict.get("Stato") or "🟢 Libero",
-          "Marca": dati_dict.get("Marca") or None,
-          "Modello": dati_dict.get("Modello") or None,
-          "Processore e anno": dati_dict.get("Processore") or dati_dict.get("Processore e anno") or None,
-          "S.O.": dati_dict.get("S.O.") or None,
-          "RAM": dati_dict.get("RAM") or None,
-          "Tipo HD": dati_dict.get("Tipo HD") or None,
-          "Capienza HD": dati_dict.get("Capienza HD") or None,
-          "Garanzia": dati_dict.get("Garanzia") or None,
-      })
+      salva_su_supabase(ip_corr, st.session_state.hardware_dettagli[ip_corr])
 
   st.session_state.dataframes_rete[idx_selezionato] = df_corrente
 
-  if modificato and payloads_da_salvare:
-    salva_batch_su_supabase(payloads_da_salvare)
+  if modificato:
     st.rerun()
 
 with tab_hardware:
@@ -444,6 +416,10 @@ with tab_hardware:
           df_import = pd.read_csv(uploaded_file)
         else:
           df_import = pd.read_excel(uploaded_file)
+        
+        # Pulisce le virgole interne dai campi di testo per evitare errori di tokenizzazione
+        for col in df_import.select_dtypes(include=['object']).columns:
+          df_import[col] = df_import[col].astype(str).str.replace(',', '', regex=False)
 
         if "Indirizzo IP" not in df_import.columns:
           st.error("Il file caricato deve contenere una colonna 'Indirizzo IP'.")
@@ -451,7 +427,6 @@ with tab_hardware:
           if st.button("Conferma e Importa Dati"):
             count_importati = 0
             base_ip_sede = blocco_completo_ip
-            batch_import_payloads = []
             
             for _, row in df_import.iterrows():
               ip_raw = str(row.get("Indirizzo IP", "")).strip()
@@ -492,26 +467,9 @@ with tab_hardware:
                 }
 
                 st.session_state.hardware_dettagli[ip_file_completo] = dati_file
-                
-                batch_import_payloads.append({
-                    "Indirizzo IP": ip_file_completo,
-                    "Nome Dispositivo": dati_file.get("Nome Dispositivo") or None,
-                    "Tipologia": dati_file.get("Tipologia") or None,
-                    "Stato": dati_file.get("Stato") or "🟢 Libero",
-                    "Marca": dati_file.get("Marca") or None,
-                    "Modello": dati_file.get("Modello") or None,
-                    "Processore e anno": dati_file.get("Processore") or None,
-                    "S.O.": dati_file.get("S.O.") or None,
-                    "RAM": dati_file.get("RAM") or None,
-                    "Tipo HD": dati_file.get("Tipo HD") or None,
-                    "Capienza HD": dati_file.get("Capienza HD") or None,
-                    "Garanzia": dati_file.get("Garanzia") or None,
-                })
+                salva_su_supabase(ip_file_completo, dati_file)
 
                 count_importati += 1
-
-            if batch_import_payloads:
-              salva_batch_su_supabase(batch_import_payloads)
 
             st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
             st.success(f"Importati con successo {count_importati} dispositivi per questa sede!")
@@ -595,8 +553,6 @@ with tab_hardware:
   )
 
   inv_modificato = False
-  payloads_inventario = []
-
   for i in range(len(df_inventario_modificato)):
     ip_corr_riga = df_inventario_modificato.loc[i, "Indirizzo IP"]
     riga_orig = df_inventario_corrente[df_inventario_corrente["Indirizzo IP"] == ip_corr_riga]
@@ -645,24 +601,10 @@ with tab_hardware:
           df_rete_sede.loc[idx_r, "Stato"] = nuovo_stato
           inv_modificato = True
 
-      payloads_inventario.append({
-          "Indirizzo IP": ip_comp,
-          "Nome Dispositivo": nuovo_nome or None,
-          "Tipologia": nuova_tipologia or None,
-          "Stato": nuovo_stato or "🟢 Libero",
-          "Marca": marca_v or None,
-          "Modello": modello_v or None,
-          "Processore e anno": proc_v or None,
-          "S.O.": so_v or None,
-          "RAM": ram_v or None,
-          "Tipo HD": tipo_hd_v or None,
-          "Capienza HD": cap_hd_v or None,
-          "Garanzia": gar_v or None,
-      })
+      salva_su_supabase(ip_comp, dati_aggiornati)
 
   st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
-  if inv_modificato and payloads_inventario:
-    salva_batch_su_supabase(payloads_inventario)
+  if inv_modificato:
     st.rerun()
 
   st.markdown("---")
@@ -679,28 +621,23 @@ with tab_hardware:
         st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
 
         ips_da_rimuovere = [m["_ip_completo"] for m in df_rete_sede.to_dict("records")]
-        payloads_svuota = []
         for ip_c in ips_da_rimuovere:
           if ip_c in st.session_state.hardware_dettagli:
             del st.session_state.hardware_dettagli[ip_c]
           
-          payloads_svuota.append({
-              "Indirizzo IP": ip_c,
-              "Nome Dispositivo": None,
-              "Tipologia": None,
+          salva_su_supabase(ip_c, {
+              "Nome Dispositivo": "",
+              "Tipologia": "",
               "Stato": "🟢 Libero",
-              "Marca": None,
-              "Modello": None,
-              "Processore e anno": None,
-              "S.O.": None,
-              "RAM": None,
-              "Tipo HD": None,
-              "Capienza HD": None,
-              "Garanzia": None
+              "Marca": "",
+              "Modello": "",
+              "Processore": "",
+              "S.O.": "",
+              "RAM": "",
+              "Tipo HD": "",
+              "Capienza HD": "",
+              "Garanzia": ""
           })
-
-        if payloads_svuota:
-          salva_batch_su_supabase(payloads_svuota)
 
         st.success(f"Inventario della sede '{sede_scelta['nome']}' svuotato con successo!")
         st.rerun()
