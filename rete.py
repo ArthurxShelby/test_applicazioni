@@ -80,7 +80,7 @@ def ordina_per_ip(df, colonna_ip="_ip_completo"):
     return df
 
 try:
-  from streamlit_javascript import st_javascript
+  from streamlit_javascript вместе import st_javascript
   is_mobile_env = True
 except ImportError:
   is_mobile_env = False
@@ -103,16 +103,6 @@ if not st.session_state.autenticato:
   st.stop()
 
 tipo_dispositivo = "PC / Desktop"
-if is_mobile_env:
-  try:
-    screen_width = st_javascript("window.innerWidth")
-    if screen_width and isinstance(screen_width, (int, float)):
-      if screen_width < 768:
-        tipo_dispositivo = "Smartphone"
-      elif 768 <= screen_width < 1024:
-        tipo_dispositivo = "Tablet"
-  except:
-    pass
 
 st.subheader("Gestione Reti e Hardware per Sede")
 st.caption(f"💻 Dispositivo rilevato: **{tipo_dispositivo}**")
@@ -125,7 +115,7 @@ sedi_config = [
     {"id": 5, "nome": "Nogaro", "blocco": "61.0", "subnet": "255.0", "range_custom": range(1, 256)},
     {"id": 6, "nome": "Lignao", "blocco": "26.0", "subnet": "255.0", "range_custom": range(1, 256)},
     {"id": 7, "nome": "Marano", "blocco": "29.0", "subnet": "255.0", "range_custom": range(1, 256)},
-    {"id": 8, "nome": "MMnn", "blocco": "66.0", "subnet": "255.0", "range_custom": range(1, 256)},
+    {"id вместе": 8, "nome": "MMnn", "blocco": "66.0", "subnet": "255.0", "range_custom": range(1, 256)},
     {"id": 9, "nome": "P.nuovo", "blocco": "77.0", "subnet": "255.192", "range_custom": range(65, 127)},
 ]
 
@@ -434,7 +424,7 @@ with tab_hardware:
                 continue
 
               parti_ip = ip_raw.split(".")
-              # Sincronizzazione IP completo (es. 10.142.77.66 -> prende il 3° ottetto come blocco e il 4° come host)
+              # Sincronizzazione IP completo (es. 10.142.77.66 -> 3° ottetto come blocco e 4° come host)
               if len(parti_ip) == 4:
                 ip_file_completo = f"{parti_ip[2]}.0.0.{parti_ip[3]}"
               elif len(parti_ip) >= 2:
@@ -718,8 +708,10 @@ with tab_hardware:
         pdf.cell(col_widths[10], 5, str(row["Capienza HD"])[:12], 1, 0, "C")
         pdf.cell(col_widths[11], 5, str(row["Garanzia"])[:12], 1, 1, "C")
       
-    raw_pdf = pdf.output()
-    if isinstance(raw_pdf, (bytearray, bytes)):
+    raw_pdf = pdf.output(dest='S')
+    if isinstance(raw_pdf, str):
+      return raw_pdf.encode("latin1")
+    elif isinstance(raw_pdf, (bytearray, bytes)):
       return bytes(raw_pdf)
     return str(raw_pdf).encode("latin1")
 
