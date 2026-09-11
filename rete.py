@@ -413,11 +413,7 @@ with tab_hardware:
     if uploaded_file is not None:
       try:
         if uploaded_file.name.endswith(".csv"):
-          try:
-            df_import = pd.read_csv(uploaded_file, sep=None, engine='python')
-          except Exception:
-            uploaded_file.seek(0)
-            df_import = pd.read_csv(uploaded_file, sep=None, engine='python', encoding='latin1')
+          df_import = pd.read_csv(uploaded_file)
         else:
           df_import = pd.read_excel(uploaded_file)
 
