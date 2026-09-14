@@ -27,7 +27,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Inizializzazione Client Supabase
 @st.cache_resource
 def init_supabase():
   url = st.secrets.get("SUPABASE_URL", "")
@@ -128,9 +127,6 @@ def estrai_anno(testo):
     return int(match.group(1))
   return 9999
 
-if "dataframes_rete" not in st.session_state:
-  st.session_state.dataframes_rete = {}
-
 if "hardware_dettagli" not in st.session_state:
   st.session_state.hardware_dettagli = {}
 
@@ -159,8 +155,11 @@ if "dati_caricati_da_supabase" not in st.session_state:
                 "Garanzia": pulisci_valore(row.get("Garanzia")),
             }
     except Exception as e:
-      st.warning(f"Tabella inventario non ancora trovata o vuota: {e}")
+      st.warning(f"Errore caricamento da Supabase: {e}")
   st.session_state.dati_caricati_da_supabase = True
+
+if "dataframes_rete" not in st.session_state:
+  st.session_state.dataframes_rete = {}
 
 idx_selezionato = st.selectbox(
     "📍 Seleziona la Sede da Gestire",
