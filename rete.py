@@ -37,15 +37,6 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
-# --- BLOCCO DI DEBUG AGGIUNTO ---
-if supabase is not None:
-  try:
-    test_res = supabase.table("inventario").select("*").execute()
-    st.write("🔍 **Debug Supabase Response:**", test_res)
-  except Exception as e:
-    st.error(f"❌ **Errore di connessione a Supabase:** {e}")
-# --------------------------------
-
 def salva_su_supabase(ip_comp, dati_dict, forza_cancellazione=False):
   if supabase is None:
     return False
@@ -144,63 +135,72 @@ def estrai_anno(testo):
 if "hardware_dettagli" not in st.session_state:
   st.session_state.hardware_dettagli = {}
 
-if "dataframes_rete" not in st.session_state:
-  st.session_state.dataframes_rete = {}
-
 if "dati_caricati_da_supabase" not in st.session_state:
   st.session_state.caricamento_in_corso = True
   if supabase is not None:
     try:
-      response = supabase.table("inventario").select("*").execute()
-      if response.data:
-        for row in response.data:
-          ip_db = str(row.get("Indirizzo IP") or row.get("indirizzo_ip") or row.get("ip") or "").strip()
-          if ip_db:
-            nome_db = pulisci_valore(row.get("Nome Dispositivo") or row.get("nome_dispositivo"))
-            stato_db = "🔴 Occupato" if nome_db else (pulisci_valore(row.get("Stato") or row.get("stato")) or "🟢 Libero")
-            proc_db = pulisci_valore(row.get("Processore e anno") or row.get("Processore") or row.get("processore"))
-            
-            st.session_state.hardware_dettagli[ip_db] = {
-                "Nome Dispositivo": nome_db,
-                "Tipologia": pulisci_valore(row.get("Tipologia") or row.get("tipologia")),
-                "Stato": stato_db,
-                "Marca": pulisci_valore(row.get("Marca") or row.get("marca")),
-                "Modello": pulisci_valore(row.get("Modello") or row.get("modello")),
-                "Processore": proc_db,
-                "S.O.": pulisci_valore(row.get("S.O.") or row.get("s_o") or row.get("so")),
-                "RAM": pulisci_valore(row.get("RAM") or row.get("ram")),
-                "Tipo HD": pulisci_valore(row.get("Tipo HD") or row.get("tipo_hd")),
-                "Capienza HD": pulisci_valore(row.get("Capienza HD") or row.get("capienza_hd")),
-                "Garanzia": pulisci_valore(row.get("Garanzia") or row.get("garanzia")),
-            }
+      # Gestione paginazione per scaricare tutti i record oltre i 1000
+      all_rows = []
+      batch_size = 1000
+      start = 0
+      while True:
+        res = supabase.table("inventario").select("*").range(start, start + batch_size - 1).execute()
+        if not res.data:
+          break
+        all_rows.extend(res.data)
+        if len(res.data) < batch_size:
+          break
+        start += batch_size
+
+      for row in all_rows:
+        ip_db = str(row.get("Indirizzo IP") or row.get("indirizzo_ip") or row.get("ip") or "").strip()
+        if ip_db:
+          nome_db = pulisci_valore(row.get("Nome Dispositivo") or row.get("nome_dispositivo"))
+          stato_db = "🔴 Occupato" if nome_db else (pulisci_valore(row.get("Stato") or row.get("stato")) or "🟢 Libero")
+          proc_db = pulisci_valore(row.get("Processore e anno") or row.get("Processore") or row.get("processore"))
+          
+          st.session_state.hardware_dettagli[ip_db] = {
+              "Nome Dispositivo": nome_db,
+              "Tipologia": pulisci_valore(row.get("Tipologia") or row.get("tipologia")),
+              "Stato": stato_db,
+              "Marca": pulisci_valore(row.get("Marca") or row.get("marca")),
+              "Modello": pulisci_valore(row.get("Modello") or row.get("modello")),
+              "Processore": proc_db,
+              "S.O.": pulisci_valore(row.get("S.O.") or row.get("s_o") or row.get("so")),
+              "RAM": pulisci_valore(row.get("RAM") or row.get("ram")),
+              "Tipo HD": pulisci_valore(row.get("Tipo HD") or row.get("tipo_hd")),
+              "Capienza HD": pulisci_valore(row.get("Capienza HD") or row.get("capienza_hd")),
+              "Garanzia": pulisci_valore(row.get("Garanzia") or row.get("garanzia")),
+          }
     except Exception as e:
       st.error(f"Errore caricamento da Supabase: {e}")
   st.session_state.dati_caricati_da_supabase = True
   st.session_state.caricamento_in_corso = False
 
+# Ricostruzione/aggiornamento forzato dei dataframe ad ogni avvio basato sui dati caricati
+st.session_state.dataframes_rete = {}
 for idx, sede in enumerate(sedi_config):
-  if idx not in st.session_state.dataframes_rete:
-    blocco_sede = sede["blocco"]
-    range_ip = sede["range_custom"]
-    righe_ip = []
-    for i in range_ip:
-      ip_completo = f"100.200.{blocco_sede}.{i}"
-      
-      hw = st.session_state.hardware_dettagli.get(ip_completo, {})
-      nome_macchina = pulisci_valore(hw.get("Nome Dispositivo", ""))
-      tipologia = pulisci_valore(hw.get("Tipologia", ""))
-      stato = "🔴 Occupato" if nome_macchina else pulisci_valore(hw.get("Stato", "🟢 Libero"))
-      if not stato:
-        stato = "🟢 Libero"
+  blocco_sede = sede["blocco"]
+  range_ip = sede["range_custom"]
+  righe_ip = []
+  for i in range_ip:
+    ip_completo = f"100.200.{blocco_sede}.{i}"
+    
+    hw = st.session_state.hardware_dettagli.get(ip_completo, {})
+    nome_macchina = pulisci_valore(hw.get("Nome Dispositivo", ""))
+    tipologia = pulisci_valore(hw.get("Tipologia", ""))
+    stato = "🔴 Occupato" if nome_macchina else pulisci_valore(hw.get("Stato", "🟢 Libero"))
+    if not stato:
+      stato = "🟢 Libero"
 
-      righe_ip.append({
-          "Indirizzo IP": ip_completo,
-          "_ip_completo": ip_completo,
-          "Nome Dispositivo": nome_macchina,
-          "Tipologia": tipologia,
-          "Stato": stato,
-      })
-    st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
+    righe_ip.append({
+        "Indirizzo IP": ip_completo,
+        "_ip_completo": ip_completo,
+        "Nome Dispositivo": nome_macchina,
+        "Tipologia": tipologia,
+        "Stato": stato,
+    })
+  st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
 
 if "stato_ordinamento_anno" not in st.session_state:
   st.session_state.stato_ordinamento_anno = {}
@@ -761,4 +761,4 @@ with tab_hardware:
         file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.pdf",
         mime="application/pdf",
         use_container_width=True,
-    )    
+    )
