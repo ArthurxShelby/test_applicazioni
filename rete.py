@@ -549,9 +549,9 @@ with tab_hardware:
     riga_orig = df_inventario_corrente[df_inventario_corrente["Indirizzo IP"] == ip_corr_riga]
     if not riga_orig.empty:
       ip_comp = riga_orig.iloc[0]["_ip_completo"]
+      
       nuovo_nome = pulisci_valore(df_inventario_modificato.loc[i, "Nome Dispositivo"])
       nuova_tipologia = pulisci_valore(df_inventario_modificato.loc[i, "Tipologia"])
-      
       nuovo_stato = "🔴 Occupato" if nuovo_nome else "🟢 Libero"
       if not nuovo_nome:
         nuova_tipologia = ""
@@ -565,35 +565,50 @@ with tab_hardware:
       cap_hd_v = pulisci_valore(df_inventario_modificato.loc[i, "Capienza HD"])
       gar_v = pulisci_valore(df_inventario_modificato.loc[i, "Garanzia"])
 
-      dati_aggiornati = {
-          "Nome Dispositivo": nuovo_nome,
-          "Tipologia": nuova_tipologia,
-          "Stato": nuovo_stato,
-          "Marca": marca_v,
-          "Modello": modello_v,
-          "Processore": proc_v,
-          "S.O.": so_v,
-          "RAM": ram_v,
-          "Tipo HD": tipo_hd_v,
-          "Capienza HD": cap_hd_v,
-          "Garanzia": gar_v,
-      }
+      # VERIFICA SE LA RIGA È CAMBIATA RISPETTO ALL'ORIGINALE
+      row_changed = (
+          riga_orig.iloc[0]["Nome Dispositivo"] != nuovo_nome or
+          riga_orig.iloc[0]["Tipologia"] != nuova_tipologia or
+          riga_orig.iloc[0]["Stato"] != nuovo_stato or
+          riga_orig.iloc[0]["Marca"] != marca_v or
+          riga_orig.iloc[0]["Modello"] != modello_v or
+          riga_orig.iloc[0]["Processore e anno"] != proc_v or
+          riga_orig.iloc[0]["S.O."] != so_v or
+          riga_orig.iloc[0]["RAM"] != ram_v or
+          riga_orig.iloc[0]["Tipo HD"] != tipo_hd_v or
+          riga_orig.iloc[0]["Capienza HD"] != cap_hd_v or
+          riga_orig.iloc[0]["Garanzia"] != gar_v
+      )
 
-      st.session_state.hardware_dettagli[ip_comp] = dati_aggiornati
+      if row_changed:
+        if st.session_state.get("caricamento_in_corso", False):
+          continue
 
-      idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_comp].index
-      if not idx_r.empty:
-        vecchio_nome = str(df_rete_sede.loc[idx_r[0], "Nome Dispositivo"])
-        vecchia_tipologia = str(df_rete_sede.loc[idx_r[0], "Tipologia"])
-        vecchio_stato = str(df_rete_sede.loc[idx_r[0], "Stato"])
-        if vecchio_nome != nuovo_nome or vecchia_tipologia != nuova_tipologia or vecchio_stato != nuovo_stato:
+        dati_aggiornati = {
+            "Nome Dispositivo": nuovo_nome,
+            "Tipologia": nuova_tipologia,
+            "Stato": nuovo_stato,
+            "Marca": marca_v,
+            "Modello": modello_v,
+            "Processore": proc_v,
+            "S.O.": so_v,
+            "RAM": ram_v,
+            "Tipo HD": tipo_hd_v,
+            "Capienza HD": cap_hd_v,
+            "Garanzia": gar_v,
+        }
+
+        st.session_state.hardware_dettagli[ip_comp] = dati_aggiornati
+
+        idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_comp].index
+        if not idx_r.empty:
           df_rete_sede.loc[idx_r, "Nome Dispositivo"] = nuovo_nome
           df_rete_sede.loc[idx_r, "Tipologia"] = nuova_tipologia
           df_rete_sede.loc[idx_r, "Stato"] = nuovo_stato
           inv_modificato = True
 
-      forza_del = (not nuovo_nome)
-      salva_su_supabase(ip_comp, dati_aggiornati, forza_cancellazione=forza_del)
+        forza_del = (not nuovo_nome)
+        salva_su_supabase(ip_comp, dati_aggiornati, forza_cancellazione=forza_del)
 
   st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
   if inv_modificato:
