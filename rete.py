@@ -102,7 +102,15 @@ if is_mobile_env:
     pass
 
 st.subheader("Gestione Reti e Hardware per Sede")
-st.caption(f"💻 Dispositivo rilevato: **{tipo_dispositivo}**")
+col_info_head, col_btn_sync = st.columns([3, 1])
+with col_info_head:
+  st.caption(f"💻 Dispositivo rilevato: **{tipo_dispositivo}**")
+with col_btn_sync:
+  if st.button("🔄 Sincronizza da Supabase"):
+    st.session_state.pop("dati_caricati_da_supabase", None)
+    st.session_state.pop("dataframes_rete", None)
+    st.session_state.pop("hardware_dettagli", None)
+    st.rerun()
 
 sedi_config = [
     {"id": 1, "nome": "Trieste", "blocco": "38", "subnet": "254.0", "range_custom": range(1, 256)},
@@ -145,26 +153,25 @@ if "dati_caricati_da_supabase" not in st.session_state:
       response = supabase.table("inventario").select("*").execute()
       if response.data:
         for row in response.data:
-          ip_db = str(row.get("Indirizzo IP", "")).strip()
+          # Gestione flessibile dei nomi di colonna su Supabase
+          ip_db = str(row.get("Indirizzo IP") or row.get("indirizzo_ip") or row.get("ip") or "").strip()
           if ip_db:
-            nome_db = pulisci_valore(row.get("Nome Dispositivo"))
-            stato_db = "🔴 Occupato" if nome_db else (pulisci_valore(row.get("Stato")) or "🟢 Libero")
-            
-            # CORRETTO: gestisce correttamente il recupero della chiave processore da Supabase
-            proc_db = pulisci_valore(row.get("Processore e anno") or row.get("Processore"))
+            nome_db = pulisci_valore(row.get("Nome Dispositivo") or row.get("nome_dispositivo"))
+            stato_db = "🔴 Occupato" if nome_db else (pulisci_valore(row.get("Stato") or row.get("stato")) or "🟢 Libero")
+            proc_db = pulisci_valore(row.get("Processore e anno") or row.get("Processore") or row.get("processore"))
             
             st.session_state.hardware_dettagli[ip_db] = {
                 "Nome Dispositivo": nome_db,
-                "Tipologia": pulisci_valore(row.get("Tipologia")),
+                "Tipologia": pulisci_valore(row.get("Tipologia") or row.get("tipologia")),
                 "Stato": stato_db,
-                "Marca": pulisci_valore(row.get("Marca")),
-                "Modello": pulisci_valore(row.get("Modello")),
+                "Marca": pulisci_valore(row.get("Marca") or row.get("marca")),
+                "Modello": pulisci_valore(row.get("Modello") or row.get("modello")),
                 "Processore": proc_db,
-                "S.O.": pulisci_valore(row.get("S.O.")),
-                "RAM": pulisci_valore(row.get("RAM")),
-                "Tipo HD": pulisci_valore(row.get("Tipo HD")),
-                "Capienza HD": pulisci_valore(row.get("Capienza HD")),
-                "Garanzia": pulisci_valore(row.get("Garanzia")),
+                "S.O.": pulisci_valore(row.get("S.O.") or row.get("s_o") or row.get("so")),
+                "RAM": pulisci_valore(row.get("RAM") or row.get("ram")),
+                "Tipo HD": pulisci_valore(row.get("Tipo HD") or row.get("tipo_hd")),
+                "Capienza HD": pulisci_valore(row.get("Capienza HD") or row.get("capienza_hd")),
+                "Garanzia": pulisci_valore(row.get("Garanzia") or row.get("garanzia")),
             }
     except Exception as e:
       st.error(f"Errore caricamento da Supabase: {e}")
