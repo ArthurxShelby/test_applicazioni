@@ -38,7 +38,6 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
-# Funzione centralizzata per la sincronizzazione su Supabase
 def salva_su_supabase(ip_comp, dati_dict):
   if supabase is None:
     return False
@@ -62,22 +61,6 @@ def salva_su_supabase(ip_comp, dati_dict):
   except Exception as e:
     st.error(f"Errore sincronizzazione Supabase su IP {ip_comp}: {e}")
     return False
-
-# Funzione per ordinare correttamente gli IP in modo numerico
-def ordina_per_ip(df, colonna_ip="_ip_completo"):
-  if df.empty or colonna_ip not in df.columns:
-    return df
-  try:
-    df = df.copy()
-    df["_sort_key"] = df[colonna_ip].apply(
-        lambda x: ipaddress.ip_address(str(x).strip())
-        if str(x).strip()
-        else ipaddress.ip_address("0.0.0.0")
-    )
-    df = df.sort_values(by="_sort_key").drop(columns=["_sort_key"])
-    return df
-  except Exception:
-    return df
 
 try:
   from streamlit_javascript import st_javascript
@@ -145,14 +128,12 @@ def estrai_anno(testo):
     return int(match.group(1))
   return 9999
 
-# Inizializzazione Stati
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
 
 if "hardware_dettagli" not in st.session_state:
   st.session_state.hardware_dettagli = {}
 
-# Caricamento dati da Supabase all'avvio (una tantum)
 if "dati_caricati_da_supabase" not in st.session_state:
   if supabase is not None:
     try:
@@ -191,16 +172,15 @@ idx_selezionato = st.selectbox(
 )
 
 sede_scelta = sedi_config[idx_selezionato]
-blocco_completo_ip = sede_scelta["blocco"].split(".")[0]
+blocco_base = sede_scelta["blocco"] # es. "38.0" o "77.0"
 subnet_ultimi_due = sede_scelta["subnet"]
 
-# Generazione on-demand o recupero del DataFrame per la sola sede selezionata
+# Generazione rigorosa basata sul blocco della sede selezionata (mantiene l'ordine sequenziale degli ultimi ottetti)
 if idx_selezionato not in st.session_state.dataframes_rete:
-  base_ip = sede_scelta["blocco"].split(".")[0]
   range_ip = sede_scelta["range_custom"]
   righe_ip = []
   for i in range_ip:
-    ip_completo = f"{base_ip}.0.0.{i}"
+    ip_completo = f"{blocco_base}.0.{i}"
     hw = st.session_state.hardware_dettagli.get(ip_completo, {})
     nome_macchina = pulisci_valore(hw.get("Nome Dispositivo", ""))
     tipologia = pulisci_valore(hw.get("Tipologia", ""))
@@ -215,7 +195,7 @@ if idx_selezionato not in st.session_state.dataframes_rete:
         "Tipologia": tipologia,
         "Stato": stato,
     })
-  st.session_state.dataframes_rete[idx_selezionato] = ordina_per_ip(pd.DataFrame(righe_ip), "_ip_completo")
+  st.session_state.dataframes_rete[idx_selezionato] = pd.DataFrame(righe_ip)
 
 if "stato_ordinamento_anno" not in st.session_state:
   st.session_state.stato_ordinamento_anno = {}
@@ -417,7 +397,6 @@ with tab_hardware:
         else:
           df_import = pd.read_excel(uploaded_file)
 
-        # Pulizia di eventuali colonne vuote o 'Unnamed'
         df_import = df_import.loc[:, ~df_import.columns.str.contains('^Unnamed')]
 
         if "Indirizzo IP" not in df_import.columns:
@@ -425,7 +404,6 @@ with tab_hardware:
         else:
           if st.button("Conferma e Importa Dati"):
             count_importati = 0
-            base_ip_sede = blocco_completo_ip
             
             for _, row in df_import.iterrows():
               ip_raw = str(row.get("Indirizzo IP", "")).strip()
@@ -433,12 +411,12 @@ with tab_hardware:
                 continue
 
               parti_ip = ip_raw.split(".")
-              if len(parti_ip) == 4:
-                ip_file_completo = ip_raw
-              elif len(parti_ip) >= 2:
-                ip_file_completo = f"{parti_ip[-2]}.0.0.{parti_ip[-1]}"
-              else:
-                ip_file_completo = f"{base_ip_sede}.0.0.{ip_raw}"
+              # Estrae l'ultimo ottetto dall'IP del file per mapparlo esattamente nella riga della sede attiva
+              ultimo_ottetto = parti_ip[-1] if len(parti_ip) > 0 else ""
+              if not ultimo_ottetto.isdigit():
+                continue
+
+              ip_file_completo = f"{blocco_base}.0.{ultimo_ottetto}"
 
               nome_mac_file = pulisci_valore(row.get("Nome Dispositivo", ""))
               tipologia_file = pulisci_valore(row.get("Tipologia", "PC / Macchina"))
@@ -451,16 +429,6 @@ with tab_hardware:
                 df_rete_sede.loc[idx_r, "Nome Dispositivo"] = nome_mac_file
                 df_rete_sede.loc[idx_r, "Tipologia"] = tipologia_file if nome_mac_file else ""
                 df_rete_sede.loc[idx_r, "Stato"] = stato_file
-              else:
-                nuova_riga = pd.DataFrame([{
-                    "Indirizzo IP": ip_file_completo,
-                    "_ip_completo": ip_file_completo,
-                    "Nome Dispositivo": nome_mac_file,
-                    "Tipologia": tipologia_file if nome_mac_file else "",
-                    "Stato": stato_file
-                }])
-                df_rete_sede = pd.concat([df_rete_sede, nuova_riga], ignore_index=True)
-                df_rete_sede = ordina_per_ip(df_rete_sede, "_ip_completo")
 
               dati_file = {
                   "Nome Dispositivo": nome_mac_file,
@@ -482,7 +450,7 @@ with tab_hardware:
               count_importati += 1
 
             st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
-            st.success(f"Importati con successo {count_importati} dispositivi per questa sede!")
+            st.success(f"Importati con successo {count_importati} dispositivi nella griglia della sede!")
             st.rerun()
       except Exception as e:
         st.error(f"Errore nella lettura del file: {e}")
@@ -527,7 +495,6 @@ with tab_hardware:
     })
 
   df_inventario_corrente = pd.DataFrame(lista_completa)
-  df_inventario_corrente = ordina_per_ip(df_inventario_corrente, "_ip_completo")
 
   if st.session_state.stato_ordinamento_anno.get(idx_selezionato, False):
     df_inventario_corrente["_anno_temp"] = df_inventario_corrente["Processore e anno"].apply(estrai_anno)
@@ -679,7 +646,6 @@ with tab_hardware:
       })
       
   df_export_finale = pd.DataFrame(lista_export_finale)
-  df_export_finale = ordina_per_ip(df_export_finale, "Indirizzo IP")
 
   class PDFReportTab(FPDF):
     def header(self):
