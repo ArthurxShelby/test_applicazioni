@@ -136,7 +136,7 @@ if "dati_caricati_da_supabase" not in st.session_state:
       response = supabase.table("inventario").select("*").execute()
       if response.data:
         for row in response.data:
-          ip_db = row.get("Indirizzo IP")
+          ip_db = str(row.get("Indirizzo IP", "")).strip()
           if ip_db:
             nome_db = pulisci_valore(row.get("Nome Dispositivo"))
             stato_db = "🔴 Occupato" if nome_db else (pulisci_valore(row.get("Stato")) or "🟢 Libero")
@@ -720,6 +720,5 @@ with tab_hardware:
         data=pdf_bytes_tab,
         file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.pdf",
         mime="application/pdf",
-        use_keyword=True,
         use_container_width=True,
     )
