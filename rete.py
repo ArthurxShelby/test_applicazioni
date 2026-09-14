@@ -56,45 +56,11 @@ def salva_su_supabase(ip_comp, dati_dict):
         "Capienza HD": dati_dict.get("Capienza HD") or None,
         "Garanzia": dati_dict.get("Garanzia") or None,
     }
-    supabase.table("inventario").upsert(payload, on_conflict="Indirizzo IP").execute()
+    supabase.table("Intentario").upsert(payload, on_conflict="Indirizzo IP").execute()
     return True
   except Exception as e:
     st.error(f"Errore sincronizzazione Supabase su IP {ip_comp}: {e}")
     return False
-
-# Migrazione automatica una tantum per convertire i vecchi IP in 100.200.X.X su Supabase
-if "migrazione_eseguita" not in st.session_state:
-  if supabase is not None:
-    try:
-      sedi_mappatura = {
-          "38": "100.200.38.",
-          "39": "100.200.39.",
-          "86": "100.200.86.",
-          "168": "100.200.168.",
-          "61": "100.200.61.",
-          "26": "100.200.26.",
-          "29": "100.200.29.",
-          "66": "100.200.66.",
-          "77": "100.200.77.",
-      }
-      response = supabase.table("inventario").select("*").execute()
-      if response.data:
-        for row in response.data:
-          ip_attuale = row.get("Indirizzo IP")
-          if ip_attuale and not ip_attuale.startswith("100.200."):
-            parti = ip_attuale.split(".")
-            if len(parti) == 4:
-              ultimo = parti[-1]
-              for blocco, prefisso_nuovo in sedi_mappatura.items():
-                if ip_attuale.startswith(blocco + ".") or f".{blocco}." in ip_attuale:
-                  nuovo_ip = prefisso_nuovo + ultimo
-                  row["Indirizzo IP"] = nuovo_ip
-                  supabase.table("inventario").upsert(row).execute()
-                  supabase.table("inventario").delete().eq("Indirizzo IP", ip_attuale).execute()
-                  break
-    except Exception as e:
-      pass
-  st.session_state.migrazione_eseguita = True
 
 try:
   from streamlit_javascript import st_javascript
@@ -171,7 +137,7 @@ if "hardware_dettagli" not in st.session_state:
 if "dati_caricati_da_supabase" not in st.session_state:
   if supabase is not None:
     try:
-      response = supabase.table("inventario").select("*").execute()
+      response = supabase.table("Intentario").select("*").execute()
       if response.data:
         for row in response.data:
           ip_db = row.get("Indirizzo IP")
@@ -193,7 +159,7 @@ if "dati_caricati_da_supabase" not in st.session_state:
                 "Garanzia": pulisci_valore(row.get("Garanzia")),
             }
     except Exception as e:
-      st.error(f"Errore di caricamento da Supabase: {e}")
+      st.warning(f"Tabella Intentario non ancora trovata o vuota: {e}")
   st.session_state.dati_caricati_da_supabase = True
 
 idx_selezionato = st.selectbox(
@@ -755,5 +721,6 @@ with tab_hardware:
         data=pdf_bytes_tab,
         file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.pdf",
         mime="application/pdf",
+        use_keyword=True,
         use_container_width=True,
     )
