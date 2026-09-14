@@ -37,13 +37,18 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
-def salva_su_supabase(ip_comp, dati_dict):
+def salva_su_supabase(ip_comp, dati_dict, forza_cancellazione=False):
   if supabase is None:
     return False
   try:
+    nome_disp = dati_dict.get("Nome Dispositivo")
+    # Protezione anti-cancellazione accidentale: se il nome è vuoto e non è una cancellazione voluta, non pialliamo il DB
+    if not nome_disp and not forza_cancellazione:
+      return False
+
     payload = {
         "Indirizzo IP": ip_comp,
-        "Nome Dispositivo": dati_dict.get("Nome Dispositivo") or None,
+        "Nome Dispositivo": nome_disp or None,
         "Tipologia": dati_dict.get("Tipologia") or None,
         "Stato": dati_dict.get("Stato") or "🟢 Libero",
         "Marca": dati_dict.get("Marca") or None,
@@ -133,7 +138,7 @@ if "hardware_dettagli" not in st.session_state:
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
 
-# Sincronizzazione iniziale da Supabase una tantum all'avvio
+# Sincronizzazione obbligatoria da Supabase all'avvio
 if "dati_caricati_da_supabase" not in st.session_state:
   if supabase is not None:
     try:
@@ -162,7 +167,6 @@ if "dati_caricati_da_supabase" not in st.session_state:
       st.warning(f"Errore caricamento da Supabase: {e}")
   st.session_state.dati_caricati_da_supabase = True
 
-# Popola i DataFrame di tutte le sedi usando i dati aggiornati (sia locali che da Supabase)
 for idx, sede in enumerate(sedi_config):
   if idx not in st.session_state.dataframes_rete:
     blocco_sede = sede["blocco"]
@@ -296,7 +300,9 @@ with tab_rete:
       st.session_state.hardware_dettagli[ip_corr]["Tipologia"] = tipo_scelto
       st.session_state.hardware_dettagli[ip_corr]["Stato"] = stato_attuale
 
-      salva_su_supabase(ip_corr, st.session_state.hardware_dettagli[ip_corr])
+      # Se stiamo svuotando esplicitamente un campo, passiamo forza_cancellazione=True
+      forza_del = (not nome_mac)
+      salva_su_supabase(ip_corr, st.session_state.hardware_dettagli[ip_corr], forza_cancellazione=forza_del)
 
   st.session_state.dataframes_rete[idx_selezionato] = df_corrente
 
@@ -386,7 +392,8 @@ with tab_hardware:
             df_rete_sede.loc[idx_r, "Stato"] = stato_finale
             st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
 
-          salva_su_supabase(ip_scelto, dati_salvataggio)
+          forza_del = (not nome_salvato)
+          salva_su_supabase(ip_scelto, dati_salvataggio, forza_cancellazione=forza_del)
 
           st.success(f"Dati di {scelta_mostrata} salvati con successo!")
           st.rerun()
@@ -447,7 +454,7 @@ with tab_hardware:
               }
 
               st.session_state.hardware_dettagli[ip_file_completo] = dati_file
-              salva_su_supabase(ip_file_completo, dati_file)
+              salva_su_supabase(ip_file_completo, dati_file, forza_cancellazione=False)
 
               count_importati += 1
 
@@ -580,7 +587,8 @@ with tab_hardware:
           df_rete_sede.loc[idx_r, "Stato"] = nuovo_stato
           inv_modificato = True
 
-      salva_su_supabase(ip_comp, dati_aggiornati)
+      forza_del = (not nuovo_nome)
+      salva_su_supabase(ip_comp, dati_aggiornati, forza_cancellazione=forza_del)
 
   st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
   if inv_modificato:
@@ -604,6 +612,7 @@ with tab_hardware:
           if ip_c in st.session_state.hardware_dettagli:
             del st.session_state.hardware_dettagli[ip_c]
           
+          # Qui forziamo la cancellazione perché l'utente ha premuto esplicitamente "Svuota Sede"
           salva_su_supabase(ip_c, {
               "Nome Dispositivo": "",
               "Tipologia": "",
@@ -616,7 +625,7 @@ with tab_hardware:
               "Tipo HD": "",
               "Capienza HD": "",
               "Garanzia": ""
-          })
+          }, forza_cancellazione=True)
 
         st.success(f"Inventario della sede '{sede_scelta['nome']}' svuotato con successo!")
         st.rerun()
