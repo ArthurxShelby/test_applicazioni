@@ -62,6 +62,40 @@ def salva_su_supabase(ip_comp, dati_dict):
     st.error(f"Errore sincronizzazione Supabase su IP {ip_comp}: {e}")
     return False
 
+# Migrazione automatica una tantum per convertire i vecchi IP in 100.200.X.X su Supabase
+if "migrazione_eseguita" not in st.session_state:
+  if supabase is not None:
+    try:
+      sedi_mappatura = {
+          "38": "100.200.38.",
+          "39": "100.200.39.",
+          "86": "100.200.86.",
+          "168": "100.200.168.",
+          "61": "100.200.61.",
+          "26": "100.200.26.",
+          "29": "100.200.29.",
+          "66": "100.200.66.",
+          "77": "100.200.77.",
+      }
+      response = supabase.table("inventario").select("*").execute()
+      if response.data:
+        for row in response.data:
+          ip_attuale = row.get("Indirizzo IP")
+          if ip_attuale and not ip_attuale.startswith("100.200."):
+            parti = ip_attuale.split(".")
+            if len(parti) == 4:
+              ultimo = parti[-1]
+              for blocco, prefisso_nuovo in sedi_mappatura.items():
+                if ip_attuale.startswith(blocco + ".") or f".{blocco}." in ip_attuale:
+                  nuovo_ip = prefisso_nuovo + ultimo
+                  row["Indirizzo IP"] = nuovo_ip
+                  supabase.table("inventario").upsert(row).execute()
+                  supabase.table("inventario").delete().eq("Indirizzo IP", ip_attuale).execute()
+                  break
+    except Exception as e:
+      pass
+  st.session_state.migrazione_eseguita = True
+
 try:
   from streamlit_javascript import st_javascript
   is_mobile_env = True
@@ -175,7 +209,6 @@ sede_scelta = sedi_config[idx_selezionato]
 blocco_base = sede_scelta["blocco"]
 subnet_ultimi_due = sede_scelta["subnet"]
 
-# Generazione rigorosa basata sul prefisso corretto 100.200.blocco.i
 if idx_selezionato not in st.session_state.dataframes_rete:
   range_ip = sede_scelta["range_custom"]
   righe_ip = []
@@ -416,7 +449,6 @@ with tab_hardware:
               if not ultimo_ottetto.isdigit():
                 continue
 
-              # Mappa l'IP mantenendo la struttura corretta della sede attiva (100.200.blocco.ultimo_ottetto)
               ip_file_completo = f"100.200.{blocco_base}.{ultimo_ottetto}"
 
               nome_mac_file = pulisci_valore(row.get("Nome Dispositivo", ""))
