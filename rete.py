@@ -38,7 +38,7 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
-# Funzione centralizzata per la sincronizzazione su Supabase (con supporto batch opzionale)
+# Funzione centralizzata per la sincronizzazione su Supabase
 def salva_su_supabase(ip_comp, dati_dict):
   if supabase is None:
     return False
@@ -417,6 +417,9 @@ with tab_hardware:
         else:
           df_import = pd.read_excel(uploaded_file)
 
+        # Pulizia di eventuali colonne vuote o 'Unnamed'
+        df_import = df_import.loc[:, ~df_import.columns.str.contains('^Unnamed')]
+
         if "Indirizzo IP" not in df_import.columns:
           st.error("Il file caricato deve contenere una colonna 'Indirizzo IP'.")
         else:
@@ -426,7 +429,7 @@ with tab_hardware:
             
             for _, row in df_import.iterrows():
               ip_raw = str(row.get("Indirizzo IP", "")).strip()
-              if not ip_raw:
+              if not ip_raw or ip_raw.lower() in ["nan", "none"]:
                 continue
 
               parti_ip = ip_raw.split(".")
@@ -437,35 +440,46 @@ with tab_hardware:
               else:
                 ip_file_completo = f"{base_ip_sede}.0.0.{ip_raw}"
 
-              if ip_file_completo.startswith(f"{base_ip_sede}."):
-                nome_mac_file = pulisci_valore(row.get("Nome Dispositivo", ""))
-                tipologia_file = pulisci_valore(row.get("Tipologia", "PC / Macchina"))
-                stato_file = "🔴 Occupato" if nome_mac_file else "🟢 Libero"
-                
-                idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_file_completo].index
-                if not idx_r.empty:
-                  df_rete_sede.loc[idx_r, "Nome Dispositivo"] = nome_mac_file
-                  df_rete_sede.loc[idx_r, "Tipologia"] = tipologia_file if nome_mac_file else ""
-                  df_rete_sede.loc[idx_r, "Stato"] = stato_file
-
-                dati_file = {
+              nome_mac_file = pulisci_valore(row.get("Nome Dispositivo", ""))
+              tipologia_file = pulisci_valore(row.get("Tipologia", "PC / Macchina"))
+              if not tipologia_file and nome_mac_file:
+                tipologia_file = "PC / Macchina"
+              stato_file = "🔴 Occupato" if nome_mac_file else "🟢 Libero"
+              
+              idx_r = df_rete_sede[df_rete_sede["_ip_completo"] == ip_file_completo].index
+              if not idx_r.empty:
+                df_rete_sede.loc[idx_r, "Nome Dispositivo"] = nome_mac_file
+                df_rete_sede.loc[idx_r, "Tipologia"] = tipologia_file if nome_mac_file else ""
+                df_rete_sede.loc[idx_r, "Stato"] = stato_file
+              else:
+                nuova_riga = pd.DataFrame([{
+                    "Indirizzo IP": ip_file_completo,
+                    "_ip_completo": ip_file_completo,
                     "Nome Dispositivo": nome_mac_file,
                     "Tipologia": tipologia_file if nome_mac_file else "",
-                    "Stato": stato_file,
-                    "Marca": pulisci_valore(row.get("Marca", "")),
-                    "Modello": pulisci_valore(row.get("Modello", "")),
-                    "Processore": pulisci_valore(row.get("Processore e anno", "")),
-                    "S.O.": pulisci_valore(row.get("S.O.", "")),
-                    "RAM": pulisci_valore(row.get("RAM", "")),
-                    "Tipo HD": pulisci_valore(row.get("Tipo HD", "")),
-                    "Capienza HD": pulisci_valore(row.get("Capienza HD", "")),
-                    "Garanzia": pulisci_valore(row.get("Garanzia", "")),
-                }
+                    "Stato": stato_file
+                }])
+                df_rete_sede = pd.concat([df_rete_sede, nuova_riga], ignore_index=True)
+                df_rete_sede = ordina_per_ip(df_rete_sede, "_ip_completo")
 
-                st.session_state.hardware_dettagli[ip_file_completo] = dati_file
-                salva_su_supabase(ip_file_completo, dati_file)
+              dati_file = {
+                  "Nome Dispositivo": nome_mac_file,
+                  "Tipologia": tipologia_file if nome_mac_file else "",
+                  "Stato": stato_file,
+                  "Marca": pulisci_valore(row.get("Marca", "")),
+                  "Modello": pulisci_valore(row.get("Modello", "")),
+                  "Processore": pulisci_valore(row.get("Processore e anno", "")),
+                  "S.O.": pulisci_valore(row.get("S.O.", "")),
+                  "RAM": pulisci_valore(row.get("RAM", "")),
+                  "Tipo HD": pulisci_valore(row.get("Tipo HD", "")),
+                  "Capienza HD": pulisci_valore(row.get("Capienza HD", "")),
+                  "Garanzia": pulisci_valore(row.get("Garanzia", "")),
+              }
 
-                count_importati += 1
+              st.session_state.hardware_dettagli[ip_file_completo] = dati_file
+              salva_su_supabase(ip_file_completo, dati_file)
+
+              count_importati += 1
 
             st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
             st.success(f"Importati con successo {count_importati} dispositivi per questa sede!")
