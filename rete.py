@@ -38,7 +38,7 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
-# Funzione centralizzata per la sincronizzazione su Supabase
+# Funzione centralizzata per la sincronizzazione su Supabase (con supporto batch opzionale)
 def salva_su_supabase(ip_comp, dati_dict):
   if supabase is None:
     return False
