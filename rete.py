@@ -37,6 +37,15 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
+# --- BLOCCO DI DEBUG AGGIUNTO ---
+if supabase is not None:
+  try:
+    test_res = supabase.table("inventario").select("*").execute()
+    st.write("🔍 **Debug Supabase Response:**", test_res)
+  except Exception as e:
+    st.error(f"❌ **Errore di connessione a Supabase:** {e}")
+# --------------------------------
+
 def salva_su_supabase(ip_comp, dati_dict, forza_cancellazione=False):
   if supabase is None:
     return False
@@ -102,15 +111,7 @@ if is_mobile_env:
     pass
 
 st.subheader("Gestione Reti e Hardware per Sede")
-col_info_head, col_btn_sync = st.columns([3, 1])
-with col_info_head:
-  st.caption(f"💻 Dispositivo rilevato: **{tipo_dispositivo}**")
-with col_btn_sync:
-  if st.button("🔄 Sincronizza da Supabase"):
-    st.session_state.pop("dati_caricati_da_supabase", None)
-    st.session_state.pop("dataframes_rete", None)
-    st.session_state.pop("hardware_dettagli", None)
-    st.rerun()
+st.caption(f"💻 Dispositivo rilevato: **{tipo_dispositivo}**")
 
 sedi_config = [
     {"id": 1, "nome": "Trieste", "blocco": "38", "subnet": "254.0", "range_custom": range(1, 256)},
@@ -153,7 +154,6 @@ if "dati_caricati_da_supabase" not in st.session_state:
       response = supabase.table("inventario").select("*").execute()
       if response.data:
         for row in response.data:
-          # Gestione flessibile dei nomi di colonna su Supabase
           ip_db = str(row.get("Indirizzo IP") or row.get("indirizzo_ip") or row.get("ip") or "").strip()
           if ip_db:
             nome_db = pulisci_valore(row.get("Nome Dispositivo") or row.get("nome_dispositivo"))
@@ -761,4 +761,4 @@ with tab_hardware:
         file_name=f"Inventario_Occupati_{sede_scelta['nome'].replace(' ', '_')}.pdf",
         mime="application/pdf",
         use_container_width=True,
-    )
+    )    )
