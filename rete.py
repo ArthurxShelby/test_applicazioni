@@ -172,15 +172,19 @@ idx_selezionato = st.selectbox(
 )
 
 sede_scelta = sedi_config[idx_selezionato]
-blocco_base = sede_scelta["blocco"] # es. "38.0" o "77.0"
+blocco_base = sede_scelta["blocco"]
 subnet_ultimi_due = sede_scelta["subnet"]
 
-# Generazione rigorosa basata sul blocco della sede selezionata (mantiene l'ordine sequenziale degli ultimi ottetti)
+# Generazione rigorosa e ordinata basata unicamente sul range della sede
 if idx_selezionato not in st.session_state.dataframes_rete:
   range_ip = sede_scelta["range_custom"]
   righe_ip = []
   for i in range_ip:
+    ip_completo = f"10.142.{blocco_base}.{i}" if blocco_base in ["38.0", "39.0", "77.0"] else f"{blocco_base}.0.{i}"
+    # Nota: adatta il prefisso se necessario (es. 10.142.x.x o diretto). Usiamo la struttura coerente.
+    # Nel tuo script originale usavi f"{blocco_base}.0.{i}", manteniamo la coerenza con il blocco scelto:
     ip_completo = f"{blocco_base}.0.{i}"
+    
     hw = st.session_state.hardware_dettagli.get(ip_completo, {})
     nome_macchina = pulisci_valore(hw.get("Nome Dispositivo", ""))
     tipologia = pulisci_valore(hw.get("Tipologia", ""))
@@ -411,11 +415,11 @@ with tab_hardware:
                 continue
 
               parti_ip = ip_raw.split(".")
-              # Estrae l'ultimo ottetto dall'IP del file per mapparlo esattamente nella riga della sede attiva
               ultimo_ottetto = parti_ip[-1] if len(parti_ip) > 0 else ""
               if not ultimo_ottetto.isdigit():
                 continue
 
+              # Mappa l'IP mantenendo la struttura corretta della sede attiva
               ip_file_completo = f"{blocco_base}.0.{ultimo_ottetto}"
 
               nome_mac_file = pulisci_valore(row.get("Nome Dispositivo", ""))
