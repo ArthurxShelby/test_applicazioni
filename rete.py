@@ -42,7 +42,6 @@ def salva_su_supabase(ip_comp, dati_dict, forza_cancellazione=False):
     return False
   try:
     nome_disp = dati_dict.get("Nome Dispositivo")
-    # Protezione anti-cancellazione accidentale: se il nome è vuoto e non è una cancellazione voluta, non pialliamo il DB
     if not nome_disp and not forza_cancellazione:
       return False
 
@@ -138,8 +137,8 @@ if "hardware_dettagli" not in st.session_state:
 if "dataframes_rete" not in st.session_state:
   st.session_state.dataframes_rete = {}
 
-# Sincronizzazione obbligatoria da Supabase all'avvio
 if "dati_caricati_da_supabase" not in st.session_state:
+  st.session_state.caricamento_in_corso = True
   if supabase is not None:
     try:
       response = supabase.table("inventario").select("*").execute()
@@ -166,6 +165,7 @@ if "dati_caricati_da_supabase" not in st.session_state:
     except Exception as e:
       st.warning(f"Errore caricamento da Supabase: {e}")
   st.session_state.dati_caricati_da_supabase = True
+  st.session_state.caricamento_in_corso = False
 
 for idx, sede in enumerate(sedi_config):
   if idx not in st.session_state.dataframes_rete:
@@ -288,6 +288,9 @@ with tab_rete:
     )
 
     if row_changed:
+      if st.session_state.get("caricamento_in_corso", False):
+        continue
+
       modificato = True
       df_corrente.loc[i, "Nome Dispositivo"] = nome_mac
       df_corrente.loc[i, "Tipologia"] = tipo_scelto
@@ -300,7 +303,6 @@ with tab_rete:
       st.session_state.hardware_dettagli[ip_corr]["Tipologia"] = tipo_scelto
       st.session_state.hardware_dettagli[ip_corr]["Stato"] = stato_attuale
 
-      # Se stiamo svuotando esplicitamente un campo, passiamo forza_cancellazione=True
       forza_del = (not nome_mac)
       salva_su_supabase(ip_corr, st.session_state.hardware_dettagli[ip_corr], forza_cancellazione=forza_del)
 
@@ -399,20 +401,21 @@ with tab_hardware:
           st.rerun()
 
   with st.expander("📁 Importa inventario da file (CSV o Excel)"):
-    uploaded_file = st.file_uploader("Carica file CSV o XLSX", type=["csv", "xlsx"])
+    uploaded_file = st.file_uploader("Carica file CSV o XLSX", type=["csv", "xlsx"], key=f"uploader_{idx_selezionato}")
+    
     if uploaded_file is not None:
-      try:
-        if uploaded_file.name.endswith(".csv"):
-          df_import = pd.read_csv(uploaded_file)
-        else:
-          df_import = pd.read_excel(uploaded_file)
+      if st.button("🚀 Conferma e Importa Dati nel Database", key=f"btn_conferma_import_{idx_selezionato}"):
+        try:
+          if uploaded_file.name.endswith(".csv"):
+            df_import = pd.read_csv(uploaded_file)
+          else:
+            df_import = pd.read_excel(uploaded_file)
 
-        df_import = df_import.loc[:, ~df_import.columns.str.contains('^Unnamed')]
+          df_import = df_import.loc[:, ~df_import.columns.str.contains('^Unnamed')]
 
-        if "Indirizzo IP" not in df_import.columns:
-          st.error("Il file caricato deve contenere una colonna 'Indirizzo IP'.")
-        else:
-          if st.button("Conferma e Importa Dati"):
+          if "Indirizzo IP" not in df_import.columns:
+            st.error("Il file caricato deve contenere una colonna 'Indirizzo IP'.")
+          else:
             count_importati = 0
             
             for _, row in df_import.iterrows():
@@ -459,10 +462,10 @@ with tab_hardware:
               count_importati += 1
 
             st.session_state.dataframes_rete[idx_selezionato] = df_rete_sede
-            st.success(f"Importati con successo {count_importati} dispositivi nella griglia della sede!")
+            st.success(f"Importati con successo {count_importati} dispositivi nella griglia e su Supabase!")
             st.rerun()
-      except Exception as e:
-        st.error(f"Errore nella lettura del file: {e}")
+        except Exception as e:
+          st.error(f"Errore nella lettura o importazione del file: {e}")
 
   st.markdown("---")
   
@@ -612,7 +615,6 @@ with tab_hardware:
           if ip_c in st.session_state.hardware_dettagli:
             del st.session_state.hardware_dettagli[ip_c]
           
-          # Qui forziamo la cancellazione perché l'utente ha premuto esplicitamente "Svuota Sede"
           salva_su_supabase(ip_c, {
               "Nome Dispositivo": "",
               "Tipologia": "",
