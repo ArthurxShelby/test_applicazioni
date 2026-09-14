@@ -60,7 +60,6 @@ def salva_su_supabase(ip_comp, dati_dict, forza_cancellazione=False):
         "Garanzia": dati_dict.get("Garanzia") or None,
     }
     
-    # Esegue l'upsert e cattura eventuali errori di schema o conflitti
     response = supabase.table("inventario").upsert(payload, on_conflict="Indirizzo IP").execute()
     return True
   except Exception as e:
@@ -151,13 +150,16 @@ if "dati_caricati_da_supabase" not in st.session_state:
             nome_db = pulisci_valore(row.get("Nome Dispositivo"))
             stato_db = "🔴 Occupato" if nome_db else (pulisci_valore(row.get("Stato")) or "🟢 Libero")
             
+            # CORRETTO: gestisce correttamente il recupero della chiave processore da Supabase
+            proc_db = pulisci_valore(row.get("Processore e anno") or row.get("Processore"))
+            
             st.session_state.hardware_dettagli[ip_db] = {
                 "Nome Dispositivo": nome_db,
                 "Tipologia": pulisci_valore(row.get("Tipologia")),
                 "Stato": stato_db,
                 "Marca": pulisci_valore(row.get("Marca")),
                 "Modello": pulisci_valore(row.get("Modello")),
-                "Processore": pulisci_valore(row.get("Processore e anno")),
+                "Processore": proc_db,
                 "S.O.": pulisci_valore(row.get("S.O.")),
                 "RAM": pulisci_valore(row.get("RAM")),
                 "Tipo HD": pulisci_valore(row.get("Tipo HD")),
@@ -450,7 +452,7 @@ with tab_hardware:
                   "Stato": stato_file,
                   "Marca": pulisci_valore(row.get("Marca", "")),
                   "Modello": pulisci_valore(row.get("Modello", "")),
-                  "Processore": pulisci_valore(row.get("Processore e anno", "")),
+                  "Processore": pulisci_valore(row.get("Processore e anno", "") or row.get("Processore", "")),
                   "S.O.": pulisci_valore(row.get("S.O.", "")),
                   "RAM": pulisci_valore(row.get("RAM", "")),
                   "Tipo HD": pulisci_valore(row.get("Tipo HD", "")),
@@ -547,11 +549,9 @@ with tab_hardware:
   for i in range(len(df_inventario_modificato)):
     ip_corr_riga = df_inventario_modificato.loc[i, "Indirizzo IP"]
     riga_orig = df_inventario_corrente[df_inventario_corrente["Indirizzo IP"] == ip_corr_riga]
-    
     if not riga_orig.empty:
       ip_comp = riga_orig.iloc[0]["_ip_completo"]
       
-      # Valori attuali dal Data Editor
       nuovo_nome = pulisci_valore(df_inventario_modificato.loc[i, "Nome Dispositivo"])
       nuova_tipologia = pulisci_valore(df_inventario_modificato.loc[i, "Tipologia"])
       nuovo_stato = "🔴 Occupato" if nuovo_nome else "🟢 Libero"
@@ -567,12 +567,10 @@ with tab_hardware:
       cap_hd_v = pulisci_valore(df_inventario_modificato.loc[i, "Capienza HD"])
       gar_v = pulisci_valore(df_inventario_modificato.loc[i, "Garanzia"])
 
-      # VERIFICA SE LA RIGA È CAMBIATA RISPETTO ALL'ORIGINALE
-      vecchio_dato = st.session_state.hardware_dettagli.get(ip_comp, {})
-      
       row_changed = (
           riga_orig.iloc[0]["Nome Dispositivo"] != nuovo_nome or
           riga_orig.iloc[0]["Tipologia"] != nuova_tipologia or
+          riga_orig.iloc[0]["Stato"] != nuovo_stato or
           riga_orig.iloc[0]["Marca"] != marca_v or
           riga_orig.iloc[0]["Modello"] != modello_v or
           riga_orig.iloc[0]["Processore e anno"] != proc_v or
@@ -583,7 +581,6 @@ with tab_hardware:
           riga_orig.iloc[0]["Garanzia"] != gar_v
       )
 
-      # Esegue il salvataggio su Supabase SOLO SE l'utente ha modificato questa specifica riga
       if row_changed:
         if st.session_state.get("caricamento_in_corso", False):
           continue
