@@ -56,7 +56,7 @@ def salva_su_supabase(ip_comp, dati_dict):
         "Capienza HD": dati_dict.get("Capienza HD") or None,
         "Garanzia": dati_dict.get("Garanzia") or None,
     }
-    supabase.table("Intentario").upsert(payload, on_conflict="Indirizzo IP").execute()
+    supabase.table("inventario").upsert(payload, on_conflict="Indirizzo IP").execute()
     return True
   except Exception as e:
     st.error(f"Errore sincronizzazione Supabase su IP {ip_comp}: {e}")
@@ -137,7 +137,7 @@ if "hardware_dettagli" not in st.session_state:
 if "dati_caricati_da_supabase" not in st.session_state:
   if supabase is not None:
     try:
-      response = supabase.table("Intentario").select("*").execute()
+      response = supabase.table("inventario").select("*").execute()
       if response.data:
         for row in response.data:
           ip_db = row.get("Indirizzo IP")
@@ -159,7 +159,7 @@ if "dati_caricati_da_supabase" not in st.session_state:
                 "Garanzia": pulisci_valore(row.get("Garanzia")),
             }
     except Exception as e:
-      st.warning(f"Tabella Intentario non ancora trovata o vuota: {e}")
+      st.warning(f"Tabella inventario non ancora trovata o vuota: {e}")
   st.session_state.dati_caricati_da_supabase = True
 
 idx_selezionato = st.selectbox(
