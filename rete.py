@@ -58,7 +58,7 @@ def salva_su_supabase(ip_comp, dati_dict):
     supabase.table("inventario").upsert(payload, on_conflict="Indirizzo IP").execute()
     return True
   except Exception as e:
-    st.error(f"Errore sincronizzazione Supabase su IP {ip_comp}: {e}")
+    st.error(f"Errore critico Supabase su IP {ip_comp}: {e}")
     return False
 
 try:
@@ -130,6 +130,10 @@ def estrai_anno(testo):
 if "hardware_dettagli" not in st.session_state:
   st.session_state.hardware_dettagli = {}
 
+if "dataframes_rete" not in st.session_state:
+  st.session_state.dataframes_rete = {}
+
+# Sincronizzazione iniziale da Supabase una tantum all'avvio
 if "dati_caricati_da_supabase" not in st.session_state:
   if supabase is not None:
     try:
@@ -158,8 +162,33 @@ if "dati_caricati_da_supabase" not in st.session_state:
       st.warning(f"Errore caricamento da Supabase: {e}")
   st.session_state.dati_caricati_da_supabase = True
 
-if "dataframes_rete" not in st.session_state:
-  st.session_state.dataframes_rete = {}
+# Popola i DataFrame di tutte le sedi usando i dati aggiornati (sia locali che da Supabase)
+for idx, sede in enumerate(sedi_config):
+  if idx not in st.session_state.dataframes_rete:
+    blocco_sede = sede["blocco"]
+    range_ip = sede["range_custom"]
+    righe_ip = []
+    for i in range_ip:
+      ip_completo = f"100.200.{blocco_sede}.{i}"
+      
+      hw = st.session_state.hardware_dettagli.get(ip_completo, {})
+      nome_macchina = pulisci_valore(hw.get("Nome Dispositivo", ""))
+      tipologia = pulisci_valore(hw.get("Tipologia", ""))
+      stato = "🔴 Occupato" if nome_macchina else pulisci_valore(hw.get("Stato", "🟢 Libero"))
+      if not stato:
+        stato = "🟢 Libero"
+
+      righe_ip.append({
+          "Indirizzo IP": ip_completo,
+          "_ip_completo": ip_completo,
+          "Nome Dispositivo": nome_macchina,
+          "Tipologia": tipologia,
+          "Stato": stato,
+      })
+    st.session_state.dataframes_rete[idx] = pd.DataFrame(righe_ip)
+
+if "stato_ordinamento_anno" not in st.session_state:
+  st.session_state.stato_ordinamento_anno = {}
 
 idx_selezionato = st.selectbox(
     "📍 Seleziona la Sede da Gestire",
@@ -173,31 +202,6 @@ idx_selezionato = st.selectbox(
 sede_scelta = sedi_config[idx_selezionato]
 blocco_base = sede_scelta["blocco"]
 subnet_ultimi_due = sede_scelta["subnet"]
-
-if idx_selezionato not in st.session_state.dataframes_rete:
-  range_ip = sede_scelta["range_custom"]
-  righe_ip = []
-  for i in range_ip:
-    ip_completo = f"100.200.{blocco_base}.{i}"
-    
-    hw = st.session_state.hardware_dettagli.get(ip_completo, {})
-    nome_macchina = pulisci_valore(hw.get("Nome Dispositivo", ""))
-    tipologia = pulisci_valore(hw.get("Tipologia", ""))
-    stato = "🔴 Occupato" if nome_macchina else pulisci_valore(hw.get("Stato", "🟢 Libero"))
-    if not stato:
-      stato = "🟢 Libero"
-
-    righe_ip.append({
-        "Indirizzo IP": ip_completo,
-        "_ip_completo": ip_completo,
-        "Nome Dispositivo": nome_macchina,
-        "Tipologia": tipologia,
-        "Stato": stato,
-    })
-  st.session_state.dataframes_rete[idx_selezionato] = pd.DataFrame(righe_ip)
-
-if "stato_ordinamento_anno" not in st.session_state:
-  st.session_state.stato_ordinamento_anno = {}
 
 tab_rete, tab_hardware = st.tabs(
     ["🌐 Blocco IP & Occupazione", "💻 Inventario Hardware Dettagliato"]
