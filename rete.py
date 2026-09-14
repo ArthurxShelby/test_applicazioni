@@ -166,7 +166,7 @@ idx_selezionato = st.selectbox(
     "📍 Seleziona la Sede da Gestire",
     options=range(len(sedi_config)),
     format_func=lambda i: (
-        f"{sedi_config[i]['nome']} — Rete: 10.142.{sedi_config[i]['blocco']}.X"
+        f"{sedi_config[i]['nome']} — Rete: 100.200.{sedi_config[i]['blocco']}.X"
         f" / {sedi_config[i]['subnet']}"
     ),
 )
@@ -175,12 +175,12 @@ sede_scelta = sedi_config[idx_selezionato]
 blocco_base = sede_scelta["blocco"]
 subnet_ultimi_due = sede_scelta["subnet"]
 
-# Generazione rigorosa basata sul prefisso corretto 10.142.blocco.i
+# Generazione rigorosa basata sul prefisso corretto 100.200.blocco.i
 if idx_selezionato not in st.session_state.dataframes_rete:
   range_ip = sede_scelta["range_custom"]
   righe_ip = []
   for i in range_ip:
-    ip_completo = f"10.142.{blocco_base}.{i}"
+    ip_completo = f"100.200.{blocco_base}.{i}"
     
     hw = st.session_state.hardware_dettagli.get(ip_completo, {})
     nome_macchina = pulisci_valore(hw.get("Nome Dispositivo", ""))
@@ -416,8 +416,8 @@ with tab_hardware:
               if not ultimo_ottetto.isdigit():
                 continue
 
-              # Mappa l'IP mantenendo la struttura corretta della sede attiva (10.142.blocco.ultimo_ottetto)
-              ip_file_completo = f"10.142.{blocco_base}.{ultimo_ottetto}"
+              # Mappa l'IP mantenendo la struttura corretta della sede attiva (100.200.blocco.ultimo_ottetto)
+              ip_file_completo = f"100.200.{blocco_base}.{ultimo_ottetto}"
 
               nome_mac_file = pulisci_valore(row.get("Nome Dispositivo", ""))
               tipologia_file = pulisci_valore(row.get("Tipologia", "PC / Macchina"))
