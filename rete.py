@@ -547,9 +547,11 @@ with tab_hardware:
   for i in range(len(df_inventario_modificato)):
     ip_corr_riga = df_inventario_modificato.loc[i, "Indirizzo IP"]
     riga_orig = df_inventario_corrente[df_inventario_corrente["Indirizzo IP"] == ip_corr_riga]
+    
     if not riga_orig.empty:
       ip_comp = riga_orig.iloc[0]["_ip_completo"]
       
+      # Valori attuali dal Data Editor
       nuovo_nome = pulisci_valore(df_inventario_modificato.loc[i, "Nome Dispositivo"])
       nuova_tipologia = pulisci_valore(df_inventario_modificato.loc[i, "Tipologia"])
       nuovo_stato = "🔴 Occupato" if nuovo_nome else "🟢 Libero"
@@ -566,10 +568,11 @@ with tab_hardware:
       gar_v = pulisci_valore(df_inventario_modificato.loc[i, "Garanzia"])
 
       # VERIFICA SE LA RIGA È CAMBIATA RISPETTO ALL'ORIGINALE
+      vecchio_dato = st.session_state.hardware_dettagli.get(ip_comp, {})
+      
       row_changed = (
           riga_orig.iloc[0]["Nome Dispositivo"] != nuovo_nome or
           riga_orig.iloc[0]["Tipologia"] != nuova_tipologia or
-          riga_orig.iloc[0]["Stato"] != nuovo_stato or
           riga_orig.iloc[0]["Marca"] != marca_v or
           riga_orig.iloc[0]["Modello"] != modello_v or
           riga_orig.iloc[0]["Processore e anno"] != proc_v or
@@ -580,6 +583,7 @@ with tab_hardware:
           riga_orig.iloc[0]["Garanzia"] != gar_v
       )
 
+      # Esegue il salvataggio su Supabase SOLO SE l'utente ha modificato questa specifica riga
       if row_changed:
         if st.session_state.get("caricamento_in_corso", False):
           continue
