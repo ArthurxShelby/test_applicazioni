@@ -59,10 +59,12 @@ def salva_su_supabase(ip_comp, dati_dict, forza_cancellazione=False):
         "Capienza HD": dati_dict.get("Capienza HD") or None,
         "Garanzia": dati_dict.get("Garanzia") or None,
     }
-    supabase.table("inventario").upsert(payload, on_conflict="Indirizzo IP").execute()
+    
+    # Esegue l'upsert e cattura eventuali errori di schema o conflitti
+    response = supabase.table("inventario").upsert(payload, on_conflict="Indirizzo IP").execute()
     return True
   except Exception as e:
-    st.error(f"Errore critico Supabase su IP {ip_comp}: {e}")
+    st.error(f"❌ ERRORE SUPABASE su IP {ip_comp}: {e}")
     return False
 
 try:
@@ -163,7 +165,7 @@ if "dati_caricati_da_supabase" not in st.session_state:
                 "Garanzia": pulisci_valore(row.get("Garanzia")),
             }
     except Exception as e:
-      st.warning(f"Errore caricamento da Supabase: {e}")
+      st.error(f"Errore caricamento da Supabase: {e}")
   st.session_state.dati_caricati_da_supabase = True
   st.session_state.caricamento_in_corso = False
 
