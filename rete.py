@@ -106,7 +106,7 @@ st.caption(f"💻 Dispositivo rilevato: **{tipo_dispositivo}**")
 
 sedi_config = [
     {"id": 1, "nome": "Trieste", "blocco": "38", "subnet": "254.0", "range_custom": range(1, 256)},
-    {"id": 2, "nome": "Trieste", "blocco": "39", "subnet": "254.0", "range_custom": range(1, 256)},
+    {"id": 2, "nome": "Sede Centrale", "blocco": "39", "subnet": "254.0", "range_custom": range(1, 256)},
     {"id": 3, "nome": "Monfalcone", "blocco": "86", "subnet": "255.0", "range_custom": range(1, 256)},
     {"id": 4, "nome": "Grado", "blocco": "168", "subnet": "255.0", "range_custom": range(1, 256)},
     {"id": 5, "nome": "Nogaro", "blocco": "61", "subnet": "255.0", "range_custom": range(1, 256)},
@@ -305,12 +305,28 @@ with tab_rete:
       df_corrente.loc[i, "Tipologia"] = tipo_scelto
       df_corrente.loc[i, "Stato"] = stato_attuale
 
-      if ip_corr not in st.session_state.hardware_dettagli:
-        st.session_state.hardware_dettagli[ip_corr] = {}
-      
-      st.session_state.hardware_dettagli[ip_corr]["Nome Dispositivo"] = nome_mac
-      st.session_state.hardware_dettagli[ip_corr]["Tipologia"] = tipo_scelto
-      st.session_state.hardware_dettagli[ip_corr]["Stato"] = stato_attuale
+      if not nome_mac:
+        # Se viene cancellato il nome dispositivo, pulisce completamente i dettagli hardware locali e azzera il record su Supabase
+        st.session_state.hardware_dettagli[ip_corr] = {
+            "Nome Dispositivo": "",
+            "Tipologia": "",
+            "Stato": "🟢 Libero",
+            "Marca": "",
+            "Modello": "",
+            "Processore": "",
+            "S.O.": "",
+            "RAM": "",
+            "Tipo HD": "",
+            "Capienza HD": "",
+            "Garanzia": "",
+        }
+      else:
+        if ip_corr not in st.session_state.hardware_dettagli:
+          st.session_state.hardware_dettagli[ip_corr] = {}
+        
+        st.session_state.hardware_dettagli[ip_corr]["Nome Dispositivo"] = nome_mac
+        st.session_state.hardware_dettagli[ip_corr]["Tipologia"] = tipo_scelto
+        st.session_state.hardware_dettagli[ip_corr]["Stato"] = stato_attuale
 
       forza_del = (not nome_mac)
       salva_su_supabase(ip_corr, st.session_state.hardware_dettagli[ip_corr], forza_cancellazione=forza_del)
@@ -380,19 +396,34 @@ with tab_hardware:
           nome_salvato = pulisci_valore(hw_nome_macchina)
           stato_finale = "🔴 Occupato" if nome_salvato else "🟢 Libero"
           
-          dati_salvataggio = {
-              "Nome Dispositivo": nome_salvato,
-              "Tipologia": hw_tipologia if nome_salvato else "",
-              "Stato": stato_finale,
-              "Marca": hw_marca,
-              "Modello": hw_modello,
-              "Processore": hw_cpu,
-              "S.O.": hw_so,
-              "RAM": f"{hw_ram} GB",
-              "Tipo HD": hw_tipo_hd,
-              "Capienza HD": hw_cap_hd,
-              "Garanzia": hw_garanzia,
-          }
+          if not nome_salvato:
+            dati_salvataggio = {
+                "Nome Dispositivo": "",
+                "Tipologia": "",
+                "Stato": "🟢 Libero",
+                "Marca": "",
+                "Modello": "",
+                "Processore": "",
+                "S.O.": "",
+                "RAM": "",
+                "Tipo HD": "",
+                "Capienza HD": "",
+                "Garanzia": "",
+            }
+          else:
+            dati_salvataggio = {
+                "Nome Dispositivo": nome_salvato,
+                "Tipologia": hw_tipologia,
+                "Stato": stato_finale,
+                "Marca": hw_marca,
+                "Modello": hw_modello,
+                "Processore": hw_cpu,
+                "S.O.": hw_so,
+                "RAM": f"{hw_ram} GB",
+                "Tipo HD": hw_tipo_hd,
+                "Capienza HD": hw_cap_hd,
+                "Garanzia": hw_garanzia,
+            }
 
           st.session_state.hardware_dettagli[ip_scelto] = dati_salvataggio
 
@@ -590,19 +621,34 @@ with tab_hardware:
         if st.session_state.get("caricamento_in_corso", False):
           continue
 
-        dati_aggiornati = {
-            "Nome Dispositivo": nuovo_nome,
-            "Tipologia": nuova_tipologia,
-            "Stato": nuovo_stato,
-            "Marca": marca_v,
-            "Modello": modello_v,
-            "Processore": proc_v,
-            "S.O.": so_v,
-            "RAM": ram_v,
-            "Tipo HD": tipo_hd_v,
-            "Capienza HD": cap_hd_v,
-            "Garanzia": gar_v,
-        }
+        if not nuovo_nome:
+          dati_aggiornati = {
+              "Nome Dispositivo": "",
+              "Tipologia": "",
+              "Stato": "🟢 Libero",
+              "Marca": "",
+              "Modello": "",
+              "Processore": "",
+              "S.O.": "",
+              "RAM": "",
+              "Tipo HD": "",
+              "Capienza HD": "",
+              "Garanzia": "",
+          }
+        else:
+          dati_aggiornati = {
+              "Nome Dispositivo": nuovo_nome,
+              "Tipologia": nuova_tipologia,
+              "Stato": nuovo_stato,
+              "Marca": marca_v,
+              "Modello": modello_v,
+              "Processore": proc_v,
+              "S.O.": so_v,
+              "RAM": ram_v,
+              "Tipo HD": tipo_hd_v,
+              "Capienza HD": cap_hd_v,
+              "Garanzia": gar_v,
+          }
 
         st.session_state.hardware_dettagli[ip_comp] = dati_aggiornati
 
