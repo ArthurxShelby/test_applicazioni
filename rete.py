@@ -106,7 +106,7 @@ st.caption(f"💻 Dispositivo rilevato: **{tipo_dispositivo}**")
 
 sedi_config = [
     {"id": 1, "nome": "Trieste", "blocco": "38", "subnet": "254.0", "range_custom": range(1, 256)},
-    {"id": 2, "nome": "Sede Centrale", "blocco": "39", "subnet": "254.0", "range_custom": range(1, 256)},
+    {"id": 2, "nome": "Trieste", "blocco": "39", "subnet": "254.0", "range_custom": range(1, 256)},
     {"id": 3, "nome": "Monfalcone", "blocco": "86", "subnet": "255.0", "range_custom": range(1, 256)},
     {"id": 4, "nome": "Grado", "blocco": "168", "subnet": "255.0", "range_custom": range(1, 256)},
     {"id": 5, "nome": "Nogaro", "blocco": "61", "subnet": "255.0", "range_custom": range(1, 256)},
