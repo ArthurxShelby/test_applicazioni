@@ -731,10 +731,12 @@ with tab_hardware:
         pdf.cell(col_widths[10], 5, str(row["Capienza HD"])[:12], 1, 0, "C")
         pdf.cell(col_widths[11], 5, str(row["Garanzia"])[:12], 1, 1, "C")
       
-    raw_pdf = pdf.output()
-    if isinstance(raw_pdf, (bytearray, bytes)):
-      return bytes(raw_pdf)
-    return str(raw_pdf).encode("latin1")
+    pdf_output = pdf.output(dest="S")
+    if isinstance(pdf_output, str):
+      return pdf_output.encode("latin1", errors="replace")
+    elif isinstance(pdf_output, (bytes, bytearray)):
+      return bytes(pdf_output)
+    return str(pdf_output).encode("latin1", errors="replace")
 
   output_excel_tab = io.BytesIO()
   with pd.ExcelWriter(output_excel_tab, engine="openpyxl") as writer:
