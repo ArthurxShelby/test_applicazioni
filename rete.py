@@ -139,7 +139,6 @@ if "dati_caricati_da_supabase" not in st.session_state:
   st.session_state.caricamento_in_corso = True
   if supabase is not None:
     try:
-      # Gestione paginazione per scaricare tutti i record oltre i 1000
       all_rows = []
       batch_size = 1000
       start = 0
@@ -177,7 +176,6 @@ if "dati_caricati_da_supabase" not in st.session_state:
   st.session_state.dati_caricati_da_supabase = True
   st.session_state.caricamento_in_corso = False
 
-# Ricostruzione/aggiornamento forzato dei dataframe ad ogni avvio basato sui dati caricati
 st.session_state.dataframes_rete = {}
 for idx, sede in enumerate(sedi_config):
   blocco_sede = sede["blocco"]
@@ -721,7 +719,11 @@ with tab_hardware:
         pdf.cell(col_widths[0], 5, str(row["Indirizzo IP"]), 1, 0, "C")
         pdf.cell(col_widths[1], 5, str(row["Nome Dispositivo"])[:18], 1, 0, "L")
         pdf.cell(col_widths[2], 5, str(row["Tipologia"])[:15], 1, 0, "L")
-        pdf.cell(col_widths[3], 5, str(row["Stato"])[:12], 1, 0, "C")
+        
+        # Rimuove le emoji dallo stato per compatibilità con i font standard FPDF (Latin-1)
+        stato_pulito = str(row["Stato"]).replace("🟢", "").replace("🔴", "").strip()
+        pdf.cell(col_widths[3], 5, stato_pulito[:12], 1, 0, "C")
+        
         pdf.cell(col_widths[4], 5, str(row["Marca"])[:12], 1, 0, "L")
         pdf.cell(col_widths[5], 5, str(row["Modello"])[:12], 1, 0, "L")
         pdf.cell(col_widths[6], 5, str(row["Processore e anno"])[:15], 1, 0, "L")
