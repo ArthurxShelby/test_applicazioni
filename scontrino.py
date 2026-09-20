@@ -41,11 +41,8 @@ if foto_scattata is not None:
 
                 prompt = "Analizza questo scontrino ed estrai nome negozio, data e totale finale in euro."
 
-                # Chiamata al modello multimodale
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=[immagine, prompt],
-                    config=config,
+                model="gemini-1.5-flash", contents=[immagine, prompt], config=config
                 )
 
                 # Parsing dei dati ottenuti
