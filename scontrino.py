@@ -3,6 +3,15 @@ from google import genai
 from google.genai import types
 from PIL import Image
 from pydantic import BaseModel, Field
+import streamlit as st
+
+codice = """
+from google import genai
+client = genai.Client()
+"""
+
+# Specificare 'python' attiva il syntax highlighting
+st.code(codice, language="python")
 
 
 # 1. Definiamo lo schema JSON desiderato tramite Pydantic
