@@ -1,6 +1,4 @@
+google-genai
+pillow
+pydantic
 streamlit
-pandas
-supabase
-reportlab
-openpyxl
-fpdf2
