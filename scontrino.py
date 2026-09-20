@@ -41,7 +41,6 @@ def carica_storico() -> list:
         with open(FILE_STORICO, "r", encoding="utf-8") as f:
             try:
                 data = json.load(f)
-                # Assicura che ogni elemento abbia un id univoco per le modifiche
                 for idx, item in enumerate(data):
                     if "id" not in item:
                         item["id"] = idx
@@ -120,7 +119,25 @@ tab1, tab2 = st.tabs(["📷 Scansiona Scontrino", "📊 Storico & Export PDF"])
 
 # TAB 1: ACQUISIZIONE
 with tab1:
-    foto_scattata = st.camera_input("Scatta una foto allo scontrino")
+    # Inizializza lo stato dell'attivazione della fotocamera
+    if "camera_attiva" not in st.session_state:
+        st.session_state["camera_attiva"] = False
+
+    col_cam1, col_cam2 = st.columns([1, 1])
+
+    with col_cam1:
+        if st.button("📷 Attiva Fotocamera", use_container_width=True):
+            st.session_state["camera_attiva"] = True
+
+    with col_cam2:
+        if st.session_state["camera_attiva"]:
+            if st.button("🚫 Disattiva Fotocamera", use_container_width=True):
+                st.session_state["camera_attiva"] = False
+                st.rerun()
+
+    foto_scattata = None
+    if st.session_state["camera_attiva"]:
+        foto_scattata = st.camera_input("Scatta una foto allo scontrino")
 
     if foto_scattata is not None:
         immagine = Image.open(foto_scattata)
@@ -190,7 +207,6 @@ with tab2:
 
         st.divider()
 
-        # Ciclo per mostrare ciascuno scontrino con opzioni di Modifica e Cancellazione
         scontrino_da_rimuovere = None
         scontrino_modificato = False
 
@@ -208,7 +224,6 @@ with tab2:
                 if st.button("🗑️ Elimina", key=f"del_{item['id']}", type="secondary"):
                     scontrino_da_rimuovere = item["id"]
 
-            # Form di modifica espandibile
             if st.session_state.get(f"editing_{item['id']}", False):
                 with st.form(key=f"form_edit_{item['id']}"):
                     nuovo_negozio = st.text_input("Negozio", value=item["negozio"])
@@ -224,20 +239,17 @@ with tab2:
 
             st.divider()
 
-        # Gestione eliminazione scontrino
         if scontrino_da_rimuovere is not None:
             storico_attuale = [x for x in storico_attuale if x["id"] != scontrino_da_rimuovere]
             salva_lista_storico(storico_attuale)
             st.success("Scontrino eliminato con successo!")
             st.rerun()
 
-        # Gestione salvataggio modifiche
         if scontrino_modificato:
             salva_lista_storico(storico_attuale)
             st.success("Modifiche salvate con successo!")
             st.rerun()
 
-        # Generazione e scaricamento del PDF aggiornato
         pdf_bytes = genera_pdf_storico(storico_attuale)
         st.download_button(
             label="📄 Scarica Report PDF",
