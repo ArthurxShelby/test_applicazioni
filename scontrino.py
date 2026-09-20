@@ -17,7 +17,7 @@ import streamlit as st
 
 # Configurazione della pagina Streamlit
 st.set_page_config(page_title="Gestione Scontrini", layout="centered")
-st.title("🧾 Scatta, Gestisci e Genera PDF")
+st.title("🧾 Scatta, Inserisci e Genera PDF")
 
 FILE_STORICO = "storico_scontrini.json"
 
@@ -115,11 +115,10 @@ def genera_pdf_storico(storico: list) -> bytes:
 
 
 # --- INTERFACCIA APP STREAMLIT ---
-tab1, tab2 = st.tabs(["📷 Scansiona Scontrino", "📊 Storico & Export PDF"])
+tab1, tab2, tab3 = st.tabs(["📷 Scansiona con Camera", "✍️ Inserimento Manuale", "📊 Storico & Export PDF"])
 
-# TAB 1: ACQUISIZIONE
+# TAB 1: ACQUISIZIONE CON CAMERA
 with tab1:
-    # Inizializza lo stato dell'attivazione della fotocamera
     if "camera_attiva" not in st.session_state:
         st.session_state["camera_attiva"] = False
 
@@ -195,8 +194,27 @@ with tab1:
                 else:
                     st.error(f"Si è verificato un errore durante l'analisi: {ultimo_errore}")
 
-# TAB 2: STORICO, MODIFICA, CANCELLAZIONE & PDF
+# TAB 2: INSERIMENTO MANUALE
 with tab2:
+    st.subheader("Inserisci una nuova voce manualmente")
+
+    with st.form("form_inserimento_manuale", clear_on_submit=True):
+        m_negozio = st.text_input("Nome Negozio / Esercente", placeholder="Es. Bar Centrale")
+        m_data = st.date_input("Data dello scontrino", value=datetime.now())
+        m_totale = st.number_input("Importo Totale (€)", min_value=0.01, step=0.10, format="%.2f")
+
+        submit_manuale = st.form_submit_button("➕ Aggiungi allo Storico", type="primary")
+
+        if submit_manuale:
+            if m_negozio.strip() == "":
+                st.error("Inserisci il nome del negozio.")
+            else:
+                data_str = m_data.strftime("%Y-%m-%d")
+                salva_scontrino(m_negozio, data_str, float(m_totale))
+                st.success(f"Aggiunto con successo: **{m_negozio}** - € {m_totale:.2f} ({data_str})")
+
+# TAB 3: STORICO, MODIFICA, CANCELLAZIONE & PDF
+with tab3:
     storico_attuale = carica_storico()
 
     if storico_attuale:
@@ -259,4 +277,4 @@ with tab2:
             type="primary",
         )
     else:
-        st.info("Nessuno scontrino presente nello storico. Scansiona uno scontrino dalla prima scheda.")
+        st.info("Nessuno scontrino presente nello storico. Scansiona una foto o inserisci una voce manualmente.")
