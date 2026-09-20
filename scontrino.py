@@ -1,5 +1,7 @@
+from datetime import datetime
 import os
 import time
+from typing import Optional
 import streamlit as st
 from google import genai
 from google.genai import types
@@ -11,10 +13,13 @@ st.set_page_config(page_title="Lettore Scontrini", layout="centered")
 st.title("🧾 Scatta e Analizza Scontrino")
 
 
-# Schema dei dati di output
+# Schema dei dati di output (con data opzionale)
 class ScontrinoData(BaseModel):
     nome_negozio: str = Field(description="Nome dell'esercente")
-    data: str = Field(description="Data dello scontrino (YYYY-MM-DD)")
+    data: Optional[str] = Field(
+        default=None,
+        description="Data dello scontrino nel formato YYYY-MM-DD se ben visibile, altrimenti null",
+    )
     totale_euro: float = Field(
         description="Importo totale finale pagato in Euro"
     )
@@ -28,7 +33,6 @@ if foto_scattata is not None:
 
     if st.button("Analizza Scontrino", type="primary"):
         with st.spinner("Analisi in corso con Gemini..."):
-            # Elenco di modelli da provare in ordine di priorità
             modelli = ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
             dati = None
             ultimo_errore = None
@@ -39,11 +43,14 @@ if foto_scattata is not None:
                 response_schema=ScontrinoData,
                 temperature=0.1,
             )
-            prompt = "Analizza questo scontrino ed estrai nome negozio, data e totale finale in euro."
+            prompt = (
+                "Analizza questo scontrino ed estrai nome negozio, data e totale finale in euro. "
+                "Se la data non è visibile o è tagliata nella foto, lascia il campo data vuoto/null."
+            )
 
-            # Tentativo di chiamata con retry e fallback su modelli alternativi
+            # Tentativo di chiamata API
             for modello in modelli:
-                for tentativo in range(2):  # Prova fino a 2 volte per modello
+                for tentativo in range(2):
                     try:
                         response = client.models.generate_content(
                             model=modello,
@@ -55,7 +62,7 @@ if foto_scattata is not None:
                     except Exception as e:
                         ultimo_errore = e
                         if "503" in str(e):
-                            time.sleep(2)  # Attende 2 secondi prima di riprovare
+                            time.sleep(2)
                             continue
                         else:
                             break
@@ -63,9 +70,16 @@ if foto_scattata is not None:
                     break
 
             if dati is not None:
+                # Se la data non è presente nella foto, usa la data odierna
+                data_finale = (
+                    dati.data
+                    if dati.data
+                    else f"{datetime.now().strftime('%Y-%m-%d')} (Data odierna)"
+                )
+
                 st.success("Estrazione completata!")
                 st.metric("Totale Euro", f"€ {dati.totale_euro:.2f}")
                 st.write(f"**Negozio:** {dati.nome_negozio}")
-                st.write(f"**Data:** {dati.data}")
+                st.write(f"**Data:** {data_finale}")
             else:
                 st.error(f"Si è verificato un errore durante l'analisi: {ultimo_errore}")
