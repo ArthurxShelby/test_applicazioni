@@ -1,79 +1,64 @@
 import os
+import streamlit as st
 from google import genai
 from google.genai import types
 from PIL import Image
 from pydantic import BaseModel, Field
-import streamlit as st
 
-codice = """
-from google import genai
-client = genai.Client()
-"""
-
-# Specificare 'python' attiva il syntax highlighting
-st.code(codice, language="python")
+# Configurazione della pagina Streamlit
+st.set_page_config(page_title="Lettore Scontrini", layout="centered")
+st.title("🧾 Estrazione Totale Scontrino")
 
 
-# 1. Definiamo lo schema JSON desiderato tramite Pydantic
+# Definizione dello schema dati per l'output strutturato
 class ScontrinoData(BaseModel):
-    nome_negozio: str = Field(description="Nome o ragione sociale dell'esercente")
-    data: str = Field(
-        description="Data dello scontrino nel formato YYYY-MM-DD, se visibile"
-    )
+    nome_negozio: str = Field(description="Nome dell'esercente")
+    data: str = Field(description="Data dello scontrino (YYYY-MM-DD)")
     totale_euro: float = Field(
-        description="Importo totale finale pagato espresso in Euro (float con 2 decimali)"
-    )
-    valuta: str = Field(
-        default="EUR", description="Codice ISO della valuta (es. EUR)"
+        description="Importo totale finale pagato in Euro"
     )
 
 
-def estrai_totale_scontrino(percorso_immagine: str) -> ScontrinoData:
-    # 2. Inizializziamo il client dell'SDK (legge automaticamente GEMINI_API_KEY)
-    client = genai.Client()
+# Componente per il caricamento del file
+uploaded_file = st.file_uploader(
+    "Carica la foto dello scontrino", type=["jpg", "jpeg", "png"]
+)
 
-    # 3. Carichiamo l'immagine dello scontrino
-    try:
-        immagine = Image.open(percorso_immagine)
-    except FileNotFoundError:
-        raise FileNotFoundError(
-            f"Impossibile trovare l'immagine nel percorso: {percorso_immagine}"
-        )
+if uploaded_file is not None:
+    # Mostra l'immagine caricata
+    immagine = Image.open(uploaded_file)
+    st.image(immagine, caption="Scontrino caricato", use_container_width=True)
 
-    # 4. Configuriamo la richiesta fornendo lo schema Pydantic
-    config = types.GenerateContentConfig(
-        response_mime_type="application/json",
-        response_schema=ScontrinoData,
-        temperature=0.1,  # Temperatura bassa per ridurre la creatività dell'AI
-    )
+    if st.button("Analizza Scontrino", type="primary"):
+        with st.spinner("Analisi in corso con Gemini..."):
+            try:
+                # Inizializzazione del client Gemini
+                client = genai.Client()
 
-    prompt = (
-        "Analizza questa immagine di uno scontrino fiscale. "
-        "Estrai il nome del negozio, la data e l'importo totale finale pagato espresso in euro."
-    )
+                # Configurazione della generazione con schema JSON
+                config = types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=ScontrinoData,
+                    temperature=0.1,
+                )
 
-    # 5. Inviamo l'immagine e il prompt al modello vision (Gemini 2.5/3.5 Flash)
-    response = client.models.generate_content(
-        model="gemini-2.5-flash", contents=[immagine, prompt], config=config
-    )
+                prompt = "Analizza questo scontrino ed estrai nome negozio, data e totale finale in euro."
 
-    # 6. L'SDK deserializza automaticamente la risposta nello schema Pydantic fornito
-    dati_estratte: ScontrinoData = response.parsed
-    return dati_estratte
+                # Chiamata al modello multimodale
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=[immagine, prompt],
+                    config=config,
+                )
 
+                # Parsing dei dati ottenuti
+                dati: ScontrinoData = response.parsed
 
-# === ESECUZIONE DI ESEMPIO ===
-if __name__ == "__main__":
-    file_scontrino = "scontrino.jpg"  # Inserisci il percorso della tua foto
+                # Visualizzazione dei risultati
+                st.success("Estrazione completata!")
+                st.metric("Totale Euro", f"€ {dati.totale_euro:.2f}")
+                st.write(f"**Negozio:** {dati.nome_negozio}")
+                st.write(f"**Data:** {dati.data}")
 
-    if os.path.exists(file_scontrino):
-        risultato = estrai_totale_scontrino(file_scontrino)
-
-        print("\n--- RISULTATO ESTRAZIONE ---")
-        print(f"Negozio: {risultato.nome_negozio}")
-        print(f"Data: {risultato.data}")
-        print(f"Totale: {risultato.totale_euro:.2f} {risultato.valuta}")
-    else:
-        print(
-            f"Aggiungi un'immagine 'scontrino.jpg' nella cartella corrente per testare il codice."
-        )
+            except Exception as e:
+                st.error(f"Si è verificato un errore durante l'analisi: {e}")
