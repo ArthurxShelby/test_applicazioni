@@ -95,7 +95,12 @@ class ScontrinoData(BaseModel):
 def carica_storico() -> list:
     """Recupera tutti i movimenti da Supabase ordinati per data decrescente."""
     try:
-        response = supabase.table("movimenti").select("*").order("data", ascending=False).execute()
+        response = (
+            supabase.table("movimenti")
+            .select("*")
+            .order("data", desc=True)
+            .execute()
+        )
         return response.data
     except Exception as e:
         st.error(f"Errore durante il caricamento dei dati da Supabase: {e}")
