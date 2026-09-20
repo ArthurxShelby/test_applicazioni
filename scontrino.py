@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 # Configurazione della pagina Streamlit
 st.set_page_config(page_title="Lettore Scontrini", layout="centered")
-st.title("🧾 Estrazione Totale Scontrino")
+st.title("🧾 Scatta e Analizza Scontrino")
 
 
 # Definizione dello schema dati per l'output strutturato
@@ -19,15 +19,12 @@ class ScontrinoData(BaseModel):
     )
 
 
-# Componente per il caricamento del file
-uploaded_file = st.file_uploader(
-    "Carica la foto dello scontrino", type=["jpg", "jpeg", "png"]
-)
+# Componente per scattare la foto tramite fotocamera
+foto_scattata = st.camera_input("Scatta una foto allo scontrino")
 
-if uploaded_file is not None:
-    # Mostra l'immagine caricata
-    immagine = Image.open(uploaded_file)
-    st.image(immagine, caption="Scontrino caricato", use_container_width=True)
+if foto_scattata is not None:
+    # Apre l'immagine scattata
+    immagine = Image.open(foto_scattata)
 
     if st.button("Analizza Scontrino", type="primary"):
         with st.spinner("Analisi in corso con Gemini..."):
