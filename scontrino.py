@@ -1,6 +1,5 @@
 from datetime import datetime
 import io
-import json
 import os
 import time
 from typing import Optional
@@ -14,15 +13,73 @@ from reportlab.lib.pagesizes import A4
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
 import streamlit as st
+from supabase import create_client, Client
 
 # Configurazione della pagina Streamlit
 st.set_page_config(page_title="Gestione Bilancio & Scontrini", layout="centered")
-st.title("🧾 Gestione Entrate, Uscite e PDF")
-
-FILE_STORICO = "storico_scontrini.json"
 
 
-# Schema Pydantic per i dati di input
+# --- SISTEMA DI AUTENTICAZIONE CON PASSWORD ---
+def verifica_password() -> bool:
+    """Gestisce la schermata di login tramite password definita in st.secrets."""
+    if "autenticato" not in st.session_state:
+        st.session_state["autenticato"] = False
+
+    if st.session_state["autenticato"]:
+        return True
+
+    st.title("🔒 Accesso Riservato")
+    st.write("Inserisci la password per accedere al sistema di gestione bilancio.")
+
+    # Recupera la password dai secrets o dalle variabili d'ambiente
+    password_corretta = st.secrets.get("APP_PASSWORD") or os.environ.get("APP_PASSWORD")
+
+    if not password_corretta:
+        st.error("⚠️ La password non è stata configurata nei secrets ('APP_PASSWORD').")
+        return False
+
+    with st.form("form_login"):
+        password_inserita = st.text_input("Password", type="password")
+        submit_login = st.form_submit_button("Accedi", type="primary")
+
+        if submit_login:
+            if password_inserita == password_corretta:
+                st.session_state["autenticato"] = True
+                st.success("Accesso effettuato!")
+                st.rerun()
+            else:
+                st.error("❌ Password errata. Riprova.")
+
+    return False
+
+
+# Controlla l'accesso prima di caricare il resto dell'applicazione
+if not verifica_password():
+    st.stop()
+
+
+# --- INIZIO APPLICAZIONE (AUTENTICATA) ---
+st.title("🧾 Gestione Entrate, Uscite e PDF (Supabase)")
+
+# Pulsante per effettuare il Logout nella barra laterale
+with st.sidebar:
+    st.write("👤 Sessione Attiva")
+    if st.button("🚪 Disconnetti", use_container_width=True):
+        st.session_state["autenticato"] = False
+        st.rerun()
+
+
+# --- INIZIALIZZAZIONE SUPABASE ---
+@st.cache_resource
+def init_supabase() -> Client:
+    url = st.secrets.get("SUPABASE_URL") or os.environ.get("SUPABASE_URL")
+    key = st.secrets.get("SUPABASE_KEY") or os.environ.get("SUPABASE_KEY")
+    return create_client(url, key)
+
+supabase = init_supabase()
+
+
+# Schema Pydantic per i dati di input da Gemini
 class ScontrinoData(BaseModel):
     nome_negozio: str = Field(description="Nome dell'esercente")
     data: Optional[str] = Field(
@@ -34,43 +91,51 @@ class ScontrinoData(BaseModel):
     )
 
 
-# --- FUNZIONI DI GESTIONE STORICO ---
+# --- FUNZIONI DI GESTIONE SUPABASE ---
 def carica_storico() -> list:
-    """Carica lo storico dal file JSON se esiste."""
-    if os.path.exists(FILE_STORICO):
-        with open(FILE_STORICO, "r", encoding="utf-8") as f:
-            try:
-                data = json.load(f)
-                for idx, item in enumerate(data):
-                    if "id" not in item:
-                        item["id"] = idx
-                    if "tipo" not in item:
-                        item["tipo"] = "Uscita"  # Default per compatibilità passata
-                return data
-            except json.JSONDecodeError:
-                return []
-    return []
-
-
-def salva_lista_storico(storico: list):
-    """Salva l'intera lista dello storico ordinata per data (più recente prima)."""
-    storico.sort(key=lambda x: x["data"], reverse=True)
-    with open(FILE_STORICO, "w", encoding="utf-8") as f:
-        json.dump(storico, f, ensure_ascii=False, indent=2)
+    """Recupera tutti i movimenti da Supabase ordinati per data decrescente."""
+    try:
+        response = supabase.table("movimenti").select("*").order("data", ascending=False).execute()
+        return response.data
+    except Exception as e:
+        st.error(f"Errore durante il caricamento dei dati da Supabase: {e}")
+        return []
 
 
 def salva_movimento(negozio: str, data: str, totale: float, tipo: str = "Uscita"):
-    """Aggiunge una voce (Entrata/Uscita) allo storico."""
-    storico = carica_storico()
-    nuovo_id = max([item.get("id", 0) for item in storico], default=0) + 1
-    storico.append({
-        "id": nuovo_id,
-        "negozio": negozio,
-        "data": data,
-        "totale": totale,
-        "tipo": tipo
-    })
-    salva_lista_storico(storico)
+    """Inserisce un nuovo movimento nel database Supabase."""
+    try:
+        data_payload = {
+            "negozio": negozio,
+            "data": data,
+            "totale": totale,
+            "tipo": tipo
+        }
+        supabase.table("movimenti").insert(data_payload).execute()
+    except Exception as e:
+        st.error(f"Errore durante il salvataggio su Supabase: {e}")
+
+
+def aggiorna_movimento(item_id: int, negozio: str, data: str, totale: float, tipo: str):
+    """Aggiorna un movimento esistente su Supabase."""
+    try:
+        data_payload = {
+            "negozio": negozio,
+            "data": data,
+            "totale": totale,
+            "tipo": tipo
+        }
+        supabase.table("movimenti").update(data_payload).eq("id", item_id).execute()
+    except Exception as e:
+        st.error(f"Errore durante l'aggiornamento su Supabase: {e}")
+
+
+def elimina_movimento(item_id: int):
+    """Elimina un movimento da Supabase."""
+    try:
+        supabase.table("movimenti").delete().eq("id", item_id).execute()
+    except Exception as e:
+        st.error(f"Errore durante l'eliminazione da Supabase: {e}")
 
 
 # --- FUNZIONE GENERAZIONE PDF ---
@@ -90,8 +155,8 @@ def genera_pdf_storico(storico: list) -> bytes:
     story.append(data_generazione)
     story.append(Spacer(1, 15))
 
-    tot_entrate = sum(item["totale"] for item in storico if item.get("tipo") == "Entrata")
-    tot_uscite = sum(item["totale"] for item in storico if item.get("tipo", "Uscita") == "Uscita")
+    tot_entrate = sum(float(item["totale"]) for item in storico if item.get("tipo") == "Entrata")
+    tot_uscite = sum(float(item["totale"]) for item in storico if item.get("tipo") == "Uscita")
     saldo = tot_entrate - tot_uscite
 
     table_data = [["Data", "Descrizione / Negozio", "Tipo", "Importo (€)"]]
@@ -100,10 +165,10 @@ def genera_pdf_storico(storico: list) -> bytes:
         tipo = item.get("tipo", "Uscita")
         segno = "+" if tipo == "Entrata" else "-"
         table_data.append([
-            item["data"],
+            str(item["data"]),
             item["negozio"],
             tipo,
-            f"{segno} € {item['totale']:.2f}"
+            f"{segno} € {float(item['totale']):.2f}"
         ])
 
     table_data.append(["TOTALE ENTRATE", "", "", f"+ € {tot_entrate:.2f}"])
@@ -138,7 +203,7 @@ def genera_pdf_storico(storico: list) -> bytes:
 # --- INTERFACCIA APP STREAMLIT ---
 tab1, tab2, tab3 = st.tabs(["📷 Scansiona Scontrino (Uscita)", "✍️ Inserimento Manuale", "📊 Bilancio & Export PDF"])
 
-# TAB 1: ACQUISIZIONE CON CAMERA (Predefinito Uscita)
+# TAB 1: ACQUISIZIONE CON CAMERA
 with tab1:
     if "camera_attiva" not in st.session_state:
         st.session_state["camera_attiva"] = False
@@ -168,7 +233,9 @@ with tab1:
                 dati = None
                 ultimo_errore = None
 
-                client = genai.Client()
+                api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
+                client = genai.Client(api_key=api_key)
+                
                 config = types.GenerateContentConfig(
                     response_mime_type="application/json",
                     response_schema=ScontrinoData,
@@ -208,14 +275,14 @@ with tab1:
 
                     salva_movimento(dati.nome_negozio, data_finale, dati.totale_euro, tipo="Uscita")
 
-                    st.success("Scontrino registrato come Uscita!")
-                    st.metric("Spesa Registrarla", f"€ {dati.totale_euro:.2f}")
+                    st.success("Scontrino salvato in Supabase!")
+                    st.metric("Spesa Registrata", f"€ {dati.totale_euro:.2f}")
                     st.write(f"**Negozio:** {dati.nome_negozio}")
                     st.write(f"**Data:** {data_finale}")
                 else:
                     st.error(f"Si è verificato un errore durante l'analisi: {ultimo_errore}")
 
-# TAB 2: INSERIMENTO MANUALE (Entrata o Uscita)
+# TAB 2: INSERIMENTO MANUALE
 with tab2:
     st.subheader("Inserisci un'Entrata o un'Uscita")
 
@@ -234,7 +301,7 @@ with tab2:
                 tipo_str = "Entrata" if "Entrata" in m_tipo else "Uscita"
                 data_str = m_data.strftime("%Y-%m-%d")
                 salva_movimento(m_negozio, data_str, float(m_totale), tipo=tipo_str)
-                st.success(f"Registrata {tipo_str}: **{m_negozio}** - € {m_totale:.2f} ({data_str})")
+                st.success(f"Registrata {tipo_str} in Supabase: **{m_negozio}** - € {m_totale:.2f} ({data_str})")
 
 # TAB 3: BILANCIO IN TEMPO REALE, MODIFICA & PDF
 with tab3:
@@ -243,9 +310,8 @@ with tab3:
     if storico_attuale:
         st.subheader("📊 Bilancio in Tempo Reale")
 
-        # Calcolo Entrate, Uscite e Saldo
-        tot_entrate = sum(item["totale"] for item in storico_attuale if item.get("tipo") == "Entrata")
-        tot_uscite = sum(item["totale"] for item in storico_attuale if item.get("tipo", "Uscita") == "Uscita")
+        tot_entrate = sum(float(item["totale"]) for item in storico_attuale if item.get("tipo") == "Entrata")
+        tot_uscite = sum(float(item["totale"]) for item in storico_attuale if item.get("tipo") == "Uscita")
         saldo = tot_entrate - tot_uscite
 
         col_m1, col_m2, col_m3 = st.columns(3)
@@ -254,12 +320,10 @@ with tab3:
         col_m3.metric("⚖️ Saldo Netto", f"€ {saldo:.2f}")
 
         st.divider()
-        st.subheader("Elenco Movimenti")
+        st.subheader("Elenco Movimenti (da Supabase)")
 
-        movimento_da_rimuovere = None
-        movimento_modificato = False
-
-        for idx, item in enumerate(storico_attuale):
+        for item in storico_attuale:
+            item_id = item["id"]
             tipo = item.get("tipo", "Uscita")
             colore_ico = "🟢" if tipo == "Entrata" else "🔴"
             segno = "+" if tipo == "Entrata" else "-"
@@ -269,44 +333,33 @@ with tab3:
             with col_info:
                 st.write(
                     f"📅 **{item['data']}** | {colore_ico} **{tipo}** | "
-                    f"🏪 **{item['negozio']}** | **{segno} € {item['totale']:.2f}**"
+                    f"🏪 **{item['negozio']}** | **{segno} € {float(item['totale']):.2f}**"
                 )
 
             with col_modifica:
-                if st.button("✏️ Modifica", key=f"edit_{item['id']}"):
-                    st.session_state[f"editing_{item['id']}"] = not st.session_state.get(f"editing_{item['id']}", False)
+                if st.button("✏️ Modifica", key=f"edit_{item_id}"):
+                    st.session_state[f"editing_{item_id}"] = not st.session_state.get(f"editing_{item_id}", False)
 
             with col_elimina:
-                if st.button("🗑️ Elimina", key=f"del_{item['id']}", type="secondary"):
-                    movimento_da_rimuovere = item["id"]
+                if st.button("🗑️ Elimina", key=f"del_{item_id}", type="secondary"):
+                    elimina_movimento(item_id)
+                    st.success("Movimento eliminato con successo!")
+                    st.rerun()
 
-            if st.session_state.get(f"editing_{item['id']}", False):
-                with st.form(key=f"form_edit_{item['id']}"):
+            if st.session_state.get(f"editing_{item_id}", False):
+                with st.form(key=f"form_edit_{item_id}"):
                     nuovo_tipo = st.selectbox("Tipo", ["Uscita", "Entrata"], index=0 if tipo == "Uscita" else 1)
                     nuovo_negozio = st.text_input("Descrizione/Negozio", value=item["negozio"])
-                    nuova_data = st.text_input("Data (YYYY-MM-DD)", value=item["data"])
+                    nuova_data = st.text_input("Data (YYYY-MM-DD)", value=str(item["data"]))
                     nuovo_totale = st.number_input("Totale (€)", value=float(item["totale"]), step=0.1)
 
                     if st.form_submit_button("💾 Salva Modifiche"):
-                        item["tipo"] = nuovo_tipo
-                        item["negozio"] = nuovo_negozio
-                        item["data"] = nuova_data
-                        item["totale"] = nuovo_totale
-                        movimento_modificato = True
-                        st.session_state[f"editing_{item['id']}"] = False
+                        aggiorna_movimento(item_id, nuovo_negozio, nuova_data, nuovo_totale, nuovo_tipo)
+                        st.session_state[f"editing_{item_id}"] = False
+                        st.success("Modifiche salvate con successo!")
+                        st.rerun()
 
             st.divider()
-
-        if movimento_da_rimuovere is not None:
-            storico_attuale = [x for x in storico_attuale if x["id"] != movimento_da_rimuovere]
-            salva_lista_storico(storico_attuale)
-            st.success("Movimento eliminato con successo!")
-            st.rerun()
-
-        if movimento_modificato:
-            salva_lista_storico(storico_attuale)
-            st.success("Modifiche salvate con successo!")
-            st.rerun()
 
         pdf_bytes = genera_pdf_storico(storico_attuale)
         st.download_button(
@@ -317,4 +370,4 @@ with tab3:
             type="primary",
         )
     else:
-        st.info("Nessun movimento registrato. Scansiona uno scontrino o aggiungi una voce manualmente.")
+        st.info("Nessun movimento registrato in Supabase.")
