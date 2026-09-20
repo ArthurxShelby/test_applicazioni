@@ -39,9 +39,9 @@ if foto_scattata is not None:
 
                 prompt = "Analizza questo scontrino ed estrai nome negozio, data e totale finale in euro."
 
-                # Chiamata API con modello gemini-2.0-flash
+                # Chiamata API con il modello attivo gemini-3.6-flash
                 response = client.models.generate_content(
-                    model="gemini-2.0-flash",
+                    model="gemini-3.6-flash",
                     contents=[immagine, prompt],
                     config=config,
                 )
