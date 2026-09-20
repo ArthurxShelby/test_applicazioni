@@ -17,7 +17,7 @@ import streamlit as st
 
 # Configurazione della pagina Streamlit
 st.set_page_config(page_title="Gestione Scontrini", layout="centered")
-st.title("🧾 Scatta, Registra e Genera PDF")
+st.title("🧾 Scatta, Gestisci e Genera PDF")
 
 FILE_STORICO = "storico_scontrini.json"
 
@@ -40,22 +40,30 @@ def carica_storico() -> list:
     if os.path.exists(FILE_STORICO):
         with open(FILE_STORICO, "r", encoding="utf-8") as f:
             try:
-                return json.load(f)
+                data = json.load(f)
+                # Assicura che ogni elemento abbia un id univoco per le modifiche
+                for idx, item in enumerate(data):
+                    if "id" not in item:
+                        item["id"] = idx
+                return data
             except json.JSONDecodeError:
                 return []
     return []
 
 
-def salva_scontrino(negozio: str, data: str, totale: float):
-    """Aggiunge uno scontrino allo storico e ordina la lista per data (più recenti prima)."""
-    storico = carica_storico()
-    storico.append({"negozio": negozio, "data": data, "totale": totale})
-
-    # Ordinamento per data decrescente (da più recente a meno recente)
+def salva_lista_storico(storico: list):
+    """Salva l'intera lista dello storico ordinata per data (più recente prima)."""
     storico.sort(key=lambda x: x["data"], reverse=True)
-
     with open(FILE_STORICO, "w", encoding="utf-8") as f:
         json.dump(storico, f, ensure_ascii=False, indent=2)
+
+
+def salva_scontrino(negozio: str, data: str, totale: float):
+    """Aggiunge uno scontrino allo storico."""
+    storico = carica_storico()
+    nuovo_id = max([item.get("id", 0) for item in storico], default=0) + 1
+    storico.append({"id": nuovo_id, "negozio": negozio, "data": data, "totale": totale})
+    salva_lista_storico(storico)
 
 
 # --- FUNZIONE GENERAZIONE PDF ---
@@ -66,17 +74,15 @@ def genera_pdf_storico(storico: list) -> bytes:
     story = []
     styles = getSampleStyleSheet()
 
-    # Titolo del report
     title = Paragraph("<b>Report Generale Scontrini</b>", styles["Heading1"])
     story.append(title)
-    
+
     data_generazione = Paragraph(
         f"<i>Generato il: {datetime.now().strftime('%d/%m/%Y alle %H:%M')}</i>", styles["Normal"]
     )
     story.append(data_generazione)
     story.append(Spacer(1, 15))
 
-    # Definizione dati tabella
     table_data = [["Data", "Esercente / Negozio", "Importo (€)"]]
     totale_complessivo = 0.0
 
@@ -84,10 +90,8 @@ def genera_pdf_storico(storico: list) -> bytes:
         table_data.append([item["data"], item["negozio"], f"€ {item['totale']:.2f}"])
         totale_complessivo += item["totale"]
 
-    # Riga del totale
     table_data.append(["TOTALE COMPLESSIVO", "", f"€ {totale_complessivo:.2f}"])
 
-    # Stile della tabella PDF
     table_style = TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#31333F")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
@@ -99,7 +103,7 @@ def genera_pdf_storico(storico: list) -> bytes:
         ("GRID", (0, 0), (-1, -2), 0.5, colors.grey),
         ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#E0E0E0")),
         ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-        ("SPAN", (0, -1), (1, -1)),  # Unisce le prime due celle della riga totale
+        ("SPAN", (0, -1), (1, -1)),
     ])
 
     table = Table(table_data, colWidths=[100, 300, 120])
@@ -159,37 +163,82 @@ with tab1:
                         break
 
                 if dati is not None:
-                    # Calcolo data finale
                     data_finale = (
                         dati.data
                         if dati.data
                         else datetime.now().strftime("%Y-%m-%d")
                     )
 
-                    # Salva lo scontrino nello storico locale ordinato
                     salva_scontrino(dati.nome_negozio, data_finale, dati.totale_euro)
 
-                    st.success("Scontrino analizzato e salvato nello storico!")
+                    st.success("Scontrino analizzato e salvato!")
                     st.metric("Totale Euro", f"€ {dati.totale_euro:.2f}")
                     st.write(f"**Negozio:** {dati.nome_negozio}")
                     st.write(f"**Data registrata:** {data_finale}")
                 else:
                     st.error(f"Si è verificato un errore durante l'analisi: {ultimo_errore}")
 
-# TAB 2: STORICO & PDF
+# TAB 2: STORICO, MODIFICA, CANCELLAZIONE & PDF
 with tab2:
     storico_attuale = carica_storico()
 
     if storico_attuale:
-        st.subheader("Elenco Scontrini Registrati (Ordinati per Data)")
-        st.dataframe(storico_attuale, use_container_width=True)
+        st.subheader("Elenco Scontrini Registrati")
 
         totale_speso = sum(item["totale"] for item in storico_attuale)
         st.metric("Totale Spesa Accumulata", f"€ {totale_speso:.2f}")
 
-        # Generazione del file PDF al volo
-        pdf_bytes = genera_pdf_storico(storico_attuale)
+        st.divider()
 
+        # Ciclo per mostrare ciascuno scontrino con opzioni di Modifica e Cancellazione
+        scontrino_da_rimuovere = None
+        scontrino_modificato = False
+
+        for idx, item in enumerate(storico_attuale):
+            col_info, col_modifica, col_elimina = st.columns([3, 1, 1])
+
+            with col_info:
+                st.write(f"📅 **{item['data']}** | 🏪 **{item['negozio']}** | 💶 **€ {item['totale']:.2f}**")
+
+            with col_modifica:
+                if st.button("✏️ Modifica", key=f"edit_{item['id']}"):
+                    st.session_state[f"editing_{item['id']}"] = not st.session_state.get(f"editing_{item['id']}", False)
+
+            with col_elimina:
+                if st.button("🗑️ Elimina", key=f"del_{item['id']}", type="secondary"):
+                    scontrino_da_rimuovere = item["id"]
+
+            # Form di modifica espandibile
+            if st.session_state.get(f"editing_{item['id']}", False):
+                with st.form(key=f"form_edit_{item['id']}"):
+                    nuovo_negozio = st.text_input("Negozio", value=item["negozio"])
+                    nuova_data = st.text_input("Data (YYYY-MM-DD)", value=item["data"])
+                    nuovo_totale = st.number_input("Totale (€)", value=float(item["totale"]), step=0.1)
+
+                    if st.form_submit_button("💾 Salva Modifiche"):
+                        item["negozio"] = nuovo_negozio
+                        item["data"] = nuova_data
+                        item["totale"] = nuovo_totale
+                        scontrino_modificato = True
+                        st.session_state[f"editing_{item['id']}"] = False
+
+            st.divider()
+
+        # Gestione eliminazione scontrino
+        if scontrino_da_rimuovere is not None:
+            storico_attuale = [x for x in storico_attuale if x["id"] != scontrino_da_rimuovere]
+            salva_lista_storico(storico_attuale)
+            st.success("Scontrino eliminato con successo!")
+            st.rerun()
+
+        # Gestione salvataggio modifiche
+        if scontrino_modificato:
+            salva_lista_storico(storico_attuale)
+            st.success("Modifiche salvate con successo!")
+            st.rerun()
+
+        # Generazione e scaricamento del PDF aggiornato
+        pdf_bytes = genera_pdf_storico(storico_attuale)
         st.download_button(
             label="📄 Scarica Report PDF",
             data=pdf_bytes,
@@ -198,4 +247,4 @@ with tab2:
             type="primary",
         )
     else:
-        st.info("Nessun uno scontrino salvato nello storico. Scansiona uno scontrino dalla prima scheda.")
+        st.info("Nessuno scontrino presente nello storico. Scansiona uno scontrino dalla prima scheda.")
