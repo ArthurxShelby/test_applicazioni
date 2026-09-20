@@ -10,7 +10,7 @@ st.set_page_config(page_title="Lettore Scontrini", layout="centered")
 st.title("🧾 Scatta e Analizza Scontrino")
 
 
-# Definizione dello schema dati per l'output strutturato
+# Schema dei dati di output
 class ScontrinoData(BaseModel):
     nome_negozio: str = Field(description="Nome dell'esercente")
     data: str = Field(description="Data dello scontrino (YYYY-MM-DD)")
@@ -19,20 +19,18 @@ class ScontrinoData(BaseModel):
     )
 
 
-# Componente per scattare la foto tramite fotocamera
+# Acquisizione foto da fotocamera
 foto_scattata = st.camera_input("Scatta una foto allo scontrino")
 
 if foto_scattata is not None:
-    # Apre l'immagine scattata
     immagine = Image.open(foto_scattata)
 
     if st.button("Analizza Scontrino", type="primary"):
         with st.spinner("Analisi in corso con Gemini..."):
             try:
-                # Inizializzazione del client Gemini
+                # Inizializzazione del client
                 client = genai.Client()
 
-                # Configurazione della generazione con schema JSON
                 config = types.GenerateContentConfig(
                     response_mime_type="application/json",
                     response_schema=ScontrinoData,
@@ -41,16 +39,15 @@ if foto_scattata is not None:
 
                 prompt = "Analizza questo scontrino ed estrai nome negozio, data e totale finale in euro."
 
+                # Chiamata API con modello gemini-2.0-flash
                 response = client.models.generate_content(
-                model="gemini-1.5-flash", 
-                contents=[immagine, prompt], 
-                config=config
+                    model="gemini-2.0-flash",
+                    contents=[immagine, prompt],
+                    config=config,
                 )
 
-                # Parsing dei dati ottenuti
                 dati: ScontrinoData = response.parsed
 
-                # Visualizzazione dei risultati
                 st.success("Estrazione completata!")
                 st.metric("Totale Euro", f"€ {dati.totale_euro:.2f}")
                 st.write(f"**Negozio:** {dati.nome_negozio}")
