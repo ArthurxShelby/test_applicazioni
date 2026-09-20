@@ -2,3 +2,4 @@ google-genai
 pillow
 pydantic
 streamlit
+reportlab
