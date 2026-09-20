@@ -3,3 +3,4 @@ pillow
 pydantic
 streamlit
 reportlab
+supabase
