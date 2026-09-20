@@ -1,4 +1,5 @@
 import os
+import time
 import streamlit as st
 from google import genai
 from google.genai import types
@@ -27,31 +28,44 @@ if foto_scattata is not None:
 
     if st.button("Analizza Scontrino", type="primary"):
         with st.spinner("Analisi in corso con Gemini..."):
-            try:
-                # Inizializzazione del client
-                client = genai.Client()
+            # Elenco di modelli da provare in ordine di priorità
+            modelli = ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
+            dati = None
+            ultimo_errore = None
 
-                config = types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=ScontrinoData,
-                    temperature=0.1,
-                )
+            client = genai.Client()
+            config = types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=ScontrinoData,
+                temperature=0.1,
+            )
+            prompt = "Analizza questo scontrino ed estrai nome negozio, data e totale finale in euro."
 
-                prompt = "Analizza questo scontrino ed estrai nome negozio, data e totale finale in euro."
+            # Tentativo di chiamata con retry e fallback su modelli alternativi
+            for modello in modelli:
+                for tentativo in range(2):  # Prova fino a 2 volte per modello
+                    try:
+                        response = client.models.generate_content(
+                            model=modello,
+                            contents=[immagine, prompt],
+                            config=config,
+                        )
+                        dati = response.parsed
+                        break
+                    except Exception as e:
+                        ultimo_errore = e
+                        if "503" in str(e):
+                            time.sleep(2)  # Attende 2 secondi prima di riprovare
+                            continue
+                        else:
+                            break
+                if dati is not None:
+                    break
 
-                # Chiamata API con il modello attivo gemini-3.6-flash
-                response = client.models.generate_content(
-                    model="gemini-3.6-flash",
-                    contents=[immagine, prompt],
-                    config=config,
-                )
-
-                dati: ScontrinoData = response.parsed
-
+            if dati is not None:
                 st.success("Estrazione completata!")
                 st.metric("Totale Euro", f"€ {dati.totale_euro:.2f}")
                 st.write(f"**Negozio:** {dati.nome_negozio}")
                 st.write(f"**Data:** {dati.data}")
-
-            except Exception as e:
-                st.error(f"Si è verificato un errore durante l'analisi: {e}")
+            else:
+                st.error(f"Si è verificato un errore durante l'analisi: {ultimo_errore}")
