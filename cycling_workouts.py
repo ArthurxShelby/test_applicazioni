@@ -1,10 +1,11 @@
 import streamlit as st
 from supabase import create_client
+from datetime import datetime, timedelta
 
 # Configurazione della pagina
-st.set_page_config(page_title="Cycling Training Manager", page_icon="🚴", layout="wide")
+st.set_page_config(page_title="Cycling Coach Planner", page_icon="🚴‍♂️", layout="wide")
 
-# Connessione a Supabase tramite secrets
+# Connessione a Supabase
 @st.cache_resource
 def init_supabase():
     url = st.secrets["SUPABASE_URL"]
@@ -13,66 +14,109 @@ def init_supabase():
 
 supabase = init_supabase()
 
-st.title("🚴 Gestione Programma Allenamenti Bici")
-st.markdown("Pianifica i tuoi lavori specifici, le uscite in solitaria e i giri di gruppo.")
+st.title("🚴‍♂️ Smart Cycling Training Planner")
+st.markdown("Generatore automatico di tabelle di allenamento personalizzate basate sui tuoi parametri.")
 
-# Sidebar per inserire nuovi allenamenti
+# --- SIDEBAR: PARAMETRI E GENERATORE AUTOMATICO ---
 with st.sidebar:
-    st.header("Nuovo Allenamento")
-    with st.form("workout_form", clear_on_submit=True):
-        w_date = st.date_input("Data Allenamento")
-        day = st.selectbox("Giorno", ["Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica"])
-        w_type = st.selectbox("Tipologia", ["Soglia / Ripetute", "Fondo / Agilità", "Uscita di Gruppo", "Scarico / Riposo"])
-        desc = st.text_area("Dettagli (es. ripetute su salita, watt target)")
-        duration = st.number_input("Durata stimata (minuti)", min_value=30, max_value=480, value=120, step=15)
-        
-        submitted = st.form_submit_button("Aggiungi al Calendario")
-        
-        if submitted:
-            try:
-                data = {
-                    "workout_date": str(w_date),
-                    "day_of_week": day,
-                    "workout_type": w_type,
-                    "description": desc,
-                    "duration_min": duration,
-                    "completed": False
-                }
-                supabase.table("cycling_workouts").insert(data).execute()
-                st.success("Allenamento aggiunto con successo!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Errore durante il salvataggio: {e}")
+    st.header("⚙️ I tuoi Parametri")
+    
+    # Parametri anagrafici e di volume
+    age = st.number_input("Età", min_value=18, max_value=80, value=56)
+    weekly_rides = st.slider("Uscite settimanali", min_value=2, max_value=6, value=4)
+    target_km = st.number_input("Km settimanali target", value=350)
+    target_d_plus = st.number_input("Dislivello (D+) target in metri", value=3800, step=100)
+    
+    st.markdown("---")
+    st.header("🛠️ Genera Tabella")
+    start_date = st.date_input("Data inizio blocco", value=datetime.today())
+    num_weeks = st.slider("Numero di settimane da generare", min_value=1, max_value=4, value=2)
+    
+    if st.button("Genera Programma Automatico", type="primary"):
+        try:
+            # Pulisciamo o creiamo la logica di generazione
+            current_date = start_date
+            generated_data = []
+            
+            for week in range(1, num_weeks + 1):
+                # Struttura tipo: 4 uscite (2 solitarie infrasettimanali, 2 di gruppo weekend)
+                days_plan = [
+                    {"day": "Martedì", "type": "Solitaria - Lavori di Soglia", "desc": "Ripetute / Lavori specifici (es. San Servolo) + fondo medio", "dur": 120, "zone": "Z4/Soglia"},
+                    {"day": "Giovedì", "type": "Solitaria - Agilità e Forza", "desc": "Agilità, sfr e passista in solitaria", "dur": 150, "zone": "Z3/Tempo"},
+                    {"day": "Sabato", "type": "Uscita di Gruppo - Collinare", "desc": "Giro in compagnia, ritmo brillante ma gestito", "dur": 210, "zone": "Z2/Z3"},
+                    {"day": "Domenica", "type": "Uscita di Gruppo - Lungo", "desc": "Giro lungo con dislivello e gruppo amatoriale", "dur": 270, "zone": "Z2"},
+                ]
+                
+                # Se l'utente vuole un numero di uscite diverso, adattiamo la logica di base
+                active_days = days_plan[:weekly_rides]
+                
+                for item in active_days:
+                    # Calcoliamo una data approssimativa basata sul giorno della settimana
+                    generated_data.append({
+                        "week_number": week,
+                        "workout_date": str(current_date),
+                        "day_of_week": item["day"],
+                        "workout_type": item["type"],
+                        "target_description": item["desc"],
+                        "duration_min": item["dur"],
+                        "target_zone": item["zone"],
+                        "completed": False
+                    })
+                    current_date += timedelta(days=1)
+                
+                # Avanziamo i giorni per arrivare alla settimana successiva
+                current_date += timedelta(days=(7 - len(active_days)))
 
-# Visualizzazione principale del programma
-st.header("Tabellone Attività")
+            # Salvataggio in batch su Supabase
+            supabase.table("cycling_training_plans").insert(generated_data).execute()
+            st.success(f"Programma di {num_weeks} settimane generato e salvato su Supabase!")
+            st.rerun()
+            
+        except Exception as e:
+            st.error(f"Errore nella generazione: {e}")
+            
+    if st.button("🗑️ Svuota tutto il database"):
+        supabase.table("cycling_training_plans").delete().neq("id", 0).execute()
+        st.warning("Database svuotato.")
+        st.rerun()
+
+# --- CORPO PRINCIPALE: VISUALIZZAZIONE TABELLA ---
+st.header("📅 Il tuo Programma Attuale")
 
 try:
-    response = supabase.table("cycling_workouts").select("*").order("workout_date", desc=False).execute()
-    workouts = response.data
+    response = supabase.table("cycling_training_plans").select("*").order("workout_date", desc=False).execute()
+    plans = response.data
     
-    if workouts:
-        # Mostra come tabella interattiva
-        for w in workouts:
-            col1, col2, col3, col4, col5 = st.columns([2, 2, 3, 2, 1])
-            with col1:
-                st.markdown(f"**{w['workout_date']}** ({w['day_of_week']})")
-            with col2:
-                st.badge = "🔴" if "Soglia" in w['workout_type'] else "🟢"
-                st.markdown(f"{st.badge} `{w['workout_type']}`")
-            with col3:
-                st.write(w['description'] or "Nessun dettaglio")
-            with col4:
-                st.write(f"⏱️ {w['duration_min']} min")
-            with col5:
-                # Pulsante per marcare come completato
-                status = st.checkbox("Fatto", value=w['completed'], key=f"chk_{w['id']}")
-                if status != w['completed']:
-                    supabase.table("cycling_workouts").update({"completed": status}).eq("id", w['id']).execute()
-                    st.rerun()
-            st.divider()
+    if plans:
+        # Metriche riassuntive
+        total_mins = sum([p['duration_min'] for p in plans if not p['completed']])
+        col_m1, col_m2 = st.columns(2)
+        col_m1.metric("Minuti totali pianificati", f"{total_mins} min (~{round(total_mins/60, 1)} ore)")
+        col_m2.metric("Uscite in programma", len(plans))
+        
+        st.markdown("---")
+        
+        # Mostriamo il tabellone diviso per settimane
+        for p in plans:
+            with st.container():
+                c1, c2, c3, c4, c5 = st.columns([2, 2, 3, 2, 1])
+                with c1:
+                    st.markdown(f"**Settimana {p['week_number']}**<br>{p['workout_date']} ({p['day_of_week']})", unsafe_allow_html=True)
+                with c2:
+                    badge_color = "🔴" if "Soglia" in p['workout_type'] else "🟢"
+                    st.markdown(f"{badge_color} **{p['workout_type']}**<br>Target: `{p['target_zone']}`", unsafe_allow_html=True)
+                with c3:
+                    st.write(p['target_description'])
+                with c4:
+                    st.write(f"⏱️ {p['duration_min']} minuti")
+                with c5:
+                    is_done = st.checkbox("Fatto", value=p['completed'], key=f"plan_{p['id']}")
+                    if is_done != p['completed']:
+                        supabase.table("cycling_training_plans").update({"completed": is_done}).eq("id", p['id']).execute()
+                        st.rerun()
+                st.divider()
     else:
-        st.info("Nessun allenamento pianificato. Utilizza la sidebar per aggiungerne uno.")
+        st.info("Nessun piano di allenamento attivo. Usa i parametri nella barra laterale e clicca su 'Genera Programma Automatico'.")
 
 except Exception as e:
-    st.error(f"Impossibile caricare i dati da Supabase: {e}")
+    st.error(f"Errore di caricamento da Supabase: {e}")
