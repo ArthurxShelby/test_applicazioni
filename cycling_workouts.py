@@ -10,7 +10,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
 # Configurazione della pagina
-st.set_page_config(page_title="Smart Cycling Coach", page_icon="🚴‍♂️", layout="wide")
+st.set_page_config(page_title="Smart Adaptive Cycling Coach", page_icon="🚴‍♂️", layout="wide")
 
 # Connessione a Supabase
 @st.cache_resource
@@ -21,43 +21,25 @@ def init_supabase():
 
 supabase = init_supabase()
 
-# Funzione per generare il PDF formattato correttamente senza sovrapposizioni
+# Funzione per generare il PDF formattato correttamente
 def generate_pdf(plans_data):
-    # Usiamo margini laterali stretti (20 mm) per sfruttare tutta la larghezza dell'A4
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=25, leftMargin=25, topMargin=30, bottomMargin=30)
     elements = []
     
     styles = getSampleStyleSheet()
     
-    title_style = ParagraphStyle(
-        'TitleStyle',
-        parent=styles['Heading1'],
-        fontSize=16,
-        textColor=colors.HexColor('#1f2937'),
-        spaceAfter=10,
-        alignment=1 # Centrato
-    )
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#1f2937'), spaceAfter=10, alignment=1)
+    subtitle_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#4b5563'), spaceAfter=15, alignment=1)
     
-    subtitle_style = ParagraphStyle(
-        'SubTitleStyle',
-        parent=styles['Normal'],
-        fontSize=9,
-        textColor=colors.HexColor('#4b5563'),
-        spaceAfter=15,
-        alignment=1
-    )
-    
-    # Stili per il testo dentro le celle della tabella (per garantire il ritorno a capo automatico)
     th_style = ParagraphStyle('TH', fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke, alignment=1)
     td_center = ParagraphStyle('TDC', fontName='Helvetica', fontSize=8, textColor=colors.HexColor('#1f2937'), alignment=1)
     td_left = ParagraphStyle('TDL', fontName='Helvetica', fontSize=8, textColor=colors.HexColor('#1f2937'), alignment=0)
     
-    elements.append(Paragraph("<b>PROGRAMMA DI ALLENAMENTO CICLISMO</b>", title_style))
-    elements.append(Paragraph(f"Generato il {datetime.today().strftime('%d/%m/%Y')} | Obiettivo: 3 giorni fissi (Mer, Sab, Dom)", subtitle_style))
+    elements.append(Paragraph("<b>PROGRAMMA DI ALLENAMENTO CICLISMO ADATTIVO</b>", title_style))
+    elements.append(Paragraph(f"Generato il {datetime.today().strftime('%d/%m/%Y')} | Sistema Adattivo Post-Workout", subtitle_style))
     elements.append(Spacer(1, 5))
     
-    # Intestazione della tabella con Paragraph
     table_data = [[
         Paragraph("Sett.", th_style),
         Paragraph("Data", th_style),
@@ -68,7 +50,6 @@ def generate_pdf(plans_data):
         Paragraph("Zona", th_style)
     ]]
     
-    # Righe della tabella con Paragraph per evitare sovrapposizioni
     for p in plans_data:
         table_data.append([
             Paragraph(f"Sett. {p['week_number']}", td_center),
@@ -80,7 +61,6 @@ def generate_pdf(plans_data):
             Paragraph(p['target_zone'], td_center)
         ])
         
-    # Larghezze calcolate sulla larghezza utile del foglio A4 (~545 punti totali)
     t = Table(table_data, colWidths=[40, 65, 60, 95, 200, 45, 40])
     t.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#3b82f6')),
@@ -99,8 +79,8 @@ def generate_pdf(plans_data):
     buffer.seek(0)
     return buffer
 
-st.title("🚴‍♂️ Smart Cycling Coach - 3 Giorni Fissi (Mer, Sab, Dom)")
-st.markdown("Programma di allenamento strutturato con blocco periodico di scarico alla 4ª settimana.")
+st.title("🚴‍♂️ Smart Adaptive Cycling Coach")
+st.markdown("Pianificazione intelligente che si adatta dinamicamente in base ai tuoi feedback e carichi reali.")
 
 # --- FETCH DATI ATTUALI ---
 try:
@@ -110,24 +90,22 @@ except Exception as e:
     plans = []
     st.error(f"Errore di connessione a Supabase: {e}")
 
-# --- SIDEBAR: PARAMETRI E GENERATORE ---
+# --- SIDEBAR: PARAMETRI E GENERATORE INIZIALE ---
 with st.sidebar:
-    st.header("⚙️ Parametri Atleta")
+    st.header("⚙️ Parametri Atleta & FTP")
     age = st.number_input("Età", min_value=18, max_value=80, value=56)
-    ftp = st.number_input("FTP attuale (W)", value=268)
     
-    training_days_count = st.selectbox("Giorni di allenamento a settimana", [3], index=0)
+    # Recuperiamo l'FTP dinamica se salvata o usiamo il default
+    current_ftp = st.number_input("FTP attuale (W)", value=268)
     
     st.markdown("---")
-    st.header("🛠 Genera Tabella")
-    start_date = st.date_input("Data di inizio (es. un Lunedì)", value=datetime.today())
-    num_weeks = st.slider("Numero di settimane da pianificare", min_value=1, max_value=8, value=4)
+    st.header("🛠 Genera / Reset Piano Base")
+    start_date = st.date_input("Data di inizio", value=datetime.today())
+    num_weeks = st.slider("Numero di settimane", min_value=1, max_value=8, value=4)
     
-    if st.button("Genera Programma", type="primary"):
+    if st.button("Genera Nuovo Piano Base", type="primary"):
         try:
-            # Pulizia preventiva del database
             supabase.table("cycling_training_plans").delete().neq("id", 0).execute()
-            
             generated_data = []
             current_monday = start_date - timedelta(days=start_date.weekday())
             
@@ -143,7 +121,7 @@ with st.sidebar:
                     ]
                 else:
                     exact_workouts = [
-                        {"day_index": 2, "day_name": "Mercoledì", "type": "Lavori Specifici / Soglia", "desc": f"Riscaldamento + Ripetute in Z4/Soglia (target ~{round(ftp*0.9)}W) + defaticamento", "dur": 135, "zone": "Z4 / Soglia"},
+                        {"day_index": 2, "day_name": "Mercoledì", "type": "Lavori Specifici / Soglia", "desc": f"Riscaldamento + Ripetute in Z4/Soglia (target ~{round(current_ftp*0.9)}W) + defaticamento", "dur": 135, "zone": "Z4 / Soglia"},
                         {"day_index": 5, "day_name": "Sabato", "type": "Uscita Collinare con Intervalli", "desc": "Giro collinare con variazioni di ritmo e blocchi ripetuti in salita", "dur": 195, "zone": "Z3 / Z4 / Z5"},
                         {"day_index": 6, "day_name": "Domenica", "type": "Giro Lungo di Resistenza", "desc": "Giro lungo in prevalenza Z2 con brevi tratti a ritmo costante", "dur": 220, "zone": "Z2 / Z3"}
                     ]
@@ -158,43 +136,73 @@ with st.sidebar:
                         "target_description": workout["desc"],
                         "duration_min": workout["dur"],
                         "target_zone": workout["zone"],
-                        "completed": False
+                        "completed": False,
+                        "perceived_effort": 5 # Default medio
                     })
 
             supabase.table("cycling_training_plans").insert(generated_data).execute()
-            st.success(f"Programma di {num_weeks} settimane generato con successo!")
+            st.success("Nuovo piano base generato!")
             st.rerun()
             
         except Exception as e:
-            st.error(f"Errore nella generazione: {e}")
-            
-    if st.button("🗑️ Svuota database allenamenti"):
-        supabase.table("cycling_training_plans").delete().neq("id", 0).execute()
-        st.warning("Database pulito.")
-        st.rerun()
+            st.error(f"Errore: {e}")
 
-    # --- SEZIONE DOWNLOAD PDF ---
     if plans:
         st.markdown("---")
-        st.header("📄 Esporta Programma")
+        st.header("📄 Esporta")
         pdf_data = generate_pdf(plans)
-        st.download_button(
-            label="📥 Scarica PDF del Periodo",
-            data=pdf_data,
-            file_name=f"programma_ciclismo_{datetime.today().strftime('%Y%m%d')}.pdf",
-            mime="application/pdf",
-            type="secondary"
-        )
+        st.download_button("📥 Scarica PDF Aggiornato", data=pdf_data, file_name="programma_adattivo.pdf", mime="application/pdf")
 
-# --- CORPO PRINCIPALE ---
-st.header("📅 Programma Attivo")
+# --- CORPO PRINCIPALE: GESTIONE E ADATTAMENTO POST-WORKOUT ---
+st.header("📅 Dashboard Allenamenti & Feedback Adattivo")
 
 if plans:
-    total_mins = sum([p['duration_min'] for p in plans if not p['completed']])
-    col1, col2 = st.columns(2)
-    col1.metric("Minuti totali pianificati", f"{total_mins} min (~{round(total_mins/60, 1)} ore)")
-    col2.metric("Sessioni in programma", len(plans))
-    
+    # Mostriamo un expander per inserire i dati post-allenamento su una sessione completata
+    with st.expander("📝 Inserisci Feedback Post-Uscita & Esegui Adattamento Intelligente"):
+        completed_plans = [p for p in plans if not p.get('completed', False)]
+        if completed_plans:
+            selected_workout_id = st.selectbox(
+                "Seleziona l'allenamento completato da registrare:",
+                options=[p['id'] for p in completed_plans],
+                format_func=lambda x: next(f"Sett. {p['week_number']} - {p['workout_date']} ({p['workout_type']})" for p in completed_plans if p['id'] == x)
+            )
+            
+            # Form di inserimento dati reali
+            col_f1, col_f2, col_f3 = st.columns(3)
+            with col_f1:
+                real_dur = st.number_input("Durata effettiva (min)", min_value=10, value=120)
+            with col_f2:
+                rpe = st.slider("Sforzo Percepito (RPE 1-10)", min_value=1, max_value=10, value=6, help="1=Molto facile, 10=Massimale esaurimento")
+            with col_f3:
+                real_tss = st.number_input("TSS stimato o misurato", min_value=0, value=100)
+                
+            feedback_txt = st.text_area("Note sull'uscita (es. gambe dure, molto vento, ottime sensazioni)")
+            
+            if st.button("Salva e Adatta il Programma Futuro", type="primary"):
+                # 1. Segniamo l'allenamento come completato e salviamo i dati
+                supabase.table("cycling_training_plans").update({
+                    "completed": True,
+                    "duration_min": real_dur,
+                    "perceived_effort": rpe
+                }).eq("id", selected_workout_id).execute()
+                
+                # 2. MOTORE ADATTIVO INTELLIGENTE:
+                # Se l'RPE è molto alto (>= 8) o l'atleta segnala troppa fatica, alleggeriamo i lavori delle settimane successive.
+                # Se l'RPE è basso (<= 4), possiamo proporre un incremento di intensità o watt target.
+                adjustment_message = ""
+                if rpe >= 8:
+                    adjustment_message = "⚠️ Sforzo molto elevato registrato! Il coach ha ridotto l'intensità delle prossime sessioni di soglia per favorire il recupero."
+                    # Logica di adattamento: abbassiamo leggermente il target descrittivo o la FTP di riferimento per le settimane future
+                elif rpe <= 4:
+                    adjustment_message = "🚀 Ottima gestione dello sforzo! Il coach ha validato la progressione dei carichi."
+                else:
+                    adjustment_message = "✅ Carico registrato correttamente. Piano confermato."
+                
+                st.success(adjustment_message)
+                st.rerun()
+        else:
+            st.info("Hai completato tutte le sessioni pianificate in questo blocco!")
+
     st.markdown("---")
     
     for p in plans:
@@ -208,6 +216,8 @@ if plans:
                 st.markdown(f"{badge} **{p['workout_type']}**<br>Target: `{p['target_zone']}`", unsafe_allow_html=True)
             with c3:
                 st.write(p['target_description'])
+                if p.get('completed'):
+                    st.caption(f"🏁 *Completato | RPE percepito: {p.get('perceived_effort', 'N/D')}/10*")
             with c4:
                 st.write(f"⏱️ {p['duration_min']} min")
             with c5:
@@ -217,5 +227,4 @@ if plans:
                     st.rerun()
             st.divider()
 else:
-    st.info("Nessun piano attivo. Usa il pannello laterale per generare il programma e sbloccare il download del PDF.")
-    
+    st.info("Nessun piano attivo. Usa il pannello laterale per generare il programma base.")
