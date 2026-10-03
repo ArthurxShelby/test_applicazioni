@@ -40,18 +40,18 @@ next_workout_day = st.selectbox(
 # Funzione per prelevare l'ultima attività tramite API di Intervals.icu
 def fetch_latest_activity_from_intervals():
     try:
-        athlete_id = st.secrets["INTERVALS_ATHLETE_ID"]
+        # Se nel secret metti '0', l'API userà automaticamente l'utente associato alla chiave API
+        athlete_id = st.secrets.get("INTERVALS_ATHLETE_ID", "0")
         api_key = st.secrets["INTERVALS_API_KEY"]
         
         url = f"https://intervals.icu/api/v1/athlete/{athlete_id}/activities.json"
         
-        # L'API di Intervals.icu usa Basic Auth con utente "API_KEY" e password la chiave API
+        # Autenticazione Basic con username fisso "API_KEY" e password la chiave API personale
         response = requests.get(url, auth=("API_KEY", api_key))
         
         if response.status_code == 200:
             activities = response.json()
             if activities:
-                # Restituisce l'attività più recente (la prima della lista)
                 latest = activities[0]
                 return {
                     "date": latest.get("start_date_local"),
@@ -63,6 +63,8 @@ def fetch_latest_activity_from_intervals():
                     "avg_power": latest.get("icu_average_watts", 0),
                     "intensity_factor": latest.get("icu_intensity", 0)
                 }
+        else:
+            st.error(f"Errore HTTP {response.status_code}: {response.text}")
         return None
     except Exception as e:
         st.error(f"Errore di connessione alle API di Intervals.icu: {e}")
@@ -110,4 +112,4 @@ if st.button("Sincronizza Ultima Uscita e Chiedi al Coach", type="primary"):
                 except Exception as e:
                     st.error(f"Errore durante l'elaborazione con l'intelligenza artificiale: {e}")
         else:
-            st.warning("Non è stato possibile recuperare le attività. Verifica che l'Athlete ID e l'API Key nei secrets siano corretti.")
+            st.warning("Non è stato possibile recuperare le attività. Prova a impostare `INTERVALS_ATHLETE_ID = \"0\"` nei tuoi secrets di Streamlit.")
