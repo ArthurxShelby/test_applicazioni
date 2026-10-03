@@ -124,24 +124,29 @@ if st.session_state.latest_activity is not None:
             Scrivi una risposta chiara, professionale e motivante in italiano.
             """
             
-            # Tentativo automatico con diversi modelli disponibili per evitare errori 404
-            models_to_try = ['gemini-1.5-flash', 'gemini-pro', 'gemini-1.5-pro']
             ai_response = None
             last_error = None
             
-            for m_name in models_to_try:
-                try:
-                    model = genai.GenerativeModel(m_name)
-                    ai_response = model.generate_content(prompt)
-                    if ai_response and ai_response.text:
-                        break
-                except Exception as ex:
-                    last_error = ex
-                    continue
+            try:
+                # Recupera dinamicamente la lista dei modelli supportati dall'API Key corrente
+                supported_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                
+                for m_name in supported_models:
+                    try:
+                        clean_name = m_name.replace("models/", "")
+                        model = genai.GenerativeModel(clean_name)
+                        ai_response = model.generate_content(prompt)
+                        if ai_response and ai_response.text:
+                            break
+                    except Exception as ex:
+                        last_error = ex
+                        continue
+            except Exception as e:
+                last_error = e
             
             if ai_response and ai_response.text:
                 st.markdown("---")
                 st.subheader("💡 Analisi & Consiglio del Coach AI")
                 st.write(ai_response.text)
             else:
-                st.error(f"Impossibile generare la risposta con nessun modello disponibile. Errore tecnico: {last_error}")
+                st.error(f"Impossibile trovare un modello compatibile o generare la risposta. Errore tecnico: {last_error}")
