@@ -33,6 +33,7 @@ def init_supabase():
 supabase = init_supabase()
 
 # 1. Funzione per l'estrazione dei dati dal file con Gemini Vision
+# 1. Funzione di estrazione dati migliorata e robusta
 def extract_workout_data(uploaded_file):
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
@@ -46,8 +47,8 @@ def extract_workout_data(uploaded_file):
         }
         
         prompt = """
-        Analizza questo documento o screenshot di Intervals.icu ed estrai ESATTAMENTE in formato JSON puro i seguenti valori numerici. Se un valore non è presente, metti 0.
-        Restituisci SOLO un dizionario JSON con queste chiavi esatte e nessun altro testo:
+        Analizza questo documento o screenshot di Intervals.icu. Estrai i valori numerici principali relativi all'allenamento svolto.
+        Restituisci UNICAMENTE un oggetto JSON valido (senza testo prima o dopo, senza backtick se possibile, oppure racchiuso in un blocco ```json ... ```) con queste esatte chiavi (se un valore non è chiaro o manca, metti 0):
         {
             "duration_minutes": 0,
             "tss": 0,
@@ -62,53 +63,51 @@ def extract_workout_data(uploaded_file):
         """
         
         response = model.generate_content([file_part, prompt])
-            
-        import json
         text = response.text.strip()
+        
+        # Pulizia robusta del blocco markdown json
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0].strip()
         elif "```" in text:
             text = text.split("```")[1].split("```")[0].strip()
             
+        import json
         return json.loads(text)
     except Exception as e:
-        st.error(f"Errore nell'estrazione dei dati: {e}")
+        st.error(f"Errore critico nell'estrazione dei dati con Gemini Vision: {e}")
         return None
 
-# 2. Nuova funzione per il ricalcolo adattivo intelligente dei prossimi allenamenti tramite AI
+# 2. Funzione di ricalcolo adattivo blindata
 def adaptive_replan_workouts(completed_workout_data, future_workouts, current_ftp):
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
         
         prompt = f"""
-        Agisci come un coach di ciclismo professionista. Un tuo atleta di 56 anni ha appena completato un allenamento e mi ha fornito questi dati reali dall'uscita (estratti da Intervals.icu):
+        Agisci come un coach di ciclismo professionista. Un atleta di 56 anni ha completato un allenamento con questi dati reali da Intervals.icu:
         {completed_workout_data}
         
-        La sua FTP attuale è {current_ftp}W.
+        FTP attuale: {current_ftp}W.
         
-        Ecco la lista dei prossimi allenamenti pianificati che dobbiamo ricalcolare/adattare in base alla fatica e al TSS accumulato:
+        Ecco i prossimi allenamenti pianificati da ricalcolare in base alla fatica accumulata:
         {future_workouts}
         
         Compito:
-        Analizza se il carico dell'ultimo allenamento richiede un recupero maggiore, una modifica dei lavori di qualità o se va tutto bene. 
-        Rimodula la descrizione (`target_description`), la durata in minuti (`duration_min`) e la zona target (`target_zone`) dei prossimi allenamenti in modo adattivo.
+        Adatta la descrizione (`target_description`), la durata in minuti (`duration_min`) e la zona target (`target_zone`) dei prossimi allenamenti.
         
-        Restituisci SOLO un elenco JSON valido (senza markdown aggiuntivo oltre al blocco json) con la lista aggiornata dei prossimi allenamenti, mantenendo esattamente la stessa struttura e gli ID originali:
+        IMPORTANTE: Restituisci ESATTAMENTE e SOLO una lista JSON valida, mantenendo gli ID originali, con questa struttura:
         [
             {{
                 "id": id_originale,
-                "target_description": "nuova descrizione adattata",
-                "duration_min": nuova_durata_in_minuti,
-                "target_zone": "zona"
+                "target_description": "descrizione aggiornata",
+                "duration_min": 120,
+                "target_zone": "Z2"
             }}
         ]
+        Nessun commento, nessun testo aggiuntivo fuori dal JSON.
         """
         
         response = model.generate_content(prompt)
         text = response.text.strip()
-        
-        # Debug visivo per capire cosa risponde l'AI (puoi rimuoverlo dopo)
-        st.write("Risposta grezza ricevuta da Gemini:", text)
         
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0].strip()
@@ -116,10 +115,9 @@ def adaptive_replan_workouts(completed_workout_data, future_workouts, current_ft
             text = text.split("```")[1].split("```")[0].strip()
             
         import json
-        parsed_data = json.loads(text)
-        return parsed_data
+        return json.loads(text)
     except Exception as e:
-        st.error(f"Errore dettagliato nel ricalcolo adattivo: {e}")
+        st.error(f"Errore nel ricalcolo adattivo: {e}")
         return None
 
 # Funzione per generare il PDF del piano
