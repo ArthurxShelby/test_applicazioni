@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import io
 import google.generativeai as genai
 from PIL import Image
+import pypdf # Libreria per leggere i PDF
 
 # Import per la generazione del PDF con ReportLab
 from reportlab.lib.pagesizes import A4
@@ -23,13 +24,12 @@ def init_supabase():
 
 supabase = init_supabase()
 
-# Funzione rapida e protetta per estrarre i dati dallo screenshot
-def extract_workout_data_from_image(image):
+# Funzione universale: estrae i dati da un'immagine OPPURE da un file PDF in modo istantaneo
+def extract_workout_data(uploaded_file):
     try:
-        # Usiamo gemini-1.5-flash che è ottimizzato per risposte rapidissime e stabili
         model = genai.GenerativeModel('gemini-1.5-flash')
         prompt = """
-        Analizza questo screenshot di una schermata di ciclismo ed estrai in formato JSON puro:
+        Analizza questo documento o screenshot di un'attività di ciclismo ed estrai in formato JSON puro i seguenti valori numerici:
         - duration_minutes: durata totale in minuti (numero intero)
         - tss: il valore del Carico / TSS (numero intero)
         - intensity: percentuale di intensità (numero intero)
@@ -41,7 +41,18 @@ def extract_workout_data_from_image(image):
         - form: valore di Forma (numero intero o 0)
         Restituisci SOLO un dizionario JSON valido con queste esatte chiavi, senza altri testi.
         """
-        response = model.generate_content([image, prompt])
+        
+        # Gestione PDF vs Immagine
+        if uploaded_file.type == "application/pdf":
+            reader = pypdf.PdfReader(uploaded_file)
+            pdf_text = ""
+            for page in reader.pages:
+                pdf_text += page.extract_text() + "\n"
+            response = model.generate_content([prompt, pdf_text])
+        else:
+            image = Image.open(uploaded_file)
+            response = model.generate_content([image, prompt])
+            
         import json
         text = response.text.strip()
         if text.startswith("```json"):
@@ -50,10 +61,10 @@ def extract_workout_data_from_image(image):
             text = text[3:-3].strip()
         return json.loads(text)
     except Exception as e:
-        st.error(f"Errore nell'estrazione automatica dallo screenshot: {e}")
+        st.error(f"Errore nell'estrazione dei dati: {e}")
         return None
 
-# Funzione per generare il PDF formattato correttamente
+# Funzione per generare il PDF del piano
 def generate_pdf(plans_data):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=25, leftMargin=25, topMargin=30, bottomMargin=30)
@@ -110,8 +121,8 @@ def generate_pdf(plans_data):
     buffer.seek(0)
     return buffer
 
-st.title("🚴‍♂️ Smart Adaptive Cycling Coach con Vision AI")
-st.markdown("Carica lo screenshot della tua uscita per estrarre i dati in pochi secondi e aggiornare le sessioni future.")
+st.title("🚴‍♂️ Smart Adaptive Cycling Coach")
+st.markdown("Carica il file **PDF** o lo **screenshot** della tua uscita per aggiornare istantaneamente il programma.")
 
 # --- FETCH DATI ATTUALI ---
 try:
@@ -123,7 +134,7 @@ except Exception as e:
 
 # --- SIDEBAR: PARAMETRI E GENERATORE INIZIALE ---
 with st.sidebar:
-    st.header("⚙️ Parametri Atleta & FTP")
+    st.header("⚙️️ Parametri Atleta & FTP")
     age = st.number_input("Età", min_value=18, max_value=80, value=56)
     current_ftp = st.number_input("FTP attuale (W)", value=268)
     
@@ -210,12 +221,12 @@ with st.sidebar:
         pdf_data = generate_pdf(plans)
         st.download_button("📥 Scarica PDF Aggiornato", data=pdf_data, file_name="programma_adattivo_ai.pdf", mime="application/pdf")
 
-# --- CORPO PRINCIPALE: UPLOAD SCREENSHOT & ADATTAMENTO AUTOMATICO ---
-st.header("📸 Carica Uscita e Adatta Programma")
+# --- CORPO PRINCIPALE: UPLOAD FILE (PDF / IMMAGINE) & ADATTAMENTO ---
+st.header("📤 Carica Rapporto Attività (PDF o Immagine)")
 
 if plans:
-    with st.expander("🤖 Analisi Screenshot & Aggiornamento automatico sessioni future", expanded=True):
-        uploaded_file = st.file_uploader("Seleziona lo screenshot dell'uscita", type=["png", "jpg", "jpeg"])
+    with st.expander("🤖 Estrazione dati & Ricalcolo sessioni future", expanded=True):
+        uploaded_file = st.file_uploader("Carica il file PDF o lo screenshot dell'uscita", type=["pdf", "png", "jpg", "jpeg"])
         
         completed_plans = [p for p in plans if not p.get('completed', False)]
         if completed_plans and uploaded_file is not None:
@@ -225,12 +236,9 @@ if plans:
                 format_func=lambda x: next(f"Sett. {p['week_number']} - {p['workout_date']} ({p['workout_type']})" for p in completed_plans if p['id'] == x)
             )
             
-            if st.button("Analizza e Ricalcola Uscite Successive", type="primary"):
-                image = Image.open(uploaded_file)
-                st.image(image, caption="Screenshot caricato", use_column_width=True)
-                
-                with st.spinner("Estrazione rapida in corso..."):
-                    extracted_data = extract_workout_data_from_image(image)
+            if st.button("Elabora File e Aggiorna Programma", type="primary"):
+                with st.spinner("Elaborazione dati in corso..."):
+                    extracted_data = extract_workout_data(uploaded_file)
                 
                 if extracted_data:
                     st.success("Dati estratti con successo:")
@@ -239,7 +247,7 @@ if plans:
                     tss_val = extracted_data.get("tss", 100)
                     fatigue_val = extracted_data.get("fatigue", 80)
                     
-                    # 1. Aggiorna sessione completata
+                    # 1. Aggiorna la sessione completata
                     supabase.table("cycling_training_plans").update({
                         "completed": True,
                         "duration_min": extracted_data.get("duration_minutes", 120),
@@ -247,7 +255,7 @@ if plans:
                         "perceived_effort": 8 if tss_val > 130 else 5
                     }).eq("id", selected_workout_id).execute()
                     
-                    # 2. Riflesso sulle sessioni future
+                    # 2. Ricalcolo automatico delle sessioni successive
                     if tss_val > 130 or fatigue_val > 90:
                         future_workouts = [p for p in completed_plans if p['id'] != selected_workout_id][:2]
                         for fw in future_workouts:
@@ -257,7 +265,7 @@ if plans:
                                 "target_description": new_desc,
                                 "duration_min": new_dur
                             }).eq("id", fw['id']).execute()
-                        st.warning(f"⚠️ Carico elevato (TSS {tss_val}). Il coach ha automaticamente alleggerito le prossime 2 sessioni.")
+                        st.warning(f"⚠️ Carico elevato rilevato (TSS {tss_val}). Il coach ha automaticamente alleggerito le prossime 2 sessioni.")
                     else:
                         st.info("✅ Carico ottimale registrato. Sessioni successive confermate.")
                     
@@ -265,7 +273,7 @@ if plans:
         elif not completed_plans:
             st.info("Tutte le sessioni pianificate sono completate!")
         else:
-            st.info("Carica uno screenshot per avviare l'analisi.")
+            st.info("Carica un file PDF o un'immagine per procedere.")
 
     st.markdown("---")
     st.header("📅 Programma Attivo")
