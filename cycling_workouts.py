@@ -283,7 +283,7 @@ if plans:
             with c1:
                 st.markdown(f"**Settimana {p['week_number']}**<br>{p['workout_date']} ({p['day_of_week']})", unsafe_allow_html=True)
             with c2:
-                is_recovery = "Scarico" problemi in p['workout_type'] if 'workout_type' in p else False
+                is_recovery = "Scarico" in p['workout_type'] if 'workout_type' in p else False
                 badge = "🔵" if is_recovery else ("🔴" if "Soglia" in p['workout_type'] or "Intervalli" in p['workout_type'] else "🟢")
                 st.markdown(f"{badge} **{p['workout_type']}**<br>Target: `{p['target_zone']}`", unsafe_allow_html=True)
             with c3:
