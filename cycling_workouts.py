@@ -23,7 +23,7 @@ def init_supabase():
 
 supabase = init_supabase()
 
-# Funzione ottimizzata per evitare loop e leggere direttamente PDF o immagini con Gemini
+# Funzione corretta per l'estrazione con Gemini Vision
 def extract_workout_data(uploaded_file):
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
