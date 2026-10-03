@@ -98,15 +98,19 @@ def adaptive_replan_workouts(completed_workout_data, future_workouts, current_ft
         response = model.generate_content(prompt)
         text = response.text.strip()
         
+        # Debug visivo per capire cosa risponde l'AI (puoi rimuoverlo dopo)
+        st.write("Risposta grezza ricevuta da Gemini:", text)
+        
         if "```json" in text:
             text = text.split("```json")[1].split("```")[0].strip()
         elif "```" in text:
             text = text.split("```")[1].split("```")[0].strip()
             
         import json
-        return json.loads(text)
+        parsed_data = json.loads(text)
+        return parsed_data
     except Exception as e:
-        st.error(f"Errore nel ricalcolo adattivo con AI: {e}")
+        st.error(f"Errore dettagliato nel ricalcolo adattivo: {e}")
         return None
 
 # Funzione per generare il PDF del piano
