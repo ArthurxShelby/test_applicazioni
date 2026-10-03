@@ -18,6 +18,10 @@ except Exception:
 st.title("🚴‍♂️ Smart Cycling Coach & Intervals.icu")
 st.markdown("Pianificazione intelligente degli allenamenti basata sui tuoi dati reali.")
 
+# Inizializzazione dello stato di sessione per mantenere i dati dell'attività
+if "latest_activity" not in st.session_state:
+    st.session_state.latest_activity = None
+
 # --- SIDEBAR: PARAMETRI ATLETA ---
 with st.sidebar:
     st.header("⚙ Parametri Atleta")
@@ -39,8 +43,6 @@ next_workout_day = st.selectbox(
 
 input_mode = st.radio("Modalità recupero dati ultima uscita:", ["Sincronizza da Intervals.icu", "Inserisci dati manualmente"])
 
-latest_activity = None
-
 if input_mode == "Sincronizza da Intervals.icu":
     if st.button("Sincronizza Ultima Uscita", type="primary"):
         with st.spinner("Connessione a Intervals.icu in corso..."):
@@ -55,7 +57,7 @@ if input_mode == "Sincronizza da Intervals.icu":
                     activities = response.json()
                     if activities:
                         latest = activities[0]
-                        latest_activity = {
+                        st.session_state.latest_activity = {
                             "date": latest.get("start_date_local"),
                             "name": latest.get("name"),
                             "moving_time_min": round(latest.get("moving_time", 0) / 60),
@@ -67,24 +69,24 @@ if input_mode == "Sincronizza da Intervals.icu":
                         }
                         st.success("Attività sincronizzata con successo!")
                 else:
-                    st.warning(f"Impossibile contattare l'endpoint (HTTP {response.status_code}). Verifica l'ID atleta nei tuoi secrets o passa all'inserimento manuale.")
+                    st.warning(f"Impossibile contattare l'endpoint (HTTP {response.status_code}). Verifica l'id nei secrets.")
             except Exception as e:
                 st.warning(f"Errore di connessione: {e}")
 else:
     st.markdown("### Inserisci i dati dell'ultima uscita")
     col1, col2 = st.columns(2)
     with col1:
-        dist = st.number_input("Distanza (km)", value=85.0)
-        durata = st.number_input("Durata (min)", value=180)
-        potenza = st.number_input("Potenza Media (W)", value=210)
+        dist = st.number_input("Distanza (km)", value=85.0, key="input_dist")
+        durata = st.number_input("Durata (min)", value=180, key="input_durata")
+        potenza = st.number_input("Potenza Media (W)", value=210, key="input_potenza")
     with col2:
-        dislivello = st.number_input("Dislivello (m D+)", value=1200)
-        tss = st.number_input("TSS", value=140)
+        dislivello = st.number_input("Dislivello (m D+)", value=1200, key="input_dislivello")
+        tss = st.number_input("TSS", value=140, key="input_tss")
     
     if st.button("Conferma Dati Uscita", type="primary"):
-        latest_activity = {
+        st.session_state.latest_activity = {
             "date": datetime.now().strftime("%Y-%m-%d"),
-            "name": "Uscita recente",
+            "name": "Uscita inserita manualmente",
             "moving_time_min": durata,
             "distance_km": dist,
             "elevation_gain": dislivello,
@@ -92,12 +94,13 @@ else:
             "avg_power": potenza,
             "intensity_factor": 0.82
         }
-        st.success("Dati registrati correttamente!")
+        st.success("Dati registrati correttamente in memoria!")
 
-# Se abbiamo i dati dell'attività (sincronizzati o inseriti), generiamo il consiglio del Coach
-if latest_activity:
-    with st.expander("📊 Riepilogo dell'ultima uscita considerata"):
-        st.json(latest_activity)
+# Se abbiamo i dati dell'attività in sessione, mostriamo il riepilogo e il pulsante per l'AI
+if st.session_state.latest_activity is not None:
+    st.markdown("---")
+    with st.expander("📊 Riepilogo dell'ultima uscita considerata", expanded=True):
+        st.json(st.session_state.latest_activity)
         
     if st.button("Genera Consiglio Personalizzato con AI", type="secondary"):
         with st.spinner("Il Coach AI sta analizzando i tuoi carichi..."):
@@ -109,7 +112,7 @@ if latest_activity:
                 L'atleta ha 56 anni, pedala su una bici da corsa ({bike}) e ha una FTP di {current_ftp}W.
                 
                 Ecco i dati dell'ultima uscita:
-                {latest_activity}
+                {st.session_state.latest_activity}
                 
                 Il prossimo allenamento pianificato che deve affrontare è per il giorno: **{next_workout_day}**.
                 Struttura tipica della sua settimana:
