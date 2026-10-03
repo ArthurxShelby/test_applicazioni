@@ -105,7 +105,8 @@ if st.session_state.latest_activity is not None:
     if st.button("Genera Consiglio Personalizzato con AI", type="secondary"):
         with st.spinner("Il Coach AI sta analizzando i tuoi carichi..."):
             try:
-                model = genai.GenerativeModel('gemini-1.5-flash')
+                # Utilizzo del modello standard aggiornato
+                model = genai.GenerativeModel('gemini-2.5-flash')
                 
                 prompt = f"""
                 Agisci come un coach di ciclismo professionista ed esperto di preparazione atletica.
@@ -134,4 +135,12 @@ if st.session_state.latest_activity is not None:
                 st.write(response.text)
                 
             except Exception as e:
-                st.error(f"Errore durante la generazione con l'intelligenza artificiale: {e}")
+                # Fallback automatico su gemini-1.5-flash o gemini-pro in caso di ulteriori variazioni dell'SDK
+                try:
+                    model_fallback = genai.GenerativeModel('gemini-1.5-flash')
+                    response = model_fallback.generate_content(prompt)
+                    st.markdown("---")
+                    st.subheader("💡 Analisi & Consiglio del Coach AI")
+                    st.write(response.text)
+                except Exception as e2:
+                    st.error(f"Errore durante la generazione con l'intelligenza artificiale: {e2}")
