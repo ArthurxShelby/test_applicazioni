@@ -21,62 +21,75 @@ def init_supabase():
 
 supabase = init_supabase()
 
-# Funzione per generare il PDF in memoria
+# Funzione per generare il PDF formattato correttamente senza sovrapposizioni
 def generate_pdf(plans_data):
+    # Usiamo margini laterali stretti (20 mm) per sfruttare tutta la larghezza dell'A4
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=25, leftMargin=25, topMargin=30, bottomMargin=30)
     elements = []
     
     styles = getSampleStyleSheet()
+    
     title_style = ParagraphStyle(
         'TitleStyle',
         parent=styles['Heading1'],
-        fontSize=18,
+        fontSize=16,
         textColor=colors.HexColor('#1f2937'),
-        spaceAfter=15,
+        spaceAfter=10,
         alignment=1 # Centrato
     )
     
     subtitle_style = ParagraphStyle(
         'SubTitleStyle',
         parent=styles['Normal'],
-        fontSize=10,
+        fontSize=9,
         textColor=colors.HexColor('#4b5563'),
-        spaceAfter=20,
+        spaceAfter=15,
         alignment=1
     )
     
+    # Stili per il testo dentro le celle della tabella (per garantire il ritorno a capo automatico)
+    th_style = ParagraphStyle('TH', fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke, alignment=1)
+    td_center = ParagraphStyle('TDC', fontName='Helvetica', fontSize=8, textColor=colors.HexColor('#1f2937'), alignment=1)
+    td_left = ParagraphStyle('TDL', fontName='Helvetica', fontSize=8, textColor=colors.HexColor('#1f2937'), alignment=0)
+    
     elements.append(Paragraph("<b>PROGRAMMA DI ALLENAMENTO CICLISMO</b>", title_style))
     elements.append(Paragraph(f"Generato il {datetime.today().strftime('%d/%m/%Y')} | Obiettivo: 3 giorni fissi (Mer, Sab, Dom)", subtitle_style))
-    elements.append(Spacer(1, 10))
+    elements.append(Spacer(1, 5))
     
-    # Tabella dei dati
-    table_data = [["Sett.", "Data", "Giorno", "Tipologia", "Descrizione", "Durata", "Zona"]]
+    # Intestazione della tabella con Paragraph
+    table_data = [[
+        Paragraph("Sett.", th_style),
+        Paragraph("Data", th_style),
+        Paragraph("Giorno", th_style),
+        Paragraph("Tipologia", th_style),
+        Paragraph("Descrizione", th_style),
+        Paragraph("Durata", th_style),
+        Paragraph("Zona", th_style)
+    ]]
     
+    # Righe della tabella con Paragraph per evitare sovrapposizioni
     for p in plans_data:
         table_data.append([
-            f"Sett. {p['week_number']}",
-            str(p['workout_date']),
-            p['day_of_week'],
-            p['workout_type'],
-            p['target_description'],
-            f"{p['duration_min']} min",
-            p['target_zone']
+            Paragraph(f"Sett. {p['week_number']}", td_center),
+            Paragraph(str(p['workout_date']), td_center),
+            Paragraph(p['day_of_week'], td_center),
+            Paragraph(p['workout_type'], td_left),
+            Paragraph(p['target_description'], td_left),
+            Paragraph(f"{p['duration_min']} min", td_center),
+            Paragraph(p['target_zone'], td_center)
         ])
         
-    t = Table(table_data, colWidths=[45, 65, 60, 95, 150, 55, 60])
+    # Larghezze calcolate sulla larghezza utile del foglio A4 (~545 punti totali)
+    t = Table(table_data, colWidths=[40, 65, 60, 95, 200, 45, 40])
     t.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#3b82f6')),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,0), 9),
         ('BOTTOMPADDING', (0,0), (-1,0), 6),
+        ('TOPPADDING', (0,0), (-1,0), 6),
         ('BACKGROUND', (0,1), (-1,-1), colors.HexColor('#f9fafb')),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#d1d5db')),
-        ('FONTNAME', (0,1), (-1,-1), 'Helvetica'),
-        ('FONTSIZE', (0,1), (-1,-1), 8),
         ('TOPPADDING', (0,1), (-1,-1), 5),
         ('BOTTOMPADDING', (0,1), (-1,-1), 5),
     ]))
@@ -86,7 +99,7 @@ def generate_pdf(plans_data):
     buffer.seek(0)
     return buffer
 
-st.title("🚴‍♂️️ Smart Cycling Coach - 3 Giorni Fissi (Mer, Sab, Dom)")
+st.title("🚴‍♂️ Smart Cycling Coach - 3 Giorni Fissi (Mer, Sab, Dom)")
 st.markdown("Programma di allenamento strutturato con blocco periodico di scarico alla 4ª settimana.")
 
 # --- FETCH DATI ATTUALI ---
@@ -205,3 +218,4 @@ if plans:
             st.divider()
 else:
     st.info("Nessun piano attivo. Usa il pannello laterale per generare il programma e sbloccare il download del PDF.")
+    
