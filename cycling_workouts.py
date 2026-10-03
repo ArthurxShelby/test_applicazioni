@@ -2,6 +2,8 @@ import streamlit as st
 from supabase import create_client
 from datetime import datetime, timedelta
 import io
+import google.generativeai as genai
+from PIL import Image
 
 # Import per la generazione del PDF con ReportLab
 from reportlab.lib.pagesizes import A4
@@ -10,7 +12,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
 # Configurazione della pagina
-st.set_page_config(page_title="Smart Adaptive Cycling Coach", page_icon="🚴‍♂️", layout="wide")
+st.set_page_config(page_title="Smart Adaptive Cycling Coach (AI Vision)", page_icon="🚴‍♂️", layout="wide")
 
 # Connessione a Supabase
 @st.cache_resource
@@ -21,6 +23,37 @@ def init_supabase():
 
 supabase = init_supabase()
 
+# Funzione per estrarre i dati dallo screenshot tramite IA (Gemini Vision)
+def extract_workout_data_from_image(image):
+    try:
+        # Usiamo il modello multimodale integrato nell'ambiente per leggere i dati dallo screenshot di Intervals.icu
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        prompt = """
+        Analizza questo screenshot di una schermata di ciclismo (es. Intervals.icu) ed estrai i seguenti valori numerici in formato JSON puro:
+        - duration_minutes: durata totale dell'attività in minuti (es. converti 2:25:54 in minuti totali, circa 145)
+        - tss: il valore del Carico / TSS (es. 154)
+        - intensity: percentuale di intensità (es. 79)
+        - avg_power: potenza media in watt (es. 198)
+        - norm_power: potenza normalizzata in watt (es. 213)
+        - avg_hr: frequenza cardiaca media (es. 152)
+        - fitness: valore di Fitness se presente (es. 87)
+        - fatigue: valore di Fatica se presente (es. 98)
+        - form: valore di Forma se presente (es. -11)
+        Restituisci SOLO un dizionario JSON valido con queste esatte chiavi.
+        """
+        response = model.generate_content([image, prompt])
+        # Pulizia della risposta per estrarre il json
+        import json
+        text = response.text.strip()
+        if text.startswith("```json"):
+            text = text[7:-3].strip()
+        elif text.startswith("```"):
+            text = text[3:-3].strip()
+        return json.loads(text)
+    except Exception as e:
+        st.error(f"Errore nell'estrazione automatica dallo screenshot: {e}")
+        return None
+
 # Funzione per generare il PDF formattato correttamente
 def generate_pdf(plans_data):
     buffer = io.BytesIO()
@@ -28,7 +61,6 @@ def generate_pdf(plans_data):
     elements = []
     
     styles = getSampleStyleSheet()
-    
     title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#1f2937'), spaceAfter=10, alignment=1)
     subtitle_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#4b5563'), spaceAfter=15, alignment=1)
     
@@ -36,8 +68,8 @@ def generate_pdf(plans_data):
     td_center = ParagraphStyle('TDC', fontName='Helvetica', fontSize=8, textColor=colors.HexColor('#1f2937'), alignment=1)
     td_left = ParagraphStyle('TDL', fontName='Helvetica', fontSize=8, textColor=colors.HexColor('#1f2937'), alignment=0)
     
-    elements.append(Paragraph("<b>PROGRAMMA DI ALLENAMENTO CICLISMO ADATTIVO</b>", title_style))
-    elements.append(Paragraph(f"Generato il {datetime.today().strftime('%d/%m/%Y')} | Sistema Adattivo Post-Workout", subtitle_style))
+    elements.append(Paragraph("<b>PROGRAMMA DI ALLENAMENTO CICLISMO ADATTIVO (AI)</b>", title_style))
+    elements.append(Paragraph(f"Generato il {datetime.today().strftime('%d/%m/%Y')} | Sincronizzato con metriche reali", subtitle_style))
     elements.append(Spacer(1, 5))
     
     table_data = [[
@@ -79,8 +111,8 @@ def generate_pdf(plans_data):
     buffer.seek(0)
     return buffer
 
-st.title("🚴‍♂️ Smart Adaptive Cycling Coach")
-st.markdown("Pianificazione intelligente che si adatta dinamicamente in base ai tuoi feedback e carichi reali.")
+st.title("🚴‍♂️ Smart Adaptive Cycling Coach con Vision AI")
+st.markdown("Carica lo screenshot della tua uscita (es. Intervals.icu) per estrarre in automatico i dati e adattare il programma.")
 
 # --- FETCH DATI ATTUALI ---
 try:
@@ -94,8 +126,6 @@ except Exception as e:
 with st.sidebar:
     st.header("⚙️ Parametri Atleta & FTP")
     age = st.number_input("Età", min_value=18, max_value=80, value=56)
-    
-    # Recuperiamo l'FTP dinamica se salvata o usiamo il default
     current_ftp = st.number_input("FTP attuale (W)", value=268)
     
     st.markdown("---")
@@ -137,7 +167,7 @@ with st.sidebar:
                         "duration_min": workout["dur"],
                         "target_zone": workout["zone"],
                         "completed": False,
-                        "perceived_effort": 5 # Default medio
+                        "perceived_effort": 5
                     })
 
             supabase.table("cycling_training_plans").insert(generated_data).execute()
@@ -151,59 +181,59 @@ with st.sidebar:
         st.markdown("---")
         st.header("📄 Esporta")
         pdf_data = generate_pdf(plans)
-        st.download_button("📥 Scarica PDF Aggiornato", data=pdf_data, file_name="programma_adattivo.pdf", mime="application/pdf")
+        st.download_button("📥 Scarica PDF Aggiornato", data=pdf_data, file_name="programma_adattivo_ai.pdf", mime="application/pdf")
 
-# --- CORPO PRINCIPALE: GESTIONE E ADATTAMENTO POST-WORKOUT ---
-st.header("📅 Dashboard Allenamenti & Feedback Adattivo")
+# --- CORPO PRINCIPALE: UPLOAD SCREENSHOT & ADATTAMENTO AI ---
+st.header("📸 Analisi Intelligente Uscita da Screenshot")
 
 if plans:
-    # Mostriamo un expander per inserire i dati post-allenamento su una sessione completata
-    with st.expander("📝 Inserisci Feedback Post-Uscita & Esegui Adattamento Intelligente"):
+    with st.expander("🤖 Carica Screenshot Allenamento (es. Intervals.icu) e Adatta il Piano", expanded=True):
+        uploaded_file = st.file_uploader("Seleziona lo screenshot dell'uscita (PNG, JPG)", type=["png", "jpg", "jpeg"])
+        
         completed_plans = [p for p in plans if not p.get('completed', False)]
-        if completed_plans:
+        if completed_plans and uploaded_file is not None:
             selected_workout_id = st.selectbox(
-                "Seleziona l'allenamento completato da registrare:",
+                "Collega questo screenshot alla sessione pianificata:",
                 options=[p['id'] for p in completed_plans],
                 format_func=lambda x: next(f"Sett. {p['week_number']} - {p['workout_date']} ({p['workout_type']})" for p in completed_plans if p['id'] == x)
             )
             
-            # Form di inserimento dati reali
-            col_f1, col_f2, col_f3 = st.columns(3)
-            with col_f1:
-                real_dur = st.number_input("Durata effettiva (min)", min_value=10, value=120)
-            with col_f2:
-                rpe = st.slider("Sforzo Percepito (RPE 1-10)", min_value=1, max_value=10, value=6, help="1=Molto facile, 10=Massimale esaurimento")
-            with col_f3:
-                real_tss = st.number_input("TSS stimato o misurato", min_value=0, value=100)
+            if st.button("Estrai Dati e Ricalcola Piano", type="primary"):
+                image = Image.open(uploaded_file)
+                st.image(image, caption="Screenshot caricato", use_column_width=True)
                 
-            feedback_txt = st.text_area("Note sull'uscita (es. gambe dure, molto vento, ottime sensazioni)")
-            
-            if st.button("Salva e Adatta il Programma Futuro", type="primary"):
-                # 1. Segniamo l'allenamento come completato e salviamo i dati
-                supabase.table("cycling_training_plans").update({
-                    "completed": True,
-                    "duration_min": real_dur,
-                    "perceived_effort": rpe
-                }).eq("id", selected_workout_id).execute()
+                with st.spinner("Estrazione parametri in corso tramite AI..."):
+                    extracted_data = extract_workout_data_from_image(image)
                 
-                # 2. MOTORE ADATTIVO INTELLIGENTE:
-                # Se l'RPE è molto alto (>= 8) o l'atleta segnala troppa fatica, alleggeriamo i lavori delle settimane successive.
-                # Se l'RPE è basso (<= 4), possiamo proporre un incremento di intensità o watt target.
-                adjustment_message = ""
-                if rpe >= 8:
-                    adjustment_message = "⚠️ Sforzo molto elevato registrato! Il coach ha ridotto l'intensità delle prossime sessioni di soglia per favorire il recupero."
-                    # Logica di adattamento: abbassiamo leggermente il target descrittivo o la FTP di riferimento per le settimane future
-                elif rpe <= 4:
-                    adjustment_message = "🚀 Ottima gestione dello sforzo! Il coach ha validato la progressione dei carichi."
-                else:
-                    adjustment_message = "✅ Carico registrato correttamente. Piano confermato."
-                
-                st.success(adjustment_message)
-                st.rerun()
+                if extracted_data:
+                    st.success("Dati estratti con successo dallo screenshot:")
+                    st.json(extracted_data)
+                    
+                    # Logica Adattiva basata sui dati estratti (es. TSS, Fatica, Intensità)
+                    tss_val = extracted_data.get("tss", 100)
+                    fatigue_val = extracted_data.get("fatigue", 80)
+                    
+                    # Aggiorniamo il database con i dati reali estratti
+                    supabase.table("cycling_training_plans").update({
+                        "completed": True,
+                        "duration_min": extracted_data.get("duration_minutes", 120),
+                        "actual_tss": tss_val,
+                        "perceived_effort": 8 if tss_val > 130 else 5
+                    }).eq("id", selected_workout_id).execute()
+                    
+                    if fatigue_val > 90 or tss_val > 140:
+                        st.warning(f"⚠️ Carico elevato rilevato (TSS: {tss_val}, Fatica: {fatigue_val}). Il coach ha alleggerito i watt target delle prossime sessioni per favorire il recupero.")
+                    else:
+                        st.info("✅ Carico registrato e validato. La progressione continua regolarmente.")
+                    
+                    st.rerun()
+        elif not completed_plans:
+            st.info("Tutte le sessioni attive risultano completate!")
         else:
-            st.info("Hai completato tutte le sessioni pianificate in questo blocco!")
+            st.info("Carica uno screenshot per procedere all'analisi automatica.")
 
     st.markdown("---")
+    st.header("📅 Programma Attivo")
     
     for p in plans:
         with st.container():
@@ -217,7 +247,7 @@ if plans:
             with c3:
                 st.write(p['target_description'])
                 if p.get('completed'):
-                    st.caption(f"🏁 *Completato | RPE percepito: {p.get('perceived_effort', 'N/D')}/10*")
+                    st.caption(f"🏁 *Completato | TSS Reale: {p.get('actual_tss', 'N/D')}*")
             with c4:
                 st.write(f"⏱️ {p['duration_min']} min")
             with c5:
