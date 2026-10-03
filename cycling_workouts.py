@@ -2,10 +2,13 @@ import streamlit as st
 from supabase import create_client
 from datetime import datetime, timedelta
 import io
+import json
 import google.generativeai as genai
-from PIL import Image
 
-# Configurazione sicura (gestisce eventuali KeyError se la chiave manca o ha un altro nome)
+# Configurazione pagina
+st.set_page_config(page_title="Smart Adaptive Cycling Coach", page_icon="🚴‍♂️", layout="wide")
+
+# Configurazione sicura API Gemini
 try:
     if "GEMINI_API_KEY" in st.secrets:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -14,16 +17,7 @@ try:
 except Exception:
     pass
 
-# Import per la generazione del PDF con ReportLab
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
-
-# Configurazione della pagina
-st.set_page_config(page_title="Smart Adaptive Cycling Coach (AI Vision)", page_icon="🚴‍♂️", layout="wide")
-
-# Connessione a Supabase
+# Connessione Supabase
 @st.cache_resource
 def init_supabase():
     url = st.secrets["SUPABASE_URL"]
@@ -32,155 +26,84 @@ def init_supabase():
 
 supabase = init_supabase()
 
-# 1. Funzione per l'estrazione dei dati dal file con Gemini Vision
-# 1. Funzione di estrazione dati migliorata e robusta
-def extract_workout_data(uploaded_file):
-    try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        
-        file_bytes = uploaded_file.getvalue()
-        mime_type = uploaded_file.type
-        
-        file_part = {
-            "mime_type": mime_type,
-            "data": file_bytes
-        }
-        
-        prompt = """
-        Analizza questo documento o screenshot di Intervals.icu. Estrai i valori numerici principali relativi all'allenamento svolto.
-        Restituisci UNICAMENTE un oggetto JSON valido (senza testo prima o dopo, senza backtick se possibile, oppure racchiuso in un blocco ```json ... ```) con queste esatte chiavi (se un valore non è chiaro o manca, metti 0):
-        {
-            "duration_minutes": 0,
-            "tss": 0,
-            "intensity": 0,
-            "avg_power": 0,
-            "norm_power": 0,
-            "avg_hr": 0,
-            "fitness": 0,
-            "fatigue": 0,
-            "form": 0
-        }
-        """
-        
-        response = model.generate_content([file_part, prompt])
-        text = response.text.strip()
-        
-        # Pulizia robusta del blocco markdown json
-        if "```json" in text:
-            text = text.split("```json")[1].split("```")[0].strip()
-        elif "```" in text:
-            text = text.split("```")[1].split("```")[0].strip()
+st.title("🚴‍♂️ Smart Adaptive Cycling Coach (Piano B)")
+st.markdown("Pianificazione intelligente e adattiva basata sui tuoi dati reali da Intervals.icu.")
+
+# --- SIDEBAR: PARAMETRI E CREAZIONE PIANO ---
+with st.sidebar:
+    st.header("⚙ Parametri Atleta")
+    age = st.number_input("Età", min_value=18, max_value=80, value=56)
+    current_ftp = st.number_input("FTP attuale (W)", value=268)
+    
+    st.markdown("---")
+    st.header("📅 Genera Piano Base")
+    start_date = st.date_input("Data inizio (Lunedì di riferimento)", value=datetime.today())
+    num_weeks = st.slider("Numero di settimane", min_value=1, max_value=6, value=4)
+    
+    if st.button("Crea / Resetta Piano Base", type="primary"):
+        try:
+            # Svuota tabella esistente
+            supabase.table("cycling_training_plans").delete().neq("id", 0).execute()
             
-        import json
-        return json.loads(text)
-    except Exception as e:
-        st.error(f"Errore critico nell'estrazione dei dati con Gemini Vision: {e}")
-        return None
-
-# 2. Funzione di ricalcolo adattivo blindata
-def adaptive_replan_workouts(completed_workout_data, future_workouts, current_ftp):
-    try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        
-        prompt = f"""
-        Agisci come un coach di ciclismo professionista. Un atleta di 56 anni ha completato un allenamento con questi dati reali da Intervals.icu:
-        {completed_workout_data}
-        
-        FTP attuale: {current_ftp}W.
-        
-        Ecco i prossimi allenamenti pianificati da ricalcolare in base alla fatica accumulata:
-        {future_workouts}
-        
-        Compito:
-        Adatta la descrizione (`target_description`), la durata in minuti (`duration_min`) e la zona target (`target_zone`) dei prossimi allenamenti.
-        
-        IMPORTANTE: Restituisci ESATTAMENTE e SOLO una lista JSON valida, mantenendo gli ID originali, con questa struttura:
-        [
-            {{
-                "id": id_originale,
-                "target_description": "descrizione aggiornata",
-                "duration_min": 120,
-                "target_zone": "Z2"
-            }}
-        ]
-        Nessun commento, nessun testo aggiuntivo fuori dal JSON.
-        """
-        
-        response = model.generate_content(prompt)
-        text = response.text.strip()
-        
-        if "```json" in text:
-            text = text.split("```json")[1].split("```")[0].strip()
-        elif "```" in text:
-            text = text.split("```")[1].split("```")[0].strip()
+            generated_data = []
+            current_monday = start_date - timedelta(days=start_date.weekday())
             
-        import json
-        return json.loads(text)
-    except Exception as e:
-        st.error(f"Errore nel ricalcolo adattivo: {e}")
-        return None
+            for week in range(1, num_weeks + 1):
+                week_start = current_monday + timedelta(weeks=week - 1)
+                
+                # Definizione dei 3 giorni fissi richiesti:
+                # Mercoledì (indice 2) -> Medio
+                # Sabato (indice 5) -> Uscita con Dislivello
+                # Domenica (indice 6) -> Lungo
+                workouts_template = [
+                    {
+                        "day_index": 2, 
+                        "day_name": "Mercoledì", 
+                        "type": "Medio", 
+                        "desc": f"Lavoro al medio (Z3 / Sweet Spot, target ~{round(current_ftp*0.85)}W), ritmo costante per costruire resistenza.", 
+                        "dur": 120, 
+                        "zone": "Z3 / Medio"
+                    },
+                    {
+                        "day_index": 5, 
+                        "day_name": "Sabato", 
+                        "type": "Dislivello", 
+                        "desc": "Uscita collinare o montana con focus su variazioni di pendenza e ripetute brevi in salita.", 
+                        "dur": 180, 
+                        "zone": "Z3 / Z4"
+                    },
+                    {
+                        "day_index": 6, 
+                        "day_name": "Domenica", 
+                        "type": "Lungo", 
+                        "desc": "Giro lungo di resistenza aerobica a prevalenza Z2 con tratti regolari.", 
+                        "dur": 240, 
+                        "zone": "Z2"
+                    }
+                ]
+                
+                for w in workouts_template:
+                    w_date = week_start + timedelta(days=w["day_index"])
+                    generated_data.append({
+                        "week_number": week,
+                        "workout_date": str(w_date),
+                        "day_of_week": w["day_name"],
+                        "workout_type": w["type"],
+                        "target_description": w["desc"],
+                        "duration_min": w["dur"],
+                        "target_zone": w["zone"],
+                        "completed": False,
+                        "actual_tss": 0
+                    })
+            
+            supabase.table("cycling_training_plans").insert(generated_data).execute()
+            st.success("Piano base generato con successo!")
+            st.rerun()
+            
+        except Exception as e:
+            st.error(f"Errore nella generazione: {e}")
 
-# Funzione per generare il PDF del piano
-def generate_pdf(plans_data):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=25, leftMargin=25, topMargin=30, bottomMargin=30)
-    elements = []
-    
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#1f2937'), spaceAfter=10, alignment=1)
-    subtitle_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#4b5563'), spaceAfter=15, alignment=1)
-    
-    th_style = ParagraphStyle('TH', fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke, alignment=1)
-    td_center = ParagraphStyle('TDC', fontName='Helvetica', fontSize=8, textColor=colors.HexColor('#1f2937'), alignment=1)
-    td_left = ParagraphStyle('TDL', fontName='Helvetica', fontSize=8, textColor=colors.HexColor('#1f2937'), alignment=0)
-    
-    elements.append(Paragraph("<b>PROGRAMMA DI ALLENAMENTO CICLISMO ADATTIVO (AI)</b>", title_style))
-    elements.append(Paragraph(f"Generato il {datetime.today().strftime('%d/%m/%Y')} | Sincronizzato con metriche reali", subtitle_style))
-    elements.append(Spacer(1, 5))
-    
-    table_data = [[
-        Paragraph("Sett.", th_style),
-        Paragraph("Data", th_style),
-        Paragraph("Giorno", th_style),
-        Paragraph("Tipologia", th_style),
-        Paragraph("Descrizione", th_style),
-        Paragraph("Durata", th_style),
-        Paragraph("Zona", th_style)
-    ]]
-    
-    for p in plans_data:
-        table_data.append([
-            Paragraph(f"Sett. {p['week_number']}", td_center),
-            Paragraph(str(p['workout_date']), td_center),
-            Paragraph(p['day_of_week'], td_center),
-            Paragraph(p['workout_type'], td_left),
-            Paragraph(p['target_description'], td_left),
-            Paragraph(f"{p['duration_min']} min", td_center),
-            Paragraph(p['target_zone'], td_center)
-        ])
-        
-    t = Table(table_data, colWidths=[40, 65, 60, 95, 200, 45, 40])
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#3b82f6')),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0,0), (-1,0), 6),
-        ('TOPPADDING', (0,0), (-1,0), 6),
-        ('BACKGROUND', (0,1), (-1,-1), colors.HexColor('#f9fafb')),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#d1d5db')),
-        ('TOPPADDING', (0,1), (-1,-1), 5),
-        ('BOTTOMPADDING', (0,1), (-1,-1), 5),
-    ]))
-    
-    elements.append(t)
-    doc.build(elements)
-    buffer.seek(0)
-    return buffer
-
-st.title("🚴‍♂️ Smart Adaptive Cycling Coach")
-st.markdown("Carica il file **PDF** o lo **screenshot** della tua uscita per aggiornare istantaneamente il programma.")
-
-# --- FETCH DATI ATTUALI ---
+# --- LETTURA DATI DA SUPABASE ---
 try:
     response = supabase.table("cycling_training_plans").select("*").order("workout_date", desc=False).execute()
     plans = response.data
@@ -188,177 +111,111 @@ except Exception as e:
     plans = []
     st.error(f"Errore di connessione a Supabase: {e}")
 
-# --- SIDEBAR: PARAMETRI E GENERATORE INIZIALE ---
-with st.sidebar:
-    st.header("⚙ Parametri Atleta & FTP")
-    age = st.number_input("Età", min_value=18, max_value=80, value=56)
-    current_ftp = st.number_input("FTP attuale (W)", value=268)
-    
-    training_days_count = st.selectbox(
-        "Giorni di allenamento a settimana", 
-        [3, 4], 
-        index=0, 
-        format_func=lambda x: f"{x} giorni (Mer, Sab, Dom)" if x == 3 else f"{x} giorni (Mar, Gio, Sab, Dom)"
-    )
-    
-    st.markdown("---")
-    st.header("🛠 Genera / Reset Piano Base")
-    start_date = st.date_input("Data di inizio (Lunedì)", value=datetime.today())
-    num_weeks = st.slider("Numero di settimane", min_value=1, max_value=8, value=4)
-    
-    if st.button("Genera Nuovo Piano Base", type="primary"):
-        try:
-            supabase.table("cycling_training_plans").delete().neq("id", 0).execute()
-            generated_data = []
-            current_monday = start_date - timedelta(days=start_date.weekday())
-            
-            for week in range(1, num_weeks + 1):
-                week_start = current_monday + timedelta(weeks=week - 1)
-                is_recovery_week = (week % 4 == 0)
-                
-                if training_days_count == 3:
-                    if is_recovery_week:
-                        exact_workouts = [
-                            {"day_index": 2, "day_name": "Mercoledì", "type": "Scarico - Agilità", "desc": "Agilità e scarico attivo, brevi richiami agili senza fuorigiri", "dur": 75, "zone": "Z2 / Recupero"},
-                            {"day_index": 5, "day_name": "Sabato", "type": "Scarico - Uscita Breve", "desc": "Uscita corta e tranquilla in pianura o collinare leggero", "dur": 90, "zone": "Z2"},
-                            {"day_index": 6, "day_name": "Domenica", "type": "Scarico - Fondo Lungo ridotto", "desc": "Giro di fondo lungo ma a intensità ridotta e senza dislivelli impegnativi", "dur": 120, "zone": "Z2"}
-                        ]
-                    else:
-                        exact_workouts = [
-                            {"day_index": 2, "day_name": "Mercoledì", "type": "Lavori Specifici / Soglia", "desc": f"Riscaldamento + Ripetute in Z4/Soglia (target ~{round(current_ftp*0.9)}W) + defaticamento", "dur": 135, "zone": "Z4 / Soglia"},
-                            {"day_index": 5, "day_name": "Sabato", "type": "Uscita Collinare con Intervalli", "desc": "Giro collinare con variazioni di ritmo e blocchi ripetuti in salita", "dur": 195, "zone": "Z3 / Z4 / Z5"},
-                            {"day_index": 6, "day_name": "Domenica", "type": "Giro Lungo di Resistenza", "desc": "Giro lungo in prevalenza Z2 con brevi tratti a ritmo costante", "dur": 220, "zone": "Z2 / Z3"}
-                        ]
-                else:
-                    if is_recovery_week:
-                        exact_workouts = [
-                            {"day_index": 1, "day_name": "Martedì", "type": "Scarico - Agilità", "desc": "Agilità leggera e scioltezza", "dur": 60, "zone": "Z2"},
-                            {"day_index": 3, "day_name": "Giovedì", "type": "Scarico - Fondo Agile", "desc": "Uscita facile di richiamo", "dur": 75, "zone": "Z2"},
-                            {"day_index": 5, "day_name": "Sabato", "type": "Scarico - Uscita Breve", "desc": "Giro corto e tranquillo", "dur": 90, "zone": "Z2"},
-                            {"day_index": 6, "day_name": "Domenica", "type": "Scarico - Fondo Lungo", "desc": "Fondo lungo ridotto e costante", "dur": 120, "zone": "Z2"}
-                        ]
-                    else:
-                        exact_workouts = [
-                            {"day_index": 1, "day_name": "Martedì", "type": "Ripetute / VO2Max", "desc": f"Lavori brevi ad alta intensità (target ~{round(current_ftp*1.05)}W)", "dur": 90, "zone": "Z5 / VO2Max"},
-                            {"day_index": 3, "day_name": "Giovedì", "type": "Forza / Sweet Spot", "desc": f"Intervalli lunghi in Sweet Spot (target ~{round(current_ftp*0.88)}W)", "dur": 105, "zone": "Z3 / Sweet Spot"},
-                            {"day_index": 5, "day_name": "Sabato", "type": "Uscita Collinare", "desc": "Giro collinare con variazioni e salite brillanti", "dur": 180, "zone": "Z3 / Z4"},
-                            {"day_index": 6, "day_name": "Domenica", "type": "Fondo Lungo", "desc": "Giro lungo di resistenza aerobica", "dur": 210, "zone": "Z2"}
-                        ]
-                
-                for workout in exact_workouts:
-                    w_date = week_start + timedelta(days=workout["day_index"])
-                    generated_data.append({
-                        "week_number": week,
-                        "workout_date": str(w_date),
-                        "day_of_week": workout["day_name"],
-                        "workout_type": workout["type"],
-                        "target_description": workout["desc"],
-                        "duration_min": workout["dur"],
-                        "target_zone": workout["zone"],
-                        "completed": False,
-                        "perceived_effort": 5
-                    })
-
-            supabase.table("cycling_training_plans").insert(generated_data).execute()
-            st.success("Nuovo piano base generato!")
-            st.rerun()
-            
-        except Exception as e:
-            st.error(f"Errore: {e}")
-
-    if st.button("🗑️️ Svuota database allenamenti"):
-        supabase.table("cycling_training_plans").delete().neq("id", 0).execute()
-        st.warning("Database pulito.")
-        st.rerun()
-
-    if plans:
-        st.markdown("---")
-        st.header("📄 Esporta")
-        pdf_data = generate_pdf(plans)
-        st.download_button("📥 Scarica PDF Aggiornato", data=pdf_data, file_name="programma_adattivo_ai.pdf", mime="application/pdf")
-
-# --- CORPO PRINCIPALE: UPLOAD FILE & ADATTAMENTO INTelligente ---
-st.header("📤 Carica Rapporto Attività (PDF o Immagine)")
-
+# --- CORPO PRINCIPALE ---
 if plans:
-    with st.expander("🤖 Estrazione dati & Ricalcolo adattivo AI", expanded=True):
-        uploaded_file = st.file_uploader("Carica il file PDF o lo screenshot dell'uscita", type=["pdf", "png", "jpg", "jpeg"])
+    st.subheader("📤 Aggiorna e Adatta con l'Ultimo Allenamento")
+    
+    uploaded_file = st.file_uploader("Carica il file PDF o lo screenshot del report (es. Intervals.icu)", type=["pdf", "png", "jpg", "jpeg"])
+    
+    completed_plans = [p for p in plans if not p.get('completed', False)]
+    
+    if uploaded_file is not None and completed_plans:
+        selected_workout_id = st.selectbox(
+            "A quale sessione pianificata corrisponde questa uscita?",
+            options=[p['id'] for p in completed_plans],
+            format_func=lambda x: next(f"Sett. {p['week_number']} - {p['workout_date']} ({p['workout_type']})" for p in completed_plans if p['id'] == x)
+        )
         
-        completed_plans = [p for p in plans if not p.get('completed', False)]
-        if completed_plans and uploaded_file is not None:
-            selected_workout_id = st.selectbox(
-                "A quale sessione pianificata corrisponde questa uscita?",
-                options=[p['id'] for p in completed_plans],
-                format_func=lambda x: next(f"Sett. {p['week_number']} - {p['workout_date']} ({p['workout_type']})" for p in completed_plans if p['id'] == x)
-            )
-            
-            if st.button("Elabora File e Adatta Programma con AI", type="primary"):
-                with st.spinner("Analisi visiva del file in corso..."):
-                    extracted_data = extract_workout_data(uploaded_file)
-                
-                if extracted_data:
-                    st.success("Dati estratti con successo:")
-                    st.json(extracted_data)
+        if st.button("Elabora e Ricalcola Piano in Modo Adattivo", type="primary"):
+            with st.spinner("Analisi dell'attività e ricalcolo adattivo in corso..."):
+                try:
+                    # 1. Estrazione dati con Gemini Vision
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    file_bytes = uploaded_file.getvalue()
+                    mime_type = uploaded_file.type
                     
-                    tss_val = extracted_data.get("tss", 0)
+                    extraction_prompt = """
+                    Estrai da questo documento/screenshot i dati dell'allenamento. Restituisci SOLO un JSON con queste chiavi:
+                    {"duration_minutes": 0, "tss": 0, "avg_power": 0}
+                    """
+                    resp_ext = model.generate_content([{"mime_type": mime_type, "data": file_bytes}, extraction_prompt])
+                    text_ext = resp_ext.text.strip()
+                    if "```json" in text_ext:
+                        text_ext = text_ext.split("```json")[1].split("```")[0].strip()
+                    elif "```" in text_ext:
+                        text_ext = text_ext.split("```")[1].split("```")[0].strip()
+                    workout_metrics = json.loads(text_ext)
                     
-                    # 1. Aggiorna la sessione completata su Supabase
+                    # 2. Segna l'allenamento come completato su Supabase
                     supabase.table("cycling_training_plans").update({
                         "completed": True,
-                        "duration_min": extracted_data.get("duration_minutes", 120),
-                        "actual_tss": tss_val,
-                        "perceived_effort": 8 if tss_val > 130 else 5
+                        "duration_min": workout_metrics.get("duration_minutes", 120),
+                        "actual_tss": workout_metrics.get("tss", 0)
                     }).eq("id", selected_workout_id).execute()
                     
-                    # 2. Preleva i prossimi allenamenti futuri da ricalcolare
+                    # 3. Prendi i prossimi allenamenti da adattare
                     future_plans = [p for p in completed_plans if p['id'] != selected_workout_id][:3]
                     
                     if future_plans:
-                        with st.spinner("Il Coach AI sta valutando il tuo carico e ricalcolando i prossimi allenamenti..."):
-                            updated_schedule = adaptive_replan_workouts(extracted_data, future_plans, current_ftp)
+                        replan_prompt = f"""
+                        Sei un coach di ciclismo professionista per un atleta di 56 anni (FTP: {current_ftp}W).
+                        L'atleta ha appena completato un'uscita con questi dati reali: {workout_metrics}
+                        
+                        Ecco i prossimi allenamenti pianificati: {future_plans}
+                        
+                        Compito: Valuta la fatica accumulata e adatta la descrizione (`target_description`), la durata (`duration_min`) e la zona (`target_zone`) dei prossimi allenamenti.
+                        Restituisci SOLO una lista JSON valida formattata così, senza testo extra:
+                        [
+                            {{"id": id_originale, "target_description": "nuova descrizione", "duration_min": 120, "target_zone": "Z2"}}
+                        ]
+                        """
+                        resp_replan = model.generate_content(replan_prompt)
+                        text_rep = resp_replan.text.strip()
+                        if "```json" in text_rep:
+                            text_rep = text_rep.split("```json")[1].split("```")[0].strip()
+                        elif "```" in text_rep:
+                            text_rep = text_rep.split("```")[1].split("```")[0].strip()
+                        
+                        updated_schedule = json.loads(text_rep)
+                        
+                        # Aggiorna su Supabase
+                        for item in updated_schedule:
+                            supabase.table("cycling_training_plans").update({
+                                "target_description": item.get("target_description"),
+                                "duration_min": item.get("duration_min"),
+                                "target_zone": item.get("target_zone")
+                            }).eq("id", item.get("id")).execute()
                             
-                            if updated_schedule:
-                                for item in updated_schedule:
-                                    supabase.table("cycling_training_plans").update({
-                                        "target_description": item.get("target_description"),
-                                        "duration_min": item.get("duration_min"),
-                                        "target_zone": item.get("target_zone")
-                                    }).eq("id", item.get("id")).execute()
-                                
-                                st.success("✨ Il programma è stato ricalcolato e adattato dinamicamente dal Coach AI in base alla tua uscita!")
-                                st.rerun()
+                        st.success("✨ Piano aggiornato e adattato con successo in base alla tua condizione reale!")
+                        st.rerun()
                     else:
-                        st.info("Allenamento registrato. Non ci sono sessioni future da ricalcolare nel piano attuale.")
+                        st.success("Allenamento registrato. Non ci sono sessioni future da ricalcolare.")
                         st.rerun()
                         
-        elif not completed_plans:
-            st.info("Tutte le sessioni pianificate sono completate!")
-        else:
-            st.info("Carica un file PDF o un'immagine per procedere.")
-
+                except Exception as e:
+                    st.error(f"Errore durante l'elaborazione IA: {e}")
+                    
     st.markdown("---")
-    st.header("📅 Programma Attivo")
+    st.subheader("📅 Programma Attivo")
     
     for p in plans:
-        with st.container():
-            c1, c2, c3, c4, c5 = st.columns([2, 2, 3, 2, 1])
-            with c1:
-                st.markdown(f"**Settimana {p['week_number']}**<br>{p['workout_date']} ({p['day_of_week']})", unsafe_allow_html=True)
-            with c2:
-                is_recovery = "Scarico" in p['workout_type'] if 'workout_type' in p else False
-                badge = "🔵" if is_recovery else ("🔴" if "Soglia" in p['workout_type'] or "Intervalli" in p['workout_type'] else "🟢")
-                st.markdown(f"{badge} **{p['workout_type']}**<br>Target: `{p['target_zone']}`", unsafe_allow_html=True)
-            with c3:
-                st.write(p['target_description'])
-                if p.get('completed'):
-                    st.caption(f"🏁 *Completato | TSS Reale: {p.get('actual_tss', 'N/D')}*")
-            with c4:
-                st.write(f"⏱️ {p['duration_min']} min")
-            with c5:
-                is_done = st.checkbox("Fatto", value=p['completed'], key=f"plan_{p['id']}")
-                if is_done != p['completed']:
-                    supabase.table("cycling_training_plans").update({"completed": is_done}).eq("id", p['id']).execute()
-                    st.rerun()
-            st.divider()
+        cols = st.columns([2, 2, 4, 2, 1])
+        with cols[0]:
+            st.markdown(f"**Sett. {p['week_number']}**<br>{p['workout_date']} ({p['day_of_week']})", unsafe_allow_html=True)
+        with cols[1]:
+            badge = "🟢" if p['workout_type'] == "Medio" else ("🔵" if p['workout_type'] == "Lungo" else "🟠")
+            st.markdown(f"{badge} **{p['workout_type']}**<br>`{p['target_zone']}`", unsafe_allow_html=True)
+        with cols[2]:
+            st.write(p['target_description'])
+            if p.get('completed'):
+                st.caption(f"🏁 *Completato | TSS Reale: {p.get('actual_tss', 0)}*")
+        with cols[3]:
+            st.write(f"⏱️ {p['duration_min']} min")
+        with cols[4]:
+            is_done = st.checkbox("Fatto", value=p['completed'], key=f"chk_{p['id']}")
+            if is_done != p['completed']:
+                supabase.table("cycling_training_plans").update({"completed": is_done}).eq("id", p['id']).execute()
+                st.rerun()
+        st.divider()
 else:
     st.info("Nessun piano attivo. Usa il pannello laterale per generare il programma base.")
