@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 import io
 import google.generativeai as genai
 from PIL import Image
-import pypdf # Libreria per leggere i PDF
 
 # Import per la generazione del PDF con ReportLab
 from reportlab.lib.pagesizes import A4
@@ -13,7 +12,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
 # Configurazione della pagina
-st.set_page_config(page_title="Smart Adaptive Cycling Coach (AI Vision)", page_icon="🚴‍♂️", layout="wide")
+st.set_page_config(page_title="Smart Adaptive Cycling Coach (AI Vision)", page_icon="🚴‍♂️️", layout="wide")
 
 # Connessione a Supabase
 @st.cache_resource
@@ -24,34 +23,34 @@ def init_supabase():
 
 supabase = init_supabase()
 
-# Funzione universale: estrae i dati da un'immagine OPPURE da un file PDF in modo istantaneo
+# Funzione corretta: legge le etichette reali di Intervals.icu dal file caricato
 def extract_workout_data(uploaded_file):
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
         prompt = """
-        Analizza questo documento o screenshot di un'attività di ciclismo ed estrai in formato JSON puro i seguenti valori numerici:
-        - duration_minutes: durata totale in minuti (numero intero)
-        - tss: il valore del Carico / TSS (numero intero)
-        - intensity: percentuale di intensità (numero intero)
-        - avg_power: potenza media in watt (numero intero)
-        - norm_power: potenza normalizzata in watt (numero intero)
-        - avg_hr: frequenza cardiaca media (numero intero)
-        - fitness: valore di Fitness (numero intero o 0)
-        - fatigue: valore di Fatica (numero intero o 0)
-        - form: valore di Forma (numero intero o 0)
+        Analizza questo report di Intervals.icu ed estrai in formato JSON puro i seguenti valori numerici trovati nel documento:
+        - duration_minutes: converti la durata totale (es. 2:25:54) in minuti totali (numero intero)
+        - tss: il valore del "Carico" o TRIMP (numero intero)
+        - intensity: la percentuale di "Intensità" senza il simbolo % (numero intero)
+        - avg_power: la "Potenza media" in watt (numero intero)
+        - norm_power: la "Potenza Norm" in watt (numero intero)
+        - avg_hr: la "FC media" (frequenza cardiaca media, numero intero)
+        - fitness: il valore di "Fitness" (numero intero o 0)
+        - fatigue: il valore di "Fatica" (numero intero o 0)
+        - form: il valore di "Forma" (può essere negativo, es. -11, numero intero o 0)
+        
         Restituisci SOLO un dizionario JSON valido con queste esatte chiavi, senza altri testi.
         """
         
-        # Gestione PDF vs Immagine
-        if uploaded_file.type == "application/pdf":
-            reader = pypdf.PdfReader(uploaded_file)
-            pdf_text = ""
-            for page in reader.pages:
-                pdf_text += page.extract_text() + "\n"
-            response = model.generate_content([prompt, pdf_text])
-        else:
-            image = Image.open(uploaded_file)
-            response = model.generate_content([image, prompt])
+        file_bytes = uploaded_file.getvalue()
+        mime_type = uploaded_file.type
+        
+        file_part = {
+            "mime_type": mime_type,
+            "data": file_bytes
+        }
+        
+        response = model.generate_content([file_part, prompt])
             
         import json
         text = response.text.strip()
@@ -134,7 +133,7 @@ except Exception as e:
 
 # --- SIDEBAR: PARAMETRI E GENERATORE INIZIALE ---
 with st.sidebar:
-    st.header("⚙️️ Parametri Atleta & FTP")
+    st.header("⚙ Parametri Atleta & FTP")
     age = st.number_input("Età", min_value=18, max_value=80, value=56)
     current_ftp = st.number_input("FTP attuale (W)", value=268)
     
@@ -221,7 +220,7 @@ with st.sidebar:
         pdf_data = generate_pdf(plans)
         st.download_button("📥 Scarica PDF Aggiornato", data=pdf_data, file_name="programma_adattivo_ai.pdf", mime="application/pdf")
 
-# --- CORPO PRINCIPALE: UPLOAD FILE (PDF / IMMAGINE) & ADATTAMENTO ---
+# --- CORPO PRINCIPALE: UPLOAD FILE & ADATTAMENTO ---
 st.header("📤 Carica Rapporto Attività (PDF o Immagine)")
 
 if plans:
@@ -237,7 +236,7 @@ if plans:
             )
             
             if st.button("Elabora File e Aggiorna Programma", type="primary"):
-                with st.spinner("Elaborazione dati in corso..."):
+                with st.spinner("Analisi visiva del file in corso..."):
                     extracted_data = extract_workout_data(uploaded_file)
                 
                 if extracted_data:
@@ -284,7 +283,7 @@ if plans:
             with c1:
                 st.markdown(f"**Settimana {p['week_number']}**<br>{p['workout_date']} ({p['day_of_week']})", unsafe_allow_html=True)
             with c2:
-                is_recovery = "Scarico" in p['workout_type']
+                is_recovery = "Scarico" problemi in p['workout_type'] if 'workout_type' in p else False
                 badge = "🔵" if is_recovery else ("🔴" if "Soglia" in p['workout_type'] or "Intervalli" in p['workout_type'] else "🟢")
                 st.markdown(f"{badge} **{p['workout_type']}**<br>Target: `{p['target_zone']}`", unsafe_allow_html=True)
             with c3:
