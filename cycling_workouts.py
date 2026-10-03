@@ -2,8 +2,11 @@ import streamlit as st
 from supabase import create_client
 from datetime import datetime, timedelta
 import io
-import google.generativeai as genai
 from PIL import Image
+import google.generativeai as genai
+
+# Configura esplicitamente la chiave API per evitare il tentativo di lookup sui metadati di GCP
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
 # Import per la generazione del PDF con ReportLab
 from reportlab.lib.pagesizes import A4
