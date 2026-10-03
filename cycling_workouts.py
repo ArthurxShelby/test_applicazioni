@@ -1,9 +1,10 @@
 import streamlit as st
 from datetime import datetime
+import requests
 import google.generativeai as genai
 
 # Configurazione pagina
-st.set_page_config(page_title="Smart Cycling Coach - Piano Definitivo", page_icon="🚴‍♂️", layout="centered")
+st.set_page_config(page_title="Smart Cycling Coach - Live API", page_icon="🚴‍♂️", layout="centered")
 
 # Configurazione sicura API Gemini
 try:
@@ -14,8 +15,8 @@ try:
 except Exception:
     pass
 
-st.title("🚴‍♂️ Smart Cycling Coach (AI Advisor)")
-st.markdown("Carica il report della tua ultima uscita da **Intervals.icu** per ricevere l'analisi e il consiglio sul prossimo allenamento (Mercoledì: Medio | Sabato: Dislivello | Domenica: Lungo).")
+st.title("🚴‍♂️ Smart Cycling Coach (Live Intervals.icu)")
+st.markdown("Integrazione diretta con i flussi dati di **Intervals.icu** per il consiglio d'allenamento mirato.")
 
 # --- SIDEBAR: PARAMETRI ATLETA ---
 with st.sidebar:
@@ -30,55 +31,83 @@ with st.sidebar:
     st.markdown("- **Sabato**: Dislivello / Colli")
     st.markdown("- **Domenica**: Lungo di Resistenza")
 
-# --- CORPO PRINCIPALE ---
-uploaded_file = st.file_uploader("Carica il file PDF o lo screenshot del report", type=["pdf", "png", "jpg", "jpeg"])
-
 # Selezione del prossimo allenamento da pianificare
 next_workout_day = st.selectbox(
     "Per quale giorno vuoi pianificare il prossimo allenamento?",
     ["Mercoledì (Medio)", "Sabato (Dislivello)", "Domenica (Lungo)"]
 )
 
-if uploaded_file is not None:
-    if st.button("Analizza Attività e Consiglia Allenamento", type="primary"):
-        with st.spinner("Il Coach AI sta analizzando i dati di Intervals.icu..."):
-            try:
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                file_bytes = uploaded_file.getvalue()
-                mime_type = uploaded_file.type
-                
-                file_part = {
-                    "mime_type": mime_type,
-                    "data": file_bytes
+# Funzione per prelevare l'ultima attività tramite API di Intervals.icu
+def fetch_latest_activity_from_intervals():
+    try:
+        athlete_id = st.secrets["INTERVALS_ATHLETE_ID"]
+        api_key = st.secrets["INTERVALS_API_KEY"]
+        
+        url = f"https://intervals.icu/api/v1/athlete/{athlete_id}/activities.json"
+        
+        # L'API di Intervals.icu usa Basic Auth con utente "API_KEY" e password la chiave API
+        response = requests.get(url, auth=("API_KEY", api_key))
+        
+        if response.status_code == 200:
+            activities = response.json()
+            if activities:
+                # Restituisce l'attività più recente (la prima della lista)
+                latest = activities[0]
+                return {
+                    "date": latest.get("start_date_local"),
+                    "name": latest.get("name"),
+                    "moving_time_min": round(latest.get("moving_time", 0) / 60),
+                    "distance_km": round(latest.get("distance", 0) / 1000, 1),
+                    "elevation_gain": latest.get("total_elevation_gain", 0),
+                    "tss": latest.get("icu_training_load", 0),
+                    "avg_power": latest.get("icu_average_watts", 0),
+                    "intensity_factor": latest.get("icu_intensity", 0)
                 }
-                
-                prompt = f"""
-                Agisci come un coach di ciclismo professionista ed esperto di preparazione atletica.
-                L'atleta ha 56 anni, pedala su una bici da corsa (Giant TCR Advanced Pro 0) e ha una FTP di {current_ftp}W.
-                
-                Ha appena completato un'uscita di cui allego il report (PDF o immagine da Intervals.icu).
-                
-                Il prossimo allenamento pianificato che deve affrontare è per il giorno: **{next_workout_day}**.
-                Ricorda la struttura fissa della sua settimana:
-                - Mercoledì: Medio
-                - Sabato: Dislivello
-                - Domenica: Lungo
-                
-                Compito:
-                1. Estrai e riassumi brevemente i dati chiave dell'uscita appena fatta (Durata, TSS, Potenza Media, IF, ecc.).
-                2. Valuta lo stato di affaticamento dell'atleta in base ai carichi rilevati.
-                3. Fornisci un consiglio dettagliato e strutturato per il prossimo allenamento ({next_workout_day}), indicando target di potenza precisi calcolati sulla sua FTP di {current_ftp}W, durata consigliata, gestione dello sforzo e percorsi idonei (es. zona Trieste/Slovenia se applicabile).
-                
-                Scrivi una risposta chiara, motivante e professionale in italiano.
-                """
-                
-                response = model.generate_content([file_part, prompt])
-                
-                st.markdown("---")
-                st.subheader("💡 Analisi & Consiglio del Coach AI")
-                st.write(response.text)
-                
-            except Exception as e:
-                st.error(f"Errore durante l'elaborazione con l'intelligenza artificiale: {e}")
-else:
-    st.info("Carica un file PDF o un'immagine nella sezione sopra per iniziare.")
+        return None
+    except Exception as e:
+        st.error(f"Errore di connessione alle API di Intervals.icu: {e}")
+        return None
+
+if st.button("Sincronizza Ultima Uscita e Chiedi al Coach", type="primary"):
+    with st.spinner("Connessione a Intervals.icu in corso..."):
+        latest_activity = fetch_latest_activity_from_intervals()
+        
+        if latest_activity:
+            st.success("Ultima attività sincronizzata con successo da Intervals.icu!")
+            with st.expander("📊 Dettagli dell'ultima uscita rilevata"):
+                st.json(latest_activity)
+            
+            with st.spinner("Il Coach AI sta elaborando il consiglio personalizzato..."):
+                try:
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    
+                    prompt = f"""
+                    Agisci come un coach di ciclismo professionista ed esperto di preparazione atletica.
+                    L'atleta ha 56 anni, pedala su una bici da corsa ({bike}) e ha una FTP di {current_ftp}W.
+                    
+                    Ecco i dati reali dell'ultima uscita scaricati direttamente da Intervals.icu:
+                    {latest_activity}
+                    
+                    Il prossimo allenamento pianificato che deve affrontare è per il giorno: **{next_workout_day}**.
+                    Ricorda la struttura fissa della sua settimana:
+                    - Mercoledì: Medio
+                    - Sabato: Dislivello
+                    - Domenica: Lungo
+                    
+                    Compito:
+                    1. Analizza lo stato di affaticamento dell'atleta in base ai carichi dell'ultima uscita (TSS, dislivello, durata).
+                    2. Fornisci un consiglio dettagliato e strutturato per il prossimo allenamento ({next_workout_day}), indicando target di potenza precisi calcolati sulla sua FTP di {current_ftp}W, durata consigliata, gestione dello sforzo e percorsi idonei (es. zona Trieste/Slovenia).
+                    
+                    Scrivi una risposta chiara, motivante e professionale in italiano.
+                    """
+                    
+                    response = model.generate_content(prompt)
+                    
+                    st.markdown("---")
+                    st.subheader("💡 Analisi & Consiglio del Coach AI")
+                    st.write(response.text)
+                    
+                except Exception as e:
+                    st.error(f"Errore durante l'elaborazione con l'intelligenza artificiale: {e}")
+        else:
+            st.warning("Non è stato possibile recuperare le attività. Verifica che l'Athlete ID e l'API Key nei secrets siano corretti.")
