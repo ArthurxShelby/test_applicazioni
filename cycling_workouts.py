@@ -69,7 +69,7 @@ if input_mode == "Sincronizza da Intervals.icu":
                         }
                         st.success("Attività sincronizzata con successo!")
                 else:
-                    st.warning(f"Impossibile contattare l'endpoint (HTTP {response.status_code}). Verifica l'id nei secrets.")
+                    st.warning(f"Impossibile contattare l'endpoint (HTTP {response.status_code}).")
             except Exception as e:
                 st.warning(f"Errore di connessione: {e}")
 else:
@@ -104,43 +104,44 @@ if st.session_state.latest_activity is not None:
         
     if st.button("Genera Consiglio Personalizzato con AI", type="secondary"):
         with st.spinner("Il Coach AI sta analizzando i tuoi carichi..."):
-            try:
-                # Utilizzo del modello standard aggiornato
-                model = genai.GenerativeModel('gemini-2.5-flash')
-                
-                prompt = f"""
-                Agisci come un coach di ciclismo professionista ed esperto di preparazione atletica.
-                L'atleta ha 56 anni, pedala su una bici da corsa ({bike}) e ha una FTP di {current_ftp}W.
-                
-                Ecco i dati dell'ultima uscita:
-                {st.session_state.latest_activity}
-                
-                Il prossimo allenamento pianificato che deve affrontare è per il giorno: **{next_workout_day}**.
-                Struttura tipica della sua settimana:
-                - Mercoledì: Medio / Soglia (es. lavori su salite come San Servolo o simili in zona Trieste/Slovenia)
-                - Sabato: Dislivello / Colli
-                - Domenica: Lungo di Resistenza
-                
-                Compito:
-                1. Analizza lo stato di recupero e carico dell'atleta in base all'uscita effettuata.
-                2. Fornisci un piano di allenamento dettagliato per **{next_workout_day}**, specificando target di potenza precisi basati sulla FTP di {current_ftp}W, durata, ripetute o gestione dello sforzo, e suggerimenti sul percorso ideale (es. zona Trieste / Slovenia).
-                
-                Scrivi una risposta chiara, professionale e motivante in italiano.
-                """
-                
-                response = model.generate_content(prompt)
-                
+            prompt = f"""
+            Agisci come un coach di ciclismo professionista ed esperto di preparazione atletica.
+            L'atleta ha 56 anni, pedala su una bici da corsa ({bike}) e ha una FTP di {current_ftp}W.
+            
+            Ecco i dati dell'ultima uscita:
+            {st.session_state.latest_activity}
+            
+            Il prossimo allenamento pianificato che deve affrontare è per il giorno: **{next_workout_day}**.
+            Struttura tipica della sua settimana:
+            - Mercoledì: Medio / Soglia (es. lavori su salite come San Servolo o simili in zona Trieste/Slovenia)
+            - Sabato: Dislivello / Colli
+            - Domenica: Lungo di Resistenza
+            
+            Compito:
+            1. Analizza lo stato di recupero e carico dell'atleta in base all'uscita effettuata.
+            2. Fornisci un piano di allenamento dettagliato per **{next_workout_day}**, specificando target di potenza precisi basati sulla FTP di {current_ftp}W, durata, ripetute o gestione dello sforzo, e suggerimenti sul percorso ideale (es. zona Trieste / Slovenia).
+            
+            Scrivi una risposta chiara, professionale e motivante in italiano.
+            """
+            
+            # Tentativo automatico con diversi modelli disponibili per evitare errori 404
+            models_to_try = ['gemini-1.5-flash', 'gemini-pro', 'gemini-1.5-pro']
+            ai_response = None
+            last_error = None
+            
+            for m_name in models_to_try:
+                try:
+                    model = genai.GenerativeModel(m_name)
+                    ai_response = model.generate_content(prompt)
+                    if ai_response and ai_response.text:
+                        break
+                except Exception as ex:
+                    last_error = ex
+                    continue
+            
+            if ai_response and ai_response.text:
                 st.markdown("---")
                 st.subheader("💡 Analisi & Consiglio del Coach AI")
-                st.write(response.text)
-                
-            except Exception as e:
-                # Fallback automatico su gemini-1.5-flash o gemini-pro in caso di ulteriori variazioni dell'SDK
-                try:
-                    model_fallback = genai.GenerativeModel('gemini-1.5-flash')
-                    response = model_fallback.generate_content(prompt)
-                    st.markdown("---")
-                    st.subheader("💡 Analisi & Consiglio del Coach AI")
-                    st.write(response.text)
-                except Exception as e2:
-                    st.error(f"Errore durante la generazione con l'intelligenza artificiale: {e2}")
+                st.write(ai_response.text)
+            else:
+                st.error(f"Impossibile generare la risposta con nessun modello disponibile. Errore tecnico: {last_error}")
