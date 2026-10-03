@@ -40,14 +40,19 @@ next_workout_day = st.selectbox(
 # Funzione per prelevare l'ultima attività tramite API di Intervals.icu
 def fetch_latest_activity_from_intervals():
     try:
-        # Se nel secret metti '0', l'API userà automaticamente l'utente associato alla chiave API
-        athlete_id = st.secrets.get("INTERVALS_ATHLETE_ID", "0")
+        athlete_id = str(st.secrets.get("INTERVALS_ATHLETE_ID", "i519800"))
         api_key = st.secrets["INTERVALS_API_KEY"]
         
+        # Gestione corretta dell'endpoint: Intervals.icu accetta l'ID atleta (es. i519800) o "self"
         url = f"https://intervals.icu/api/v1/athlete/{athlete_id}/activities.json"
         
         # Autenticazione Basic con username fisso "API_KEY" e password la chiave API personale
         response = requests.get(url, auth=("API_KEY", api_key))
+        
+        # Se fallisce con l'ID specifico, proviamo in automatico con l'endpoint "self"
+        if response.status_code == 404 and athlete_id != "self":
+            url_fallback = "https://intervals.icu/api/v1/athlete/self/activities.json"
+            response = requests.get(url_fallback, auth=("API_KEY", api_key))
         
         if response.status_code == 200:
             activities = response.json()
@@ -112,4 +117,4 @@ if st.button("Sincronizza Ultima Uscita e Chiedi al Coach", type="primary"):
                 except Exception as e:
                     st.error(f"Errore durante l'elaborazione con l'intelligenza artificiale: {e}")
         else:
-            st.warning("Non è stato possibile recuperare le attività. Prova a impostare `INTERVALS_ATHLETE_ID = \"0\"` nei tuoi secrets di Streamlit.")
+            st.warning("Non è stato possibile recuperare le attività. Verifica che la chiave API nei secrets sia corretta.")
