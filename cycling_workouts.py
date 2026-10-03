@@ -23,22 +23,23 @@ def init_supabase():
 
 supabase = init_supabase()
 
-# Funzione ottimizzata per estrarre i dati dallo screenshot tramite IA
+# Funzione rapida e protetta per estrarre i dati dallo screenshot
 def extract_workout_data_from_image(image):
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        # Usiamo gemini-1.5-flash che è ottimizzato per risposte rapidissime e stabili
+        model = genai.GenerativeModel('gemini-1.5-flash')
         prompt = """
-        Analizza questo screenshot di una schermata di ciclismo (es. Intervals.icu) ed estrai i seguenti valori numerici in formato JSON puro:
-        - duration_minutes: durata totale dell'attività in minuti
-        - tss: il valore del Carico / TSS
-        - intensity: percentuale di intensità
-        - avg_power: potenza media in watt
-        - norm_power: potenza normalizzata in watt
-        - avg_hr: frequenza cardiaca media
-        - fitness: valore di Fitness se presente
-        - fatigue: valore di Fatica se presente
-        - form: valore di Forma se presente
-        Restituisci SOLO un dizionario JSON valido con queste esatte chiavi.
+        Analizza questo screenshot di una schermata di ciclismo ed estrai in formato JSON puro:
+        - duration_minutes: durata totale in minuti (numero intero)
+        - tss: il valore del Carico / TSS (numero intero)
+        - intensity: percentuale di intensità (numero intero)
+        - avg_power: potenza media in watt (numero intero)
+        - norm_power: potenza normalizzata in watt (numero intero)
+        - avg_hr: frequenza cardiaca media (numero intero)
+        - fitness: valore di Fitness (numero intero o 0)
+        - fatigue: valore di Fatica (numero intero o 0)
+        - form: valore di Forma (numero intero o 0)
+        Restituisci SOLO un dizionario JSON valido con queste esatte chiavi, senza altri testi.
         """
         response = model.generate_content([image, prompt])
         import json
@@ -110,7 +111,7 @@ def generate_pdf(plans_data):
     return buffer
 
 st.title("🚴‍♂️ Smart Adaptive Cycling Coach con Vision AI")
-st.markdown("Carica lo screenshot della tua uscita per estrarre i dati e riflettere automaticamente le modifiche sulle sessioni future.")
+st.markdown("Carica lo screenshot della tua uscita per estrarre i dati in pochi secondi e aggiornare le sessioni future.")
 
 # --- FETCH DATI ATTUALI ---
 try:
@@ -209,12 +210,12 @@ with st.sidebar:
         pdf_data = generate_pdf(plans)
         st.download_button("📥 Scarica PDF Aggiornato", data=pdf_data, file_name="programma_adattivo_ai.pdf", mime="application/pdf")
 
-# --- CORPO PRINCIPALE: UPLOAD SCREENSHOT & ADATTAMENTO AUTOMATICO DELLE USCITE SUCCESSIVE ---
+# --- CORPO PRINCIPALE: UPLOAD SCREENSHOT & ADATTAMENTO AUTOMATICO ---
 st.header("📸 Carica Uscita e Adatta Programma")
 
 if plans:
     with st.expander("🤖 Analisi Screenshot & Aggiornamento automatico sessioni future", expanded=True):
-        uploaded_file = st.file_uploader("Seleziona lo screenshot dell'uscita (es. Intervals.icu)", type=["png", "jpg", "jpeg"])
+        uploaded_file = st.file_uploader("Seleziona lo screenshot dell'uscita", type=["png", "jpg", "jpeg"])
         
         completed_plans = [p for p in plans if not p.get('completed', False)]
         if completed_plans and uploaded_file is not None:
@@ -228,7 +229,7 @@ if plans:
                 image = Image.open(uploaded_file)
                 st.image(image, caption="Screenshot caricato", use_column_width=True)
                 
-                with st.spinner("Estrazione dati in corso e ricalcolo flussi successivi..."):
+                with st.spinner("Estrazione rapida in corso..."):
                     extracted_data = extract_workout_data_from_image(image)
                 
                 if extracted_data:
@@ -238,7 +239,7 @@ if plans:
                     tss_val = extracted_data.get("tss", 100)
                     fatigue_val = extracted_data.get("fatigue", 80)
                     
-                    # 1. Segniamo come completata la sessione selezionata con i dati reali
+                    # 1. Aggiorna sessione completata
                     supabase.table("cycling_training_plans").update({
                         "completed": True,
                         "duration_min": extracted_data.get("duration_minutes", 120),
@@ -246,26 +247,25 @@ if plans:
                         "perceived_effort": 8 if tss_val > 130 else 5
                     }).eq("id", selected_workout_id).execute()
                     
-                    # 2. LOGICA ADATTIVA SULLE SESSIONI SUCCESSIVE:
-                    # Se il TSS è molto alto (>130) o la fatica supera 90, alleggeriamo i prossimi 2 allenamenti non ancora fatti
+                    # 2. Riflesso sulle sessioni future
                     if tss_val > 130 or fatigue_val > 90:
                         future_workouts = [p for p in completed_plans if p['id'] != selected_workout_id][:2]
                         for fw in future_workouts:
-                            new_desc = fw['target_description'] + " (Adattato: ridotta intensità per recupero post-carico elevato)"
-                            new_dur = max(60, int(fw['duration_min'] * 0.85)) # Riduce la durata del 15%
+                            new_desc = fw['target_description'] + " (Adattato: scarico preventivo post-carico elevato)"
+                            new_dur = max(60, int(fw['duration_min'] * 0.85))
                             supabase.table("cycling_training_plans").update({
                                 "target_description": new_desc,
                                 "duration_min": new_dur
                             }).eq("id", fw['id']).execute()
-                        st.warning(f"⚠️ Carico elevato (TSS {tss_val}). Il coach ha automaticamente ridotto durata e intensità delle prossime 2 sessioni per favorire il recupero.")
+                        st.warning(f"⚠️ Carico elevato (TSS {tss_val}). Il coach ha automaticamente alleggerito le prossime 2 sessioni.")
                     else:
-                        st.info("✅ Carico ottimale registrato. Le sessioni successive procedono come da programma.")
+                        st.info("✅ Carico ottimale registrato. Sessioni successive confermate.")
                     
                     st.rerun()
         elif not completed_plans:
             st.info("Tutte le sessioni pianificate sono completate!")
         else:
-            st.info("Carica uno screenshot per avviare l'adattamento.")
+            st.info("Carica uno screenshot per avviare l'analisi.")
 
     st.markdown("---")
     st.header("📅 Programma Attivo")
