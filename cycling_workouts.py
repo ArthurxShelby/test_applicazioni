@@ -45,4 +45,4 @@ def extract_workout_data_from_image(image):
         text = response.text.strip()
         if text.startswith("```json"):
             text = text[7:-3].strip()
-        elif text.startswith
+        elif text.startswith:
