@@ -23,7 +23,7 @@ def init_supabase():
 
 supabase = init_supabase()
 
-# Funzione per estrarre i dati dallo screenshot tramite IA (Gemini Vision)
+# Funzione ottimizzata per estrarre i dati dallo screenshot tramite IA
 def extract_workout_data_from_image(image):
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
@@ -110,7 +110,7 @@ def generate_pdf(plans_data):
     return buffer
 
 st.title("🚴‍♂️ Smart Adaptive Cycling Coach con Vision AI")
-st.markdown("Carica lo screenshot della tua uscita (es. Intervals.icu) per estrarre in automatico i dati e adattare il programma.")
+st.markdown("Carica lo screenshot della tua uscita per estrarre i dati e riflettere automaticamente le modifiche sulle sessioni future.")
 
 # --- FETCH DATI ATTUALI ---
 try:
@@ -126,7 +126,6 @@ with st.sidebar:
     age = st.number_input("Età", min_value=18, max_value=80, value=56)
     current_ftp = st.number_input("FTP attuale (W)", value=268)
     
-    # Scelta dei giorni a settimana (3 o 4)
     training_days_count = st.selectbox(
         "Giorni di allenamento a settimana", 
         [3, 4], 
@@ -162,7 +161,7 @@ with st.sidebar:
                             {"day_index": 5, "day_name": "Sabato", "type": "Uscita Collinare con Intervalli", "desc": "Giro collinare con variazioni di ritmo e blocchi ripetuti in salita", "dur": 195, "zone": "Z3 / Z4 / Z5"},
                             {"day_index": 6, "day_name": "Domenica", "type": "Giro Lungo di Resistenza", "desc": "Giro lungo in prevalenza Z2 con brevi tratti a ritmo costante", "dur": 220, "zone": "Z2 / Z3"}
                         ]
-                else: # 4 giorni a settimana (Mar, Gio, Sab, Dom)
+                else:
                     if is_recovery_week:
                         exact_workouts = [
                             {"day_index": 1, "day_name": "Martedì", "type": "Scarico - Agilità", "desc": "Agilità leggera e scioltezza", "dur": 60, "zone": "Z2"},
@@ -199,7 +198,6 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Errore: {e}")
 
-    # Pulsante per svuotare il database
     if st.button("🗑️ Svuota database allenamenti"):
         supabase.table("cycling_training_plans").delete().neq("id", 0).execute()
         st.warning("Database pulito.")
@@ -211,35 +209,36 @@ with st.sidebar:
         pdf_data = generate_pdf(plans)
         st.download_button("📥 Scarica PDF Aggiornato", data=pdf_data, file_name="programma_adattivo_ai.pdf", mime="application/pdf")
 
-# --- CORPO PRINCIPALE: UPLOAD SCREENSHOT & ADATTAMENTO AI ---
-st.header("📸 Analisi Intelligente Uscita da Screenshot")
+# --- CORPO PRINCIPALE: UPLOAD SCREENSHOT & ADATTAMENTO AUTOMATICO DELLE USCITE SUCCESSIVE ---
+st.header("📸 Carica Uscita e Adatta Programma")
 
 if plans:
-    with st.expander("🤖 Carica Screenshot Allenamento (es. Intervals.icu) e Adatta il Piano", expanded=True):
-        uploaded_file = st.file_uploader("Seleziona lo screenshot dell'uscita (PNG, JPG)", type=["png", "jpg", "jpeg"])
+    with st.expander("🤖 Analisi Screenshot & Aggiornamento automatico sessioni future", expanded=True):
+        uploaded_file = st.file_uploader("Seleziona lo screenshot dell'uscita (es. Intervals.icu)", type=["png", "jpg", "jpeg"])
         
         completed_plans = [p for p in plans if not p.get('completed', False)]
         if completed_plans and uploaded_file is not None:
             selected_workout_id = st.selectbox(
-                "Collega questo screenshot alla sessione pianificata:",
+                "A quale sessione pianificata corrisponde questa uscita?",
                 options=[p['id'] for p in completed_plans],
                 format_func=lambda x: next(f"Sett. {p['week_number']} - {p['workout_date']} ({p['workout_type']})" for p in completed_plans if p['id'] == x)
             )
             
-            if st.button("Estrai Dati e Ricalcola Piano", type="primary"):
+            if st.button("Analizza e Ricalcola Uscite Successive", type="primary"):
                 image = Image.open(uploaded_file)
                 st.image(image, caption="Screenshot caricato", use_column_width=True)
                 
-                with st.spinner("Estrazione parametri in corso tramite AI..."):
+                with st.spinner("Estrazione dati in corso e ricalcolo flussi successivi..."):
                     extracted_data = extract_workout_data_from_image(image)
                 
                 if extracted_data:
-                    st.success("Dati estratti con successo dallo screenshot:")
+                    st.success("Dati estratti con successo:")
                     st.json(extracted_data)
                     
                     tss_val = extracted_data.get("tss", 100)
                     fatigue_val = extracted_data.get("fatigue", 80)
                     
+                    # 1. Segniamo come completata la sessione selezionata con i dati reali
                     supabase.table("cycling_training_plans").update({
                         "completed": True,
                         "duration_min": extracted_data.get("duration_minutes", 120),
@@ -247,16 +246,26 @@ if plans:
                         "perceived_effort": 8 if tss_val > 130 else 5
                     }).eq("id", selected_workout_id).execute()
                     
-                    if fatigue_val > 90 or tss_val > 140:
-                        st.warning(f"⚠️ Carico elevato rilevato (TSS: {tss_val}, Fatica: {fatigue_val}). Il coach ha alleggerito i watt target delle prossime sessioni per favorire il recupero.")
+                    # 2. LOGICA ADATTIVA SULLE SESSIONI SUCCESSIVE:
+                    # Se il TSS è molto alto (>130) o la fatica supera 90, alleggeriamo i prossimi 2 allenamenti non ancora fatti
+                    if tss_val > 130 or fatigue_val > 90:
+                        future_workouts = [p for p in completed_plans if p['id'] != selected_workout_id][:2]
+                        for fw in future_workouts:
+                            new_desc = fw['target_description'] + " (Adattato: ridotta intensità per recupero post-carico elevato)"
+                            new_dur = max(60, int(fw['duration_min'] * 0.85)) # Riduce la durata del 15%
+                            supabase.table("cycling_training_plans").update({
+                                "target_description": new_desc,
+                                "duration_min": new_dur
+                            }).eq("id", fw['id']).execute()
+                        st.warning(f"⚠️ Carico elevato (TSS {tss_val}). Il coach ha automaticamente ridotto durata e intensità delle prossime 2 sessioni per favorire il recupero.")
                     else:
-                        st.info("✅ Carico registrato e validato. La progressione continua regolarmente.")
+                        st.info("✅ Carico ottimale registrato. Le sessioni successive procedono come da programma.")
                     
                     st.rerun()
         elif not completed_plans:
-            st.info("Tutte le sessioni attive risultano completate!")
+            st.info("Tutte le sessioni pianificate sono completate!")
         else:
-            st.info("Carica uno screenshot per procedere all'analisi automatica.")
+            st.info("Carica uno screenshot per avviare l'adattamento.")
 
     st.markdown("---")
     st.header("📅 Programma Attivo")
