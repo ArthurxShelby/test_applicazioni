@@ -23,7 +23,7 @@ def init_supabase():
 
 supabase = init_supabase()
 
-# Funzione ottimizzata per evitare loop e leggere direttamente PDF o immagini con Gemini
+# 1. Funzione per l'estrazione dei dati dal file con Gemini Vision
 def extract_workout_data(uploaded_file):
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
@@ -64,6 +64,49 @@ def extract_workout_data(uploaded_file):
         return json.loads(text)
     except Exception as e:
         st.error(f"Errore nell'estrazione dei dati: {e}")
+        return None
+
+# 2. Nuova funzione per il ricalcolo adattivo intelligente dei prossimi allenamenti tramite AI
+def adaptive_replan_workouts(completed_workout_data, future_workouts, current_ftp):
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        prompt = f"""
+        Agisci come un coach di ciclismo professionista. Un tuo atleta di 56 anni ha appena completato un allenamento e mi ha fornito questi dati reali dall'uscita (estratti da Intervals.icu):
+        {completed_workout_data}
+        
+        La sua FTP attuale è {current_ftp}W.
+        
+        Ecco la lista dei prossimi allenamenti pianificati che dobbiamo ricalcolare/adattare in base alla fatica e al TSS accumulato:
+        {future_workouts}
+        
+        Compito:
+        Analizza se il carico dell'ultimo allenamento richiede un recupero maggiore, una modifica dei lavori di qualità o se va tutto bene. 
+        Rimodula la descrizione (`target_description`), la durata in minuti (`duration_min`) e la zona target (`target_zone`) dei prossimi allenamenti in modo adattivo.
+        
+        Restituisci SOLO un elenco JSON valido (senza markdown aggiuntivo oltre al blocco json) con la lista aggiornata dei prossimi allenamenti, mantenendo esattamente la stessa struttura e gli ID originali:
+        [
+            {{
+                "id": id_originale,
+                "target_description": "nuova descrizione adattata",
+                "duration_min": nuova_durata_in_minuti,
+                "target_zone": "zona"
+            }}
+        ]
+        """
+        
+        response = model.generate_content(prompt)
+        text = response.text.strip()
+        
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0].strip()
+        elif "```" in text:
+            text = text.split("```")[1].split("```")[0].strip()
+            
+        import json
+        return json.loads(text)
+    except Exception as e:
+        st.error(f"Errore nel ricalcolo adattivo con AI: {e}")
         return None
 
 # Funzione per generare il PDF del piano
@@ -212,7 +255,7 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Errore: {e}")
 
-    if st.button("🗑️ Svuota database allenamenti"):
+    if st.button("🗑️️ Svuota database allenamenti"):
         supabase.table("cycling_training_plans").delete().neq("id", 0).execute()
         st.warning("Database pulito.")
         st.rerun()
@@ -223,11 +266,11 @@ with st.sidebar:
         pdf_data = generate_pdf(plans)
         st.download_button("📥 Scarica PDF Aggiornato", data=pdf_data, file_name="programma_adattivo_ai.pdf", mime="application/pdf")
 
-# --- CORPO PRINCIPALE: UPLOAD FILE & ADATTAMENTO ---
+# --- CORPO PRINCIPALE: UPLOAD FILE & ADATTAMENTO INTelligente ---
 st.header("📤 Carica Rapporto Attività (PDF o Immagine)")
 
 if plans:
-    with st.expander("🤖 Estrazione dati & Ricalcolo sessioni future", expanded=True):
+    with st.expander("🤖 Estrazione dati & Ricalcolo adattivo AI", expanded=True):
         uploaded_file = st.file_uploader("Carica il file PDF o lo screenshot dell'uscita", type=["pdf", "png", "jpg", "jpeg"])
         
         completed_plans = [p for p in plans if not p.get('completed', False)]
@@ -238,7 +281,7 @@ if plans:
                 format_func=lambda x: next(f"Sett. {p['week_number']} - {p['workout_date']} ({p['workout_type']})" for p in completed_plans if p['id'] == x)
             )
             
-            if st.button("Elabora File e Aggiorna Programma", type="primary"):
+            if st.button("Elabora File e Adatta Programma con AI", type="primary"):
                 with st.spinner("Analisi visiva del file in corso..."):
                     extracted_data = extract_workout_data(uploaded_file)
                 
@@ -246,10 +289,9 @@ if plans:
                     st.success("Dati estratti con successo:")
                     st.json(extracted_data)
                     
-                    tss_val = extracted_data.get("tss", 100)
-                    fatigue_val = extracted_data.get("fatigue", 80)
+                    tss_val = extracted_data.get("tss", 0)
                     
-                    # 1. Aggiorna la sessione completata
+                    # 1. Aggiorna la sessione completata su Supabase
                     supabase.table("cycling_training_plans").update({
                         "completed": True,
                         "duration_min": extracted_data.get("duration_minutes", 120),
@@ -257,21 +299,27 @@ if plans:
                         "perceived_effort": 8 if tss_val > 130 else 5
                     }).eq("id", selected_workout_id).execute()
                     
-                    # 2. Ricalcolo automatico delle sessioni successive
-                    if tss_val > 130 or fatigue_val > 90:
-                        future_workouts = [p for p in completed_plans if p['id'] != selected_workout_id][:2]
-                        for fw in future_workouts:
-                            new_desc = fw['target_description'] + " (Adattato: scarico preventivo post-carico elevato)"
-                            new_dur = max(60, int(fw['duration_min'] * 0.85))
-                            supabase.table("cycling_training_plans").update({
-                                "target_description": new_desc,
-                                "duration_min": new_dur
-                            }).eq("id", fw['id']).execute()
-                        st.warning(f"⚠️ Carico elevato rilevato (TSS {tss_val}). Il coach ha automaticamente alleggerito le prossime 2 sessioni.")
-                    else:
-                        st.info("✅ Carico ottimale registrato. Sessioni successive confermate.")
+                    # 2. Preleva i prossimi allenamenti futuri da ricalcolare
+                    future_plans = [p for p in completed_plans if p['id'] != selected_workout_id][:3]
                     
-                    st.rerun()
+                    if future_plans:
+                        with st.spinner("Il Coach AI sta valutando il tuo carico e ricalcolando i prossimi allenamenti..."):
+                            updated_schedule = adaptive_replan_workouts(extracted_data, future_plans, current_ftp)
+                            
+                            if updated_schedule:
+                                for item in updated_schedule:
+                                    supabase.table("cycling_training_plans").update({
+                                        "target_description": item.get("target_description"),
+                                        "duration_min": item.get("duration_min"),
+                                        "target_zone": item.get("target_zone")
+                                    }).eq("id", item.get("id")).execute()
+                                
+                                st.success("✨ Il programma è stato ricalcolato e adattato dinamicamente dal Coach AI in base alla tua uscita!")
+                                st.rerun()
+                    else:
+                        st.info("Allenamento registrato. Non ci sono sessioni future da ricalcolare nel piano attuale.")
+                        st.rerun()
+                        
         elif not completed_plans:
             st.info("Tutte le sessioni pianificate sono completate!")
         else:
