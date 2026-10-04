@@ -51,13 +51,8 @@ if input_mode == "Sincronizza da Intervals.icu":
                 api_key = st.secrets["INTERVALS_API_KEY"]
                 url = f"https://intervals.icu/api/v1/athlete/{athlete_id}/activities.json"
                 
-                # Correzione dell'autenticazione con intestazione esplicita ApiKey
-                headers = {
-                    "Authorization": f"ApiKey API_KEY:{api_key}",
-                    "Accept": "application/json"
-                }
-                
-                response = requests.get(url, headers=headers)
+                # Autenticazione corretta: username fisso "API_KEY" e password la chiave segreta
+                response = requests.get(url, auth=("API_KEY", api_key))
                 
                 if response.status_code == 200:
                     activities = response.json()
