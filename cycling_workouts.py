@@ -1,10 +1,10 @@
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, date
 import requests
 import google.generativeai as genai
 
 # Configurazione pagina
-st.set_page_config(page_title="Smart Cycling Coach", page_icon="🚴‍♂️️", layout="centered")
+st.set_page_config(page_title="Smart Cycling Coach", page_icon="🚴‍♂️", layout="centered")
 
 # Configurazione sicura API Gemini
 try:
@@ -56,9 +56,14 @@ if input_mode == "Sincronizza da Intervals.icu":
         with st.spinner("Connessione a Intervals.icu in corso..."):
             try:
                 url = f"https://intervals.icu/api/v1/athlete/{ATHLETE_ID}/activities"
+                params = {
+                    "oldest": "2025-11-15",
+                    "newest": date.today().strftime("%Y-%m-%d"),
+                    "iw": True
+                }
                 auth_data = ("API_KEY", API_KEY.strip())
                 
-                response = requests.get(url, auth=auth_data)
+                response = requests.get(url, auth=auth_data, params=params)
                 
                 if response.status_code == 200:
                     activities = response.json()
@@ -78,7 +83,7 @@ if input_mode == "Sincronizza da Intervals.icu":
                     else:
                         st.warning("Nessuna attività trovata sul profilo Intervals.icu.")
                 else:
-                    st.warning(f"Errore di comunicazione (Codice HTTP {response.status_code}). Verifica le credenziali.")
+                    st.warning(f"Errore di comunicazione (Codice HTTP {response.status_code}). Verifica le credenziali o i parametri.")
             except Exception as e:
                 st.warning(f"Errore di connessione: {e}")
 else:
