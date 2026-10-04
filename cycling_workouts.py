@@ -4,7 +4,7 @@ import requests
 import google.generativeai as genai
 
 # Configurazione pagina
-st.set_page_config(page_title="Smart Cycling Coach", page_icon="🚴‍♂️️", layout="centered")
+st.set_page_config(page_title="Smart Cycling Coach", page_icon="🚴‍♂️", layout="centered")
 
 # Configurazione sicura API Gemini
 try:
@@ -51,7 +51,13 @@ if input_mode == "Sincronizza da Intervals.icu":
                 api_key = st.secrets["INTERVALS_API_KEY"]
                 url = f"https://intervals.icu/api/v1/athlete/{athlete_id}/activities.json"
                 
-                response = requests.get(url, auth=("API_KEY", api_key))
+                # Correzione dell'autenticazione con intestazione esplicita ApiKey
+                headers = {
+                    "Authorization": f"ApiKey API_KEY:{api_key}",
+                    "Accept": "application/json"
+                }
+                
+                response = requests.get(url, headers=headers)
                 
                 if response.status_code == 200:
                     activities = response.json()
@@ -68,8 +74,10 @@ if input_mode == "Sincronizza da Intervals.icu":
                             "intensity_factor": latest.get("icu_intensity", 0)
                         }
                         st.success("Attività sincronizzata con successo!")
+                    else:
+                        st.warning("Nessuna attività trovata sul profilo Intervals.icu.")
                 else:
-                    st.warning(f"Impossibile contattare l'endpoint (Codice HTTP {response.status_code}). Verifica l'ID nei secrets.")
+                    st.warning(f"Errore di comunicazione (Codice HTTP {response.status_code}). Verifica che l'ID atleta e la chiave API nei secrets siano corretti.")
             except Exception as e:
                 st.warning(f"Errore di connessione: {e}")
 else:
