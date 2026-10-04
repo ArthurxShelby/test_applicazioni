@@ -4,7 +4,7 @@ import requests
 import google.generativeai as genai
 
 # Configurazione pagina
-st.set_page_config(page_title="Smart Cycling Coach", page_icon="🚴‍♂️", layout="centered")
+st.set_page_config(page_title="Smart Cycling Coach", page_icon="🚴‍♂️️", layout="centered")
 
 # Configurazione sicura API Gemini
 try:
@@ -17,6 +17,14 @@ except Exception:
 
 st.title("🚴‍♂️ Smart Cycling Coach & Intervals.icu")
 st.markdown("Pianificazione intelligente degli allenamenti basata sui tuoi dati reali.")
+
+# Recupero credenziali Intervals dallo stesso formato di uscite.py
+try:
+    API_KEY = st.secrets["intervals"]["api_key"]
+    ATHLETE_ID = str(st.secrets["intervals"]["athlete_id"])
+except Exception as e:
+    st.error("Errore: Configura le credenziali di Intervals nei secrets sotto la sezione [intervals].")
+    st.stop()
 
 # Inizializzazione dello stato di sessione per mantenere i dati dell'attività
 if "latest_activity" not in st.session_state:
@@ -44,55 +52,35 @@ next_workout_day = st.selectbox(
 input_mode = st.radio("Modalità recupero dati ultima uscita:", ["Sincronizza da Intervals.icu", "Inserisci dati manualmente"])
 
 if input_mode == "Sincronizza da Intervals.icu":
-    # Recupero sicuro dei secret se presenti, altrimenti fallback vuoto
-    try:
-        default_api_key = st.secrets.get("INTERVALS_API_KEY", "")
-    except Exception:
-        default_api_key = ""
-        
-    try:
-        default_athlete_id = str(st.secrets.get("INTERVALS_ATHLETE_ID", "i519800"))
-    except Exception:
-        default_athlete_id = "i519800"
-
-    if not default_api_key:
-        st.warning("⚠️ Chiave API di Intervals.icu non rilevata nei secrets. Inseriscila qui sotto:")
-        api_key_input = st.text_input("API Key Intervals.icu", type="password")
-        athlete_id_input = st.text_input("Athlete ID", value=default_athlete_id)
-    else:
-        api_key_input = default_api_key
-        athlete_id_input = default_athlete_id
-
     if st.button("Sincronizza Ultima Uscita", type="primary"):
-        if not api_key_input:
-            st.error("Inserisci una chiave API valida per continuare.")
-        else:
-            with st.spinner("Connessione a Intervals.icu in corso..."):
-                try:
-                    url = f"https://intervals.icu/api/v1/athlete/{athlete_id_input}/activities.json"
-                    response = requests.get(url, auth=("API_KEY", api_key_input))
-                    
-                    if response.status_code == 200:
-                        activities = response.json()
-                        if activities:
-                            latest = activities[0]
-                            st.session_state.latest_activity = {
-                                "date": latest.get("start_date_local"),
-                                "name": latest.get("name"),
-                                "moving_time_min": round(latest.get("moving_time", 0) / 60),
-                                "distance_km": round(latest.get("distance", 0) / 1000, 1),
-                                "elevation_gain": latest.get("total_elevation_gain", 0),
-                                "tss": latest.get("icu_training_load", 0),
-                                "avg_power": latest.get("icu_average_watts", 0),
-                                "intensity_factor": latest.get("icu_intensity", 0)
-                            }
-                            st.success("Attività sincronizzata con successo!")
-                        else:
-                            st.warning("Nessuna attività trovata sul profilo Intervals.icu.")
+        with st.spinner("Connessione a Intervals.icu in corso..."):
+            try:
+                url = f"https://intervals.icu/api/v1/athlete/{ATHLETE_ID}/activities"
+                auth_data = ("API_KEY", API_KEY.strip())
+                
+                response = requests.get(url, auth=auth_data)
+                
+                if response.status_code == 200:
+                    activities = response.json()
+                    if activities:
+                        latest = activities[0]
+                        st.session_state.latest_activity = {
+                            "date": latest.get("start_date_local"),
+                            "name": latest.get("name"),
+                            "moving_time_min": round(latest.get("moving_time", 0) / 60),
+                            "distance_km": round(latest.get("distance", 0) / 1000, 1),
+                            "elevation_gain": latest.get("total_elevation_gain", 0),
+                            "tss": latest.get("icu_training_load", 0),
+                            "avg_power": latest.get("icu_average_watts", 0),
+                            "intensity_factor": latest.get("icu_intensity", 0)
+                        }
+                        st.success("Attività sincronizzata con successo!")
                     else:
-                        st.warning(f"Errore di comunicazione (Codice HTTP {response.status_code}). Verifica ID e chiave API.")
-                except Exception as e:
-                    st.warning(f"Errore di connessione: {e}")
+                        st.warning("Nessuna attività trovata sul profilo Intervals.icu.")
+                else:
+                    st.warning(f"Errore di comunicazione (Codice HTTP {response.status_code}). Verifica le credenziali.")
+            except Exception as e:
+                st.warning(f"Errore di connessione: {e}")
 else:
     st.markdown("### Inserisci i dati dell'ultima uscita")
     col1, col2 = st.columns(2)
