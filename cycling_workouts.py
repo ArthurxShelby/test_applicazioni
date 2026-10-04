@@ -4,7 +4,7 @@ import requests
 import google.generativeai as genai
 
 # Configurazione pagina
-st.set_page_config(page_title="Smart Cycling Coach", page_icon="🚴‍♂️", layout="centered")
+st.set_page_config(page_title="Smart Cycling Coach", page_icon="🚴‍♂️️", layout="centered")
 
 # Configurazione sicura API Gemini
 try:
@@ -69,7 +69,7 @@ if input_mode == "Sincronizza da Intervals.icu":
                         }
                         st.success("Attività sincronizzata con successo!")
                 else:
-                    st.warning(f"Impossibile contattare l'endpoint (HTTP {response.status_code}).")
+                    st.warning(f"Impossibile contattare l'endpoint (Codice HTTP {response.status_code}). Verifica l'ID nei secrets.")
             except Exception as e:
                 st.warning(f"Errore di connessione: {e}")
 else:
@@ -128,7 +128,6 @@ if st.session_state.latest_activity is not None:
             last_error = None
             
             try:
-                # Recupera dinamicamente la lista dei modelli supportati dall'API Key corrente
                 supported_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
                 
                 for m_name in supported_models:
@@ -149,4 +148,4 @@ if st.session_state.latest_activity is not None:
                 st.subheader("💡 Analisi & Consiglio del Coach AI")
                 st.write(ai_response.text)
             else:
-                st.error(f"Impossibile trovare un modello compatibile o generare la risposta. Errore tecnico: {last_error}")
+                st.error(f"Impossibile trovare un modello compatibile o generare la risposta. Dettaglio errore: {last_error}")
