@@ -1,6 +1,4 @@
 streamlit
 supabase
 reportlab
-google-generativeai
-pillow
 pypdf
