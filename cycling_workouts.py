@@ -117,13 +117,26 @@ if st.session_state.latest_activity is not None:
         st.json(st.session_state.latest_activity)
         
     if st.button("Genera Consiglio Personalizzato con AI", type="secondary"):
-        prompt = f"""
-        Agisci come un coach di ciclismo professionista ed esperto di preparazione atletica.
-        L'atleta ha 56 anni, pedala su una bici da corsa ({bike}) e ha una FTP di {current_ftp}W.
+        prompt = (
+            "Agisci come un coach di ciclismo professionista ed esperto di preparazione atletica.\n"
+            f"L'atleta ha 56 anni, pedala su una bici da corsa ({bike}) e ha una FTP di {current_ftp}W.\n\n"
+            f"Ecco i dati dell'ultima uscita:\n{st.session_state.latest_activity}\n\n"
+            f"Il prossimo allenamento pianificato che deve affrontare è per il giorno: **{next_workout_day}**.\n"
+            "Struttura tipica della sua settimana:\n"
+            "- Mercoledì: Medio / Soglia (es. lavori su salite come San Servolo o simili in zona Trieste/Slovenia)\n"
+            "- Sabato: Dislivello / Colli\n"
+            "- Domenica: Lungo di Resistenza\n\n"
+            "Compito:\n"
+            "1. Analizza lo stato di recupero e carico dell'atleta in base all'uscita effettuata.\n"
+            f"2. Fornisci un piano di allenamento dettagliato per **{next_workout_day}**, specificando target di potenza precisi basati sulla FTP di {current_ftp}W, durata, ripetute o gestione dello sforzo, e suggerimenti sul percorso ideale (es. zona Trieste / Slovenia).\n\n"
+            "Scrivi una risposta chiara, professionale e motivante in italiano."
+        )
         
-        Ecco i dati dell'ultima uscita:
-        {st.session_state.latest_activity}
-        
-        Il prossimo allenamento pianificato che deve affrontare è per il giorno: **{next_workout_day}**.
-        Struttura tipica della sua settimana:
-        - Mer
+        try:
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            st.markdown("---")
+            st.subheader("💡 Analisi & Consiglio del Coach AI")
+            response = model.generate_content(prompt, stream=True)
+            st.write_stream(response)
+        except Exception as e:
+            st.error(f"Impossibile generare la risposta. Dettaglio errore: {e}")
